@@ -1,0 +1,29 @@
+{
+  "name": "nitrogen",
+  "displayName": "Nitrogen DSL",
+  "description": ".ngr grammars and nitrogen.json workspace languages through nitrogen lsp.",
+  "version": "0.1.0",
+  "publisher": "nitrogen",
+  "license": "MIT",
+  "engines": { "vscode": "^1.90.0" },
+  "main": "./out/extension.js",
+  "activationEvents": ["onLanguage:ngr", "workspaceContains:nitrogen.json"],
+  "contributes": {
+    "languages": [
+      { "id": "ngr", "aliases": ["Nitrogen grammar"], "extensions": [".ngr"], "configuration": "./language-configuration.json" }
+    ],
+    "configuration": {
+      "title": "Nitrogen",
+      "properties": {
+        "nitrogen.server.path": {
+          "type": "string",
+          "default": "nitrogen",
+          "description": "The nitrogen executable (runs `nitrogen lsp`)."
+        }
+      }
+    }
+  },
+  "scripts": { "compile": "tsc -p ./", "package": "vsce package --allow-missing-repository" },
+  "dependencies": { "vscode-languageclient": "^9.0.1" },
+  "devDependencies": { "@types/node": "^20.0.0", "@types/vscode": "^1.90.0", "@vscode/vsce": "^3.0.0", "typescript": "^5.4.0" }
+}

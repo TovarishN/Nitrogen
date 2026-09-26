@@ -1,0 +1,18 @@
+// Exercises every expression form the emitter supports, in token and syntax rules.
+// Comments use (* *) because the default trivia already skips /* */.
+syntax module Lexical
+{
+  token Comment = "(*" (!"*)" .)* "*)";
+  token Text    = "\"" ([^ '"' '\\'] / "\\" .)* "\"";
+  token Hex     = "0x" ['0'..'9' 'a'..'f' 'A'..'F']+;
+  token Digits  = (['0'..'9']+; "_")+;
+  token Word    = ['a'..'z' 'A'..'Z']+ except "pick" "tag";
+  token Signed  = &['+' '-'] ['+' '-'] ['0'..'9']+;
+  token Unicode = ['à'..'ÿ']+;
+
+  syntax Document = Items:(Item; ",")+ ";";
+  syntax Item     = Block / Pick / Tagged / Comment / Text / Hex / Signed / Digits / Word / Unicode;
+  syntax Block    = "{" Body:(Word "=" Digits)* "}";
+  syntax Pick     = "pick" Choice:("a" / "b" "c") Mark:['!']?;
+  syntax Tagged   = "tag" !"x" Word;
+}

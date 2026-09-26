@@ -1,0 +1,74 @@
+// commit points: 53 committed elements (0 composed) in 19 sequences
+Module: "syntax" "module" Name:QualifiedName "{" Members:Member* "}"
+  1 "module"  static  insert {DottedName, Identifier}  sync {"module"} @1, {DottedName, Identifier} @2, {"{"} @3, {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using"} @4, {"}"} @5
+  2 Name:QualifiedName  static  insert {"{"}  sync {DottedName, Identifier} @2, {"{"} @3, {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using"} @4, {"}"} @5
+  3 "{"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {"{"} @3, {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using"} @4, {"}"} @5
+  5 "}"  static  insert {"syntax", $}  sync {"}"} @5, {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using"} @4
+Symbols: "symbols" "{" Kinds:Identifier+ "}"
+  1 "{"  static  insert {Identifier}  sync {"{"} @1, {Identifier} @2, {"}"} @3
+  2 Kinds:Identifier+  static  insert {"}"}  sync {Identifier} @2, {"}"} @3
+  3 "}"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {"}"} @3, {Identifier} @2
+Builtin: "builtin" SymbolKind:Identifier Within:("in" Identifier)? "{" Names:QualifiedName+ "}"
+  1 SymbolKind:Identifier  static  insert {"in", "{"}  sync {Identifier} @1, {"in"} @2, {"{"} @3, {DottedName, Identifier} @4, {"}"} @5
+  3 "{"  static  insert {DottedName, Identifier}  sync {"{"} @3, {DottedName, Identifier} @4, {"}"} @5
+  4 Names:QualifiedName+  static  insert {"}"}  sync {DottedName, Identifier} @4, {"}"} @5
+  5 "}"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {"}"} @5, {DottedName, Identifier} @4
+Builtin/Within: "in" Identifier
+  1 Identifier  static  insert {"{"}  sync {Identifier} @1
+Using: "using" Module:QualifiedName ";"
+  1 Module:QualifiedName  static  insert {";"}  sync {DottedName, Identifier} @1, {";"} @2
+  2 ";"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {";"} @2
+TokenRule: "token" Name:Identifier "=" Body:Expression Except:("except" String+)? ";"
+  1 Name:Identifier  static  insert {"="}  sync {Identifier} @1, {"="} @2, {"!", "&", "(", ".", "[", DottedName, Identifier, String} @3, {"except"} @4, {";"} @5
+  2 "="  static  insert {"!", "&", "(", ".", "[", DottedName, Identifier, String}  sync {"="} @2, {"!", "&", "(", ".", "[", DottedName, Identifier, String} @3, {"except"} @4, {";"} @5
+  3 Body:Expression  static  insert {";", "except"}  sync {"!", "&", "(", ".", "[", DottedName, Identifier, String} @3, {"except"} @4, {";"} @5
+  5 ";"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {";"} @5
+TokenRule/Except: "except" String+
+  1 String+  static  insert {";"}  sync {String} @1
+SyntaxRule: "syntax" Name:Identifier "=" Body:Expression Clauses:Clause* End:(";" / Semantics)
+  1 Name:Identifier  static  insert {"="}  sync {Identifier} @1, {"="} @2, {"!", "&", "(", ".", "[", DottedName, Identifier, String} @3, {"declares", "dynamic", "references", "scope"} @4, {";", "{"} @5
+  2 "="  static  insert {"!", "&", "(", ".", "[", DottedName, Identifier, String}  sync {"="} @2, {"!", "&", "(", ".", "[", DottedName, Identifier, String} @3, {"declares", "dynamic", "references", "scope"} @4, {";", "{"} @5
+  3 Body:Expression  static  insert {";", "declares", "dynamic", "references", "scope", "{"}  sync {"!", "&", "(", ".", "[", DottedName, Identifier, String} @3, {"declares", "dynamic", "references", "scope"} @4, {";", "{"} @5
+  5 End:(";" / Semantics)  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {";", "{"} @5, {"declares", "dynamic", "references", "scope"} @4
+ExtensibleRule: "extensible" "syntax" Name:Identifier "{" Properties:PropertyDecl* Alternatives:Alternative* "}"
+  1 "syntax"  static  insert {Identifier}  sync {"syntax"} @1, {Identifier} @2, {"{"} @3, {"in", "out"} @4, {"|"} @5, {"}"} @6
+  2 Name:Identifier  static  insert {"{"}  sync {Identifier} @2, {"{"} @3, {"in", "out"} @4, {"|"} @5, {"}"} @6
+  3 "{"  static  insert {"in", "out", "|", "}"}  sync {"{"} @3, {"in", "out"} @4, {"|"} @5, {"}"} @6
+  6 "}"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {"}"} @6, {"|"} @5
+Extend: "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"
+  1 "syntax"  static  insert {DottedName, Identifier}  sync {"syntax"} @1, {DottedName, Identifier} @2, {"{"} @3, {"|"} @4, {"}"} @5
+  2 Target:QualifiedName  static  insert {"{"}  sync {DottedName, Identifier} @2, {"{"} @3, {"|"} @4, {"}"} @5
+  3 "{"  static  insert {"|", "}"}  sync {"{"} @3, {"|"} @4, {"}"} @5
+  5 "}"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {"}"} @5, {"|"} @4
+Alternative: "|" Named:(Identifier "=")? Body:Expression Precedence:("precedence" Integer Associativity?)? Clauses:Clause* Semantics:Semantics?
+  2 Body:Expression  static  insert {"declares", "dynamic", "precedence", "references", "scope", "{", "|", "}"}  sync {"!", "&", "(", ".", "[", DottedName, Identifier, String} @2, {"precedence"} @3, {"declares", "dynamic", "references", "scope"} @4, {"{"} @5
+Alternative/Precedence: "precedence" Integer Associativity?
+  1 Integer  static  insert {"declares", "dynamic", "left", "references", "right", "scope", "{", "|", "}"}  sync {Integer} @1, {"left", "right"} @2
+Declares: "declares" SymbolKind:Identifier Field:Identifier Export:"export"?
+  1 SymbolKind:Identifier  static  insert {Identifier}  sync {Identifier} @1, {Identifier} @2, {"export"} @3
+  2 Field:Identifier  static  insert {";", "declares", "dynamic", "export", "references", "scope", "{", "|", "}"}  sync {Identifier} @2, {"export"} @3
+References: "references" Question:"?"? Kinds:KindList Field:Identifier Within:("in" Identifier)?
+  2 Kinds:KindList  static  insert {Identifier}  sync {"(", Identifier} @2, {Identifier} @3, {"in"} @4
+  3 Field:Identifier  static  insert {";", "declares", "dynamic", "in", "references", "scope", "{", "|", "}"}  sync {Identifier} @3, {"in"} @4
+References/Within: "in" Identifier
+  1 Identifier  static  insert {";", "declares", "dynamic", "references", "scope", "{", "|", "}"}  sync {Identifier} @1
+KindGroup: "(" Kinds:(Identifier; "|")+ ")"
+  1 Kinds:(Identifier; "|")+  static  insert {")"}  sync {Identifier} @1, {")"} @2
+  2 ")"  static  insert {":", Identifier}  sync {")"} @2, {Identifier} @1
+SymbolProperty: "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"
+  1 "property"  static  insert {Identifier}  sync {"property"} @1, {Identifier} @2, {"for"} @3, {"(", Identifier} @4, {":"} @5, {CsType} @6, {"="} @7, {CsCode} @8, {";"} @9
+  2 Name:Identifier  static  insert {"for"}  sync {Identifier} @2, {"for"} @3, {"(", Identifier} @4, {":"} @5, {CsType} @6, {"="} @7, {CsCode} @8, {";"} @9
+  3 "for"  static  insert {"(", Identifier}  sync {"for"} @3, {"(", Identifier} @4, {":"} @5, {CsType} @6, {"="} @7, {CsCode} @8, {";"} @9
+  4 Kinds:KindList  static  insert {":"}  sync {"(", Identifier} @4, {":"} @5, {CsType} @6, {"="} @7, {CsCode} @8, {";"} @9
+  5 ":"  static  insert {CsType}  sync {":"} @5, {CsType} @6, {"="} @7, {CsCode} @8, {";"} @9
+  6 Type:CsType  static  insert {"="}  sync {CsType} @6, {"="} @7, {CsCode} @8, {";"} @9
+  7 "="  static  insert {CsCode}  sync {"="} @7, {CsCode} @8, {";"} @9
+  8 Default:CsCode  static  insert {";"}  sync {CsCode} @8, {";"} @9
+  9 ";"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {";"} @9
+Semantics: "{" Items:SemanticItem* "}"
+  2 "}"  static  insert {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using", "|", "}"}  sync {"}"} @2, {"check", "in", "out", DottedName, Identifier} @1
+Assignment: Target:QualifiedName "=" Value:CsCode ";"
+  1 "="  static  insert {CsCode}  sync {"="} @1, {CsCode} @2, {";"} @3
+  2 Value:CsCode  static  insert {";"}  sync {CsCode} @2, {";"} @3
+  3 ";"  static  insert {"check", "in", "out", "}", DottedName, Identifier}  sync {";"} @3
+// calls with recovery bits: 0

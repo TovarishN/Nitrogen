@@ -1,0 +1,7 @@
+syntax module Calc.Power
+{
+  extend syntax Calc.Expr
+  {
+    | Pow = Expr "^" Expr precedence 25 right
+  }
+}

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The `nitrogen` command (issue 236): parse and watch samples against .ngr grammars compiled in-process. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <AssemblyName>nitrogen</AssemblyName>
+    <RootNamespace>Nitrogen.Cli</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nitrogen.Workspace\Nitrogen.Workspace.csproj" />
+    <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />
+    <ProjectReference Include="..\Nitrogen.Ngr\Nitrogen.Ngr.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Nitrogen.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,371 @@
+// commit points: 224 committed elements (22 composed) in 101 sequences
+Body: "body" Name:Identifier "{" Variables:Let* Bindings:MotorBindings? Root:Part "}"
+  1 Name:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"let"} @3, {"motor_bindings"} @4, {"part"} @5, {"}"} @6
+  2 "{"  static  insert {"let", "motor_bindings", "part"}  sync {"{"} @2, {"let"} @3, {"motor_bindings"} @4, {"part"} @5, {"}"} @6
+  5 Root:Part  static  insert {"}"}  sync {"part"} @5, {"}"} @6
+  6 "}"  static  insert {"behavior", "body", "motion", "skill", $}  sync {"}"} @6
+Let: "let" Name:Identifier "=" Value:Expr
+  1 Name:Identifier  static  insert {"="}  sync {Identifier} @1, {"="} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3
+  2 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3
+  3 Value:Expr  static  insert {"let", "motor_bindings", "part"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @3
+MotorBindings: "motor_bindings" "{" Bindings:Binding* "}"
+  1 "{"  static  insert {"}", Identifier}  sync {"{"} @1, {Identifier} @2, {"}"} @3
+  3 "}"  static  insert {"part"}  sync {"}"} @3, {Identifier} @2
+Binding: Slot:(Identifier; ".")+ "=" Target:PartName
+  1 "="  static  insert {"$", Word}  sync {"="} @1, {"$", Word} @2, {Identifier} @0
+  2 Target:PartName  static  insert {"}", Identifier}  sync {"$", Word} @2
+Part: "part" Name:PartName Shape:Shape Attributes:PartAttribute* Contents:PartBody?
+  1 Name:PartName  static  insert {Identifier}  sync {"$", Word} @1, {Identifier} @2, {"at", "color", "mass", "rot"} @3, {"{"} @4
+  2 Shape:Shape  static  insert {"at", "color", "for", "joint", "mass", "part", "repeat", "rot", "{", "}"}  sync {Identifier} @2, {"at", "color", "mass", "rot"} @3, {"{"} @4
+Interpolation: "$" "{" Var:Identifier "}" Tail:Identifier?
+  1 "{"  static  insert {Identifier}  sync {"{"} @1, {Identifier} @2, {"}"} @3, {Identifier} @4
+  2 Var:Identifier  static  insert {"}"}  sync {Identifier} @2, {"}"} @3, {Identifier} @4
+  3 "}"  static  insert {"$", "}", Identifier}  sync {"}"} @3, {Identifier} @4
+Shape: Type:Identifier "(" Args:(Expr; ",")+ ")"
+  1 "("  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"("} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2, {")"} @3
+  2 Args:(Expr; ",")+  static  insert {")"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2, {")"} @3
+  3 ")"  static  insert {"at", "color", "for", "joint", "mass", "part", "repeat", "rot", "{", "}"}  sync {")"} @3, {"(", "-", "false", "not", "true", Identifier, Number} @2
+Mass: "mass" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"at", "color", "for", "joint", "mass", "part", "repeat", "rot", "{", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Color: "color" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"at", "color", "for", "joint", "mass", "part", "repeat", "rot", "{", "}"}  sync {"("} @2
+At: "at" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"at", "color", "for", "joint", "mass", "part", "repeat", "rot", "{", "}"}  sync {"("} @2
+Rot: "rot" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"at", "color", "for", "joint", "mass", "part", "repeat", "rot", "{", "}"}  sync {"("} @2
+PartBody: "{" Items:PartItem* "}"
+  2 "}"  static  insert {"for", "joint", "part", "repeat", "}"}  sync {"}"} @2, {"for", "joint", "part", "repeat"} @1
+Repeat: "repeat" Count:Expr "as" Iterator:Identifier "{" Children:Child* "}"
+  1 Count:Expr  static  insert {"as"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {"as"} @2, {Identifier} @3, {"{"} @4, {"for", "part", "repeat"} @5, {"}"} @6
+  2 "as"  static  insert {Identifier}  sync {"as"} @2, {Identifier} @3, {"{"} @4, {"for", "part", "repeat"} @5, {"}"} @6
+  3 Iterator:Identifier  static  insert {"{"}  sync {Identifier} @3, {"{"} @4, {"for", "part", "repeat"} @5, {"}"} @6
+  4 "{"  static  insert {"for", "part", "repeat", "}"}  sync {"{"} @4, {"for", "part", "repeat"} @5, {"}"} @6
+  6 "}"  static  insert {"for", "joint", "part", "repeat", "}"}  sync {"}"} @6, {"for", "part", "repeat"} @5
+For: "for" Iterator:Identifier "in" "[" Values:(Identifier; ",")+ "]" "{" Children:Child* "}"
+  1 Iterator:Identifier  static  insert {"in"}  sync {Identifier} @1, {"in"} @2, {"["} @3, {Identifier} @4, {"]"} @5, {"{"} @6, {"for", "part", "repeat"} @7, {"}"} @8
+  2 "in"  static  insert {"["}  sync {"in"} @2, {"["} @3, {Identifier} @4, {"]"} @5, {"{"} @6, {"for", "part", "repeat"} @7, {"}"} @8
+  3 "["  static  insert {Identifier}  sync {"["} @3, {Identifier} @4, {"]"} @5, {"{"} @6, {"for", "part", "repeat"} @7, {"}"} @8
+  4 Values:(Identifier; ",")+  static  insert {"]"}  sync {Identifier} @4, {"]"} @5, {"{"} @6, {"for", "part", "repeat"} @7, {"}"} @8
+  5 "]"  static  insert {"{"}  sync {"]"} @5, {"{"} @6, {"for", "part", "repeat"} @7, {"}"} @8, {Identifier} @4
+  6 "{"  static  insert {"for", "part", "repeat", "}"}  sync {"{"} @6, {"for", "part", "repeat"} @7, {"}"} @8
+  8 "}"  static  insert {"for", "joint", "part", "repeat", "}"}  sync {"}"} @8, {"for", "part", "repeat"} @7
+Joint: "joint" Type:JointType Attributes:JointAttribute*
+  1 Type:JointType  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"motor", Identifier} @1, {"anchor", "anchor_self", "angular_axis", "axis", "damping", "force", "hertz", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "pose", "range", "speed", "spring", "torque"} @2
+Axis: "axis" "=" Value:AxisValue
+  1 "="  static  insert {"(", Identifier}  sync {"="} @1, {"(", Identifier} @2
+  2 Value:AxisValue  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", Identifier} @2
+Range: "range" "=" "(" Low:Expr ".." High:Expr ")"
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3, {".."} @4, {"(", "-", "false", "not", "true", Identifier, Number} @5, {")"} @6
+  2 "("  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"("} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3, {".."} @4, {"(", "-", "false", "not", "true", Identifier, Number} @5, {")"} @6
+  3 Low:Expr  static  insert {".."}  sync {"(", "-", "false", "not", "true", Identifier, Number} @3, {".."} @4, {"(", "-", "false", "not", "true", Identifier, Number} @5, {")"} @6
+  4 ".."  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {".."} @4, {"(", "-", "false", "not", "true", Identifier, Number} @5, {")"} @6
+  5 High:Expr  static  insert {")"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @5, {")"} @6
+  6 ")"  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {")"} @6
+Torque: "torque" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Force: "force" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Speed: "speed" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Length: "length" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Hertz: "hertz" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Damping: "damping" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Anchor: "anchor" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"("} @2
+AnchorSelf: "anchor_self" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"("} @2
+LinearSpeed: "linear_speed" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"("} @2
+AngularAxis: "angular_axis" "=" Value:Tuple
+  1 "="  static  insert {"("}  sync {"="} @1, {"("} @2
+  2 Value:Tuple  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"("} @2
+Kp: "kp" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Kd: "kd" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+MaxSpeed: "max_speed" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Pose: "pose" "=" Value:Expr
+  1 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"anchor", "anchor_self", "angular_axis", "axis", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "max_speed", "motor", "part", "pose", "range", "repeat", "speed", "spring", "torque", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Tuple: "(" Values:(Expr; ",")+ ")"
+  1 Values:(Expr; ",")+  static  insert {")"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {")"} @2
+  2 ")"  static  insert {"anchor", "anchor_self", "angular_axis", "at", "axis", "color", "damping", "for", "force", "hertz", "joint", "kd", "kp", "length", "linear_speed", "mass", "max_speed", "motor", "part", "pose", "range", "repeat", "rot", "speed", "spring", "torque", "{", "}"}  sync {")"} @2, {"(", "-", "false", "not", "true", Identifier, Number} @1
+Behavior: "behavior" Name:Identifier "{" Items:BehaviorItem* "}"
+  1 Name:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"done", "inherit", "model", "reward"} @3, {"}"} @4
+  2 "{"  static  insert {"done", "inherit", "model", "reward", "}"}  sync {"{"} @2, {"done", "inherit", "model", "reward"} @3, {"}"} @4
+  4 "}"  static  insert {"behavior", "body", "motion", "skill", $}  sync {"}"} @4, {"done", "inherit", "model", "reward"} @3
+Inherit: "inherit" Name:Identifier
+  1 Name:Identifier  static  insert {"done", "inherit", "model", "reward", "}"}  sync {Identifier} @1
+Model: "model" Path:String
+  1 Path:String  static  insert {"done", "inherit", "model", "reward", "}"}  sync {String} @1
+Reward: "reward" "{" Value:Expr "}"
+  1 "{"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"{"} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2, {"}"} @3
+  2 Value:Expr  static  insert {"}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2, {"}"} @3
+  3 "}"  static  insert {"done", "inherit", "model", "reward", "}"}  sync {"}"} @3
+Done: "done" "when" Condition:Expr
+  1 "when"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"when"} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Condition:Expr  static  insert {"done", "inherit", "model", "reward", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+MotionBlock: "motion" Name:Identifier "{" Steps:Step* "}"
+  1 Name:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"at", "hold"} @3, {"}"} @4
+  2 "{"  static  insert {"at", "hold", "}"}  sync {"{"} @2, {"at", "hold"} @3, {"}"} @4
+  4 "}"  static  insert {"behavior", "body", "motion", "skill", $}  sync {"}"} @4, {"at", "hold"} @3
+Keyframe: "at" Time:Expr "pose" "{" Targets:Target* "}"
+  1 Time:Expr  static  insert {"pose"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {"pose"} @2, {"{"} @3, {Identifier} @4, {"}"} @5
+  2 "pose"  static  insert {"{"}  sync {"pose"} @2, {"{"} @3, {Identifier} @4, {"}"} @5
+  3 "{"  static  insert {"}", Identifier}  sync {"{"} @3, {Identifier} @4, {"}"} @5
+  5 "}"  static  insert {"at", "hold", "}"}  sync {"}"} @5, {Identifier} @4
+Target: Part:Identifier "." Property:Identifier "=" Value:Expr ","?
+  1 "."  static  insert {Identifier}  sync {"."} @1, {Identifier} @2, {"="} @3, {"(", "-", "false", "not", "true", Identifier, Number} @4, {","} @5
+  2 Property:Identifier  static  insert {"="}  sync {Identifier} @2, {"="} @3, {"(", "-", "false", "not", "true", Identifier, Number} @4, {","} @5
+  3 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @3, {"(", "-", "false", "not", "true", Identifier, Number} @4, {","} @5
+  4 Value:Expr  static  insert {",", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @4, {","} @5
+Hold: "hold" Duration:Expr
+  1 Duration:Expr  static  insert {"at", "hold", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+Skill: "skill" Name:Identifier "{" Lifecycle:Lifecycle Length:SkillLength? Items:SkillItem* "}"
+  1 Name:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"lifecycle"} @3, {"length"} @4, {"arguments", "complete", "inputs", "output", "requires", "source", "timeout"} @5, {"}"} @6
+  2 "{"  static  insert {"lifecycle"}  sync {"{"} @2, {"lifecycle"} @3, {"length"} @4, {"arguments", "complete", "inputs", "output", "requires", "source", "timeout"} @5, {"}"} @6
+  3 Lifecycle:Lifecycle  static  insert {"arguments", "complete", "inputs", "length", "output", "requires", "source", "timeout", "}"}  sync {"lifecycle"} @3, {"length"} @4, {"arguments", "complete", "inputs", "output", "requires", "source", "timeout"} @5, {"}"} @6
+  6 "}"  static  insert {"behavior", "body", "motion", "skill", $}  sync {"}"} @6, {"arguments", "complete", "inputs", "output", "requires", "source", "timeout"} @5
+Lifecycle: "lifecycle" Mode:LifecycleMode Fields:LifecycleField*
+  1 Mode:LifecycleMode  static  insert {"arguments", "complete", "duration", "fade_in", "fade_out", "inputs", "length", "output", "period", "requires", "source", "timeout", "}"}  sync {"continuous", "finite", "looping"} @1, {"duration", "fade_in", "fade_out", "period"} @2
+LifecycleField: Field:("duration" / "period" / "fade_in" / "fade_out") Value:Expr
+  1 Value:Expr  static  insert {"arguments", "complete", "duration", "fade_in", "fade_out", "inputs", "length", "output", "period", "requires", "source", "timeout", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+SkillLength: "length" Value:Expr
+  1 Value:Expr  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+Declarations: Section:("arguments" / "inputs") "{" Values:ValueDeclaration* "}"
+  1 "{"  static  insert {"}", Identifier}  sync {"{"} @1, {Identifier} @2, {"}"} @3
+  3 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @3, {Identifier} @2
+ValueDeclaration: Name:Identifier ":" Type:ValueType Default:("=" Expr)? Limits:("range" Bounds)?
+  1 ":"  static  insert {"bool", "enum", "float"}  sync {":"} @1, {"bool", "enum", "float"} @2, {"="} @3, {"range"} @4
+  2 Type:ValueType  static  insert {"=", "range", "}", Identifier}  sync {"bool", "enum", "float"} @2, {"="} @3, {"range"} @4
+ValueDeclaration/Default: "=" Expr
+  1 Expr  static  insert {"range", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+ValueDeclaration/Limits: "range" Bounds
+  1 Bounds  static  insert {"}", Identifier}  sync {"("} @1
+EnumType: "enum" "(" Values:(EnumValue; ",")+ ")"
+  1 "("  static  insert {Identifier}  sync {"("} @1, {Identifier} @2, {")"} @3
+  2 Values:(EnumValue; ",")+  static  insert {")"}  sync {Identifier} @2, {")"} @3
+  3 ")"  static  insert {"=", "range", "}", Identifier}  sync {")"} @3, {Identifier} @2
+Bounds: "(" Low:Expr ".." High:Expr ")"
+  1 Low:Expr  static  insert {".."}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {".."} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3, {")"} @4
+  2 ".."  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {".."} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3, {")"} @4
+  3 High:Expr  static  insert {")"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @3, {")"} @4
+  4 ")"  static  insert {"}", Identifier}  sync {")"} @4
+Requires: "requires" "motors" "{" Motors:MotorDecl* "}"
+  1 "motors"  static  insert {"{"}  sync {"motors"} @1, {"{"} @2, {Identifier} @3, {"}"} @4
+  2 "{"  static  insert {"}", Identifier}  sync {"{"} @2, {Identifier} @3, {"}"} @4
+  4 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @4, {Identifier} @3
+Source: "source" Name:Identifier ":" Body:SourceBody
+  1 Name:Identifier  static  insert {":"}  sync {Identifier} @1, {":"} @2, {"blend", "mpc", "nested", "phases", "tracks"} @3
+  2 ":"  static  insert {"blend", "mpc", "nested", "phases", "tracks"}  sync {":"} @2, {"blend", "mpc", "nested", "phases", "tracks"} @3
+  3 Body:SourceBody  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"blend", "mpc", "nested", "phases", "tracks"} @3
+Tracks: "tracks" "{" Modifiers:Modifiers? Items:Track* "}"
+  1 "{"  static  insert {"persistent", "track", "}"}  sync {"{"} @1, {"persistent"} @2, {"track"} @3, {"}"} @4
+  4 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @4, {"track"} @3
+Track: "track" Target:TrackTarget "{" "from" From:TrackValue "to" To:Expr "during" Start:Expr ".." End:Expr "easing" Easing:Identifier Release:"release"? "}"
+  1 Target:TrackTarget  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"from"} @3, {"(", "-", "false", "not", "rest", "true", Identifier, Number} @4, {"to"} @5, {"(", "-", "false", "not", "true", Identifier, Number} @6, {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  2 "{"  static  insert {"from"}  sync {"{"} @2, {"from"} @3, {"(", "-", "false", "not", "rest", "true", Identifier, Number} @4, {"to"} @5, {"(", "-", "false", "not", "true", Identifier, Number} @6, {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  3 "from"  static  insert {"(", "-", "false", "not", "rest", "true", Identifier, Number}  sync {"from"} @3, {"(", "-", "false", "not", "rest", "true", Identifier, Number} @4, {"to"} @5, {"(", "-", "false", "not", "true", Identifier, Number} @6, {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  4 From:TrackValue  static  insert {"to"}  sync {"(", "-", "false", "not", "rest", "true", Identifier, Number} @4, {"to"} @5, {"(", "-", "false", "not", "true", Identifier, Number} @6, {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  5 "to"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"to"} @5, {"(", "-", "false", "not", "true", Identifier, Number} @6, {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  6 To:Expr  static  insert {"during"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @6, {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  7 "during"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"during"} @7, {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  8 Start:Expr  static  insert {".."}  sync {"(", "-", "false", "not", "true", Identifier, Number} @8, {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  9 ".."  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {".."} @9, {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  10 End:Expr  static  insert {"easing"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @10, {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  11 "easing"  static  insert {Identifier}  sync {"easing"} @11, {Identifier} @12, {"release"} @13, {"}"} @14
+  12 Easing:Identifier  static  insert {"release", "}"}  sync {Identifier} @12, {"release"} @13, {"}"} @14
+  14 "}"  static  insert {"track", "}"}  sync {"}"} @14
+TrackTarget: Motor:TrackMotor "." Channel:Channel
+  1 "."  static  insert {"angle_offset", "feedforward_torque", "kd", "kp", "max_speed", "max_torque", "target_angle"}  sync {"."} @1, {"angle_offset", "feedforward_torque", "kd", "kp", "max_speed", "max_torque", "target_angle"} @2
+  2 Channel:Channel  static  insert {"{"}  sync {"angle_offset", "feedforward_torque", "kd", "kp", "max_speed", "max_torque", "target_angle"} @2
+PathIndex: "[" Name:Identifier "]"
+  1 Name:Identifier  static  insert {"]"}  sync {Identifier} @1, {"]"} @2
+  2 "]"  static  insert {".", "["}  sync {"]"} @2
+Phases: "phases" "{" Modifiers:Modifiers? Items:Phase* "}"
+  1 "{"  static  insert {"persistent", "phase", "}"}  sync {"{"} @1, {"persistent"} @2, {"phase"} @3, {"}"} @4
+  4 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @4, {"phase"} @3
+Phase: "phase" Name:Identifier "{" Items:PhaseItem* "}"
+  1 Name:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition"} @3, {"}"} @4
+  2 "{"  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {"{"} @2, {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition"} @3, {"}"} @4
+  4 "}"  static  insert {"phase", "}"}  sync {"}"} @4, {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition"} @3
+Transition: "transition" Duration:Expr "easing" Easing:Identifier
+  1 Duration:Expr  static  insert {"easing"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {"easing"} @2, {Identifier} @3
+  2 "easing"  static  insert {Identifier}  sync {"easing"} @2, {Identifier} @3
+  3 Easing:Identifier  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {Identifier} @3
+PhasePose: "pose" "{" Targets:PoseTarget* "}"
+  1 "{"  static  insert {"}", Identifier}  sync {"{"} @1, {Identifier} @2, {"}"} @3
+  3 "}"  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {"}"} @3, {Identifier} @2
+PoseTarget: Slot:SemanticPath "=" Value:TrackValue
+  1 "="  static  insert {"(", "-", "false", "not", "rest", "true", Identifier, Number}  sync {"="} @1, {"(", "-", "false", "not", "rest", "true", Identifier, Number} @2
+  2 Value:TrackValue  static  insert {"}", Identifier}  sync {"(", "-", "false", "not", "rest", "true", Identifier, Number} @2
+Override: "override" Slot:SemanticPath "{" Items:OverrideItem* "}"
+  1 Slot:SemanticPath  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"delay", "easing", "transition"} @3, {"}"} @4
+  2 "{"  static  insert {"delay", "easing", "transition", "}"}  sync {"{"} @2, {"delay", "easing", "transition"} @3, {"}"} @4
+  4 "}"  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {"}"} @4, {"delay", "easing", "transition"} @3
+OverrideDelay: "delay" Value:Expr
+  1 Value:Expr  static  insert {"delay", "easing", "transition", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+OverrideTransition: "transition" Value:Expr
+  1 Value:Expr  static  insert {"delay", "easing", "transition", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+OverrideEasing: "easing" Name:Identifier
+  1 Name:Identifier  static  insert {"delay", "easing", "transition", "}"}  sync {Identifier} @1
+PhaseHold: "hold" Value:Expr
+  1 Value:Expr  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+RootPosition: "root_position_offset" "(" Values:(RootLiteral; ",")+ ")"
+  1 "("  static  insert {"-", Number}  sync {"("} @1, {"-", Number} @2, {")"} @3
+  2 Values:(RootLiteral; ",")+  static  insert {")"}  sync {"-", Number} @2, {")"} @3
+  3 ")"  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {")"} @3, {"-", Number} @2
+RootRotation: "root_rotation_offset" "(" Values:(RootLiteral; ",")+ ")"
+  1 "("  static  insert {"-", Number}  sync {"("} @1, {"-", Number} @2, {")"} @3
+  2 Values:(RootLiteral; ",")+  static  insert {")"}  sync {"-", Number} @2, {")"} @3
+  3 ")"  static  insert {"hold", "override", "pose", "root_position_offset", "root_rotation_offset", "transition", "}"}  sync {")"} @3, {"-", Number} @2
+Mpc: "mpc" Controller:String "{" Modifiers:Modifiers? Inputs:InputMapping* "}"
+  1 Controller:String  static  insert {"{"}  sync {String} @1, {"{"} @2, {"persistent"} @3, {"input"} @4, {"}"} @5
+  2 "{"  static  insert {"input", "persistent", "}"}  sync {"{"} @2, {"persistent"} @3, {"input"} @4, {"}"} @5
+  5 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @5, {"input"} @4
+Nested: "nested" SkillName:Identifier "{" Modifiers:Modifiers? Items:NestedItem* "}"
+  1 SkillName:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"persistent"} @3, {"argument", "input"} @4, {"}"} @5
+  2 "{"  static  insert {"argument", "input", "persistent", "}"}  sync {"{"} @2, {"persistent"} @3, {"argument", "input"} @4, {"}"} @5
+  5 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @5, {"argument", "input"} @4
+ArgumentMapping: "argument" Name:Identifier "=" Value:Expr
+  1 Name:Identifier  static  insert {"="}  sync {Identifier} @1, {"="} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3
+  2 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3
+  3 Value:Expr  static  insert {"argument", "input", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @3
+InputMapping: "input" Name:Identifier "=" Value:Expr
+  1 Name:Identifier  static  insert {"="}  sync {Identifier} @1, {"="} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3
+  2 "="  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"="} @2, {"(", "-", "false", "not", "true", Identifier, Number} @3
+  3 Value:Expr  static  insert {"argument", "input", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @3
+BlendSource: "blend" "{" Children:BlendChild* "}"
+  1 "{"  static  insert {"}", Identifier}  sync {"{"} @1, {Identifier} @2, {"}"} @3
+  3 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @3, {Identifier} @2
+Output: "output" "blend" "{" Children:BlendChild* "}"
+  1 "blend"  static  insert {"{"}  sync {"blend"} @1, {"{"} @2, {Identifier} @3, {"}"} @4
+  2 "{"  static  insert {"}", Identifier}  sync {"{"} @2, {Identifier} @3, {"}"} @4
+  4 "}"  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"}"} @4, {Identifier} @3
+BlendChild: Source:Identifier Mode:BlendMode
+  1 Mode:BlendMode  static  insert {"}", Identifier}  sync {"additive", "parameter_weighted", "priority", "weighted"} @1
+PriorityMode: "priority" Value:Expr
+  1 Value:Expr  static  insert {"}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+WeightedMode: "weighted" "weight" Value:Expr
+  1 "weight"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"weight"} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+AdditiveMode: "additive" "weight" Value:Expr
+  1 "weight"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"weight"} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+ParameterWeightedMode: "parameter_weighted" "weight" Value:Expr
+  1 "weight"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"weight"} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2
+  2 Value:Expr  static  insert {"}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Completion: "complete" "when" Condition:Expr Dwell:("for" Expr)?
+  1 "when"  static  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {"when"} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2, {"for"} @3
+  2 Condition:Expr  static  insert {"arguments", "complete", "for", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2, {"for"} @3
+Completion/Dwell: "for" Expr
+  1 Expr  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+Timeout: "timeout" Duration:Expr "then" Result:("complete" / "fail")
+  1 Duration:Expr  static  insert {"then"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {"then"} @2, {"complete", "fail"} @3
+  2 "then"  static  insert {"complete", "fail"}  sync {"then"} @2, {"complete", "fail"} @3
+  3 Result:("complete" / "fail")  static  insert {"arguments", "complete", "inputs", "output", "requires", "source", "timeout", "}"}  sync {"complete", "fail"} @3
+Expr.Call: Callee:Identifier "(" Args:(Expr; ",")* ")"
+  1 "("  composed  insert {"(", ")", "-", "false", "not", "true", Identifier, Number}  sync {"("} @1, {"(", "-", "false", "not", "true", Identifier, Number} @2, {")"} @3
+  3 ")"  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {")"} @3, {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Paren: "(" Expr ")"
+  1 Expr  composed  insert {")"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1, {")"} @2
+  2 ")"  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {")"} @2
+Expr.Negate: "-" Expr
+  1 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+Expr.Not: "not" Expr
+  1 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @1
+Expr.Member: Expr "." Property:Identifier
+  2 Property:Identifier  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {Identifier} @2
+Expr.Ternary: Expr "?" Then:Expr ":" Else:Expr
+  2 Then:Expr  composed  insert {":"}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2, {":"} @3, {"(", "-", "false", "not", "true", Identifier, Number} @4
+  3 ":"  composed  insert {"(", "-", "false", "not", "true", Identifier, Number}  sync {":"} @3, {"(", "-", "false", "not", "true", Identifier, Number} @4
+  4 Else:Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @4
+Expr.Or: Expr "or" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.And: Expr "and" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Equal: Expr "==" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.NotEqual: Expr "!=" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Less: Expr "<" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Greater: Expr ">" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.LessEqual: Expr "<=" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.GreaterEqual: Expr ">=" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Add: Expr "+" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Sub: Expr "-" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Mul: Expr "*" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+Expr.Div: Expr "/" Expr
+  2 Expr  composed  insert {"!=", ")", "*", "+", ",", "-", ".", "..", "/", ":", "<", "<=", "==", ">", ">=", "?", "anchor", "anchor_self", "and", "angular_axis", "argument", "arguments", "as", "at", "axis", "color", "complete", "damping", "delay", "done", "duration", "during", "easing", "fade_in", "fade_out", "for", "force", "hertz", "hold", "inherit", "input", "inputs", "joint", "kd", "kp", "length", "let", "linear_speed", "mass", "max_speed", "model", "motor", "motor_bindings", "or", "output", "override", "part", "period", "pose", "range", "repeat", "requires", "reward", "root_position_offset", "root_rotation_offset", "rot", "source", "speed", "spring", "then", "timeout", "to", "torque", "transition", "{", "}", Identifier}  sync {"(", "-", "false", "not", "true", Identifier, Number} @2
+// calls with recovery bits: 44
+call Let:3  fail  after
+call Shape:2  fail  after
+call Mass:2  fail  after
+call Repeat:1  fail  after
+call Range:3  fail
+call Range:5  fail  after
+call Torque:2  fail  after
+call Force:2  fail  after
+call Speed:2  fail  after
+call Length:2  fail  after
+call Hertz:2  fail  after
+call Damping:2  fail  after
+call Kp:2  fail  after
+call Kd:2  fail  after
+call MaxSpeed:2  fail  after
+call Pose:2  fail  after
+call Tuple:1  fail  after
+call Reward:2  fail  after
+call Done:2  fail  after
+call Keyframe:1  fail  after
+call Target:4  fail  after
+call Hold:1  fail  after
+call LifecycleField:1  fail  after
+call SkillLength:1  fail  after
+call ValueDeclaration/Default:1  fail  after
+call Bounds:1  fail
+call Bounds:3  fail  after
+call Track:6  fail  after
+call Track:8  fail
+call Track:10  fail  after
+call TrackValue  fail  after
+call Transition:1  fail  after
+call OverrideDelay:1  fail  after
+call OverrideTransition:1  fail  after
+call PhaseHold:1  fail  after
+call ArgumentMapping:3  fail  after
+call InputMapping:3  fail  after
+call PriorityMode:1  fail  after
+call WeightedMode:2  fail  after
+call AdditiveMode:2  fail  after
+call ParameterWeightedMode:2  fail  after
+call Completion:2  fail  after
+call Completion/Dwell:1  fail  after
+call Timeout:1  fail  after

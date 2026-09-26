@@ -1,0 +1,11 @@
+syntax module Mini
+{
+  token Word = ['a'..'z' 'A'..'Z']+;
+
+  syntax Pair   = "(" Word ")";
+  syntax Choice = Ab / Ac;
+  syntax Ab     = "a" "b";
+  syntax Ac     = "a" "c";
+  syntax If     = "if" Word;
+  syntax Maybe  = "(" Word? ")";
+}

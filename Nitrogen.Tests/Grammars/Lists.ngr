@@ -1,0 +1,10 @@
+// Separated-list recovery (issue 235, Plan 3b): ")" after Values is a commit point whose sync set
+// re-enters the list.
+syntax module Lists
+{
+  token Name   = ['a'..'z']+ except "set";
+  token Number = ['0'..'9']+;
+
+  syntax File = Items:Set*;
+  syntax Set  = "set" Name:Name "(" Values:(Number; ",")* ")" ";";
+}

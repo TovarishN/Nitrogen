@@ -1,0 +1,24 @@
+// The Calc test language. Plan 1 hand-wrote Calc/CalcModule.cs from this grammar;
+// Plan 3 generates it.
+syntax module Calc
+{
+  token Number     = ['0'..'9']+ ("." ['0'..'9']+)?;
+  token Identifier = ['a'..'z' 'A'..'Z' '_'] ['a'..'z' 'A'..'Z' '0'..'9' '_']*;
+
+  syntax Program       = Statements:Statement*;
+  syntax Statement     = Assign / ExprStatement;
+  syntax Assign        = Target:Expr "=" Value:Expr ";";
+  syntax ExprStatement = Expr ";";
+
+  extensible syntax Expr
+  {
+    | Num   = Number
+    | Ref   = Identifier
+    | Call  = Callee:Identifier "(" Args:(Expr; ",")* ")"
+    | Paren = "(" Expr ")"
+    | Neg   = "-" Expr        precedence 30
+    | Add   = Expr "+" Expr   precedence 10 left
+    | Sub   = Expr "-" Expr   precedence 10 left
+    | Mul   = Expr "*" Expr   precedence 20 left
+  }
+}

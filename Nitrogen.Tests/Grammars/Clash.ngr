@@ -1,0 +1,8 @@
+// Same shape and precedence as Calc's Call: every call is ambiguous when both are loaded.
+syntax module Calc.Clash
+{
+  extend syntax Calc.Expr
+  {
+    | Invoke = Callee:Identifier "(" Args:(Expr; ",")* ")"
+  }
+}

@@ -1,0 +1,11 @@
+<Solution>
+  <Project Path="Nitrogen.Cli/Nitrogen.Cli.csproj" />
+  <Project Path="Nitrogen.Generator/Nitrogen.Generator.csproj" />
+  <Project Path="Nitrogen.Geometry/Nitrogen.Geometry.csproj" />
+  <Project Path="Nitrogen.Grammar/Nitrogen.Grammar.csproj" />
+  <Project Path="Nitrogen.LanguageService/Nitrogen.LanguageService.csproj" />
+  <Project Path="Nitrogen.Ngr/Nitrogen.Ngr.csproj" />
+  <Project Path="Nitrogen.Runtime/Nitrogen.Runtime.csproj" />
+  <Project Path="Nitrogen.Tests/Nitrogen.Tests.csproj" />
+  <Project Path="Nitrogen.Workspace/Nitrogen.Workspace.csproj" />
+</Solution>

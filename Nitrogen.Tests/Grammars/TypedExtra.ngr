@@ -1,0 +1,11 @@
+// Another module and namespace adds an alternative to Typed.Expr (issue 239). The alternative
+// implements the shared Type property and assigns the shared Expected property.
+syntax module TypedExtra
+{
+  using Typed;
+
+  extend syntax Typed.Expr
+  {
+    | Neg = "-" Expr precedence 8 { Type = Expr.Type == "num" ? "num" : "error"; Expr.Expected = "num"; }
+  }
+}

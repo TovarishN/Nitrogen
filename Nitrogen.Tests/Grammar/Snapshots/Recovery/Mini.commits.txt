@@ -1,0 +1,11 @@
+// commit points: 5 committed elements (0 composed) in 4 sequences
+Pair: "(" Word ")"
+  1 Word  static  insert {")"}  sync {Word} @1, {")"} @2
+  2 ")"  static  insert {$}  sync {")"} @2
+Ac: "a" "c"
+  1 "c"  static  insert {$}  sync {"c"} @1
+If: "if" Word
+  1 Word  static  insert {$}  sync {Word} @1
+Maybe: "(" Word? ")"
+  2 ")"  static  insert {$}  sync {")"} @2
+// calls with recovery bits: 0

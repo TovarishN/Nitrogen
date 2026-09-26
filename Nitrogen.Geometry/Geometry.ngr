@@ -1,0 +1,46 @@
+syntax module Geometry
+{
+  symbols { shape parameter }
+  symbol property Type for parameter : string = "error";
+
+  token Digits = ['0'..'9']+;
+  token Number = Digits ("." Digits)? (['e' 'E'] ['+' '-']? Digits)?;
+  token IdStart = ['a'..'z' 'A'..'Z' '_'];
+  token IdPart = ['a'..'z' 'A'..'Z' '0'..'9' '_'];
+  token Identifier = IdStart IdPart* except "def" "make" "box" "Scalar" "Mesh";
+
+  syntax Document = Statements:Statement*;
+  syntax Statement = Definition / Make / Box;
+  syntax Definition = "def" Name:Identifier "(" Width:Parameter "," Height:Parameter "," Depth:Parameter ")" "=" Body:DefinitionBody
+    declares shape Name export scope;
+  syntax Parameter = Name:Identifier ":" Annotation:("Scalar" / "Mesh") declares parameter Name
+  {
+    symbol.Type = Annotation.Text;
+    check GD0001 Annotation.Text == "Scalar" : "box parameters must be Scalar" at Annotation;
+  }
+  syntax DefinitionBody = TemplateBox / Make;
+  syntax TemplateBox = "box" Width:Dimension Height:Dimension Depth:Dimension ";";
+  syntax Dimension = Num / ParameterRef;
+  syntax ParameterRef = Name:Identifier references parameter Name
+  {
+    check GD0001 Symbol?.Type == "Scalar" : "box dimensions must be Scalar" at Name;
+  }
+  syntax Make = "make" Name:Identifier "(" Args:(Dimension; ",")* ")" ";"
+    references shape Name
+  {
+    check GD0003 Args.Count == 3 : "make needs three dimensions" at Name;
+  }
+  syntax Num = Sign:("+" / "-")? Value:Number
+  {
+    out hover Type : string = "";
+    out Amount : float? = null;
+    Type = "Core.Scalar";
+    Amount = GeometryValues.Parse(Value.Text, Sign?.Text == "-");
+    check GE0001 GeometryValues.Positive(Amount) : "box dimensions must be finite and positive";
+  }
+  syntax Box = "box" Width:Num Height:Num Depth:Num ";"
+  {
+    out Type : string = "";
+    Type = "Geometry.Mesh";
+  }
+}

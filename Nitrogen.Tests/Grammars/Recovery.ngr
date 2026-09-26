@@ -1,0 +1,11 @@
+// Recovery (issue 235): every element after "item", and all of Field, are commit points; the
+// Fields list is re-entered after a bad item.
+syntax module Recovery
+{
+  token Name   = ['a'..'z']+ except "item";
+  token Number = ['0'..'9']+;
+
+  syntax File  = Items:Item*;
+  syntax Item  = "item" Name:Name "{" Fields:Field* "}";
+  syntax Field = Key:Name "=" Value:Number ";";
+}

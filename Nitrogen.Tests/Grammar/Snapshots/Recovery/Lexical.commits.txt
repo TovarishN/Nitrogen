@@ -1,0 +1,15 @@
+// commit points: 7 committed elements (0 composed) in 6 sequences
+Document: Items:(Item; ",")+ ";"
+  1 ";"  static  insert {$}  sync {";"} @1, {"pick", "tag", "{", Comment, Digits, Hex, Signed, Text, Unicode, Word} @0
+Block: "{" Body:(Word "=" Digits)* "}"
+  2 "}"  static  insert {",", ";"}  sync {"}"} @2, {Word} @1
+Block/Body: Word "=" Digits
+  1 "="  static  insert {Digits}  sync {"="} @1, {Digits} @2
+  2 Digits  static  insert {"}", Word}  sync {Digits} @2
+Pick: "pick" Choice:("a" / ("b" "c")) Mark:[...]?
+  1 Choice:("a" / ("b" "c"))  static  insert {",", ";", *}  sync {"a", "b"} @1, {*} @2
+Pick/Choice#2: "b" "c"
+  1 "c"  static  insert {",", ";", *}  sync {"c"} @1
+Tagged: "tag" !"x" Word
+  2 Word  static  insert {",", ";"}  sync {Word} @2
+// calls with recovery bits: 0

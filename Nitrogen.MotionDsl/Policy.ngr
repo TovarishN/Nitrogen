@@ -1,0 +1,390 @@
+// PolicyParser's `.policy` and `.compose` documents (issue 234, Plan 7). Self-contained: its tokens
+// repeat Motion.ngr's because PolicyParser matches words by TEXT, so every MotionLexer keyword is
+// also a name here (`Word`, never Motion's `Identifier`). Semantics live in PolicyAstMapper;
+// PolicyEquivalenceTests hold this grammar and PolicyParser to the same AST.
+syntax module Policy
+{
+  token Digits  = ['0'..'9']+;
+  token Number  = Digits ("." Digits)? (['e' 'E'] ['+' '-']? Digits)?;
+  token IdStart = ['a'..'z' 'A'..'Z' '_'];
+  token IdPart  = ['a'..'z' 'A'..'Z' '0'..'9' '_'];
+  token Word    = IdStart IdPart*;
+  token String  = "\"" [^ '"']* "\"";
+  // `60M`, `7500k`: a number with a glued word; the mapper allows only k and M.
+  token Count   = Number (IdStart IdPart*)?;
+  // Word lists that end at the words PolicyParser's loops stop at.
+  token ChannelWord  = IdStart IdPart* except "families" "box" "resample" "standing_height";
+  token ScenarioWord = IdStart IdPart* except "report" "episodes" "seeds" "start" "noise" "perturb" "deterministic";
+  token PoseWord     = IdStart IdPart* except "requires" "walk" "getup" "rules" "commands";
+  // `clock steps x` fails in PolicyParser; it must not fall back to a reference named `steps`.
+  token ClockRef     = IdStart IdPart* except "steps";
+  // What MotionLexer lexes after the closing brace, which PolicyParser never reads.
+  token LooseString  = "\"" [^ '"']* "\""?;
+  token Punct        = ">=" / "<=" / "==" / "!=" / ".." / ['+' '-' '*' '/' '(' ')' '{' '}' '[' ']' ',' '?' ':' '$' '.' '=' '<' '>'];
+
+  // Binding (issue 237). A document binds on its own: a compose names its policies by file path.
+  symbols { reference channel goal_channel family noise scenario pose weight command setting }
+  builtin goal_channel { v_forward v_lateral yaw_rate height duty_left duty_right }
+  builtin family       { velocity stand posture one_leg }
+  builtin noise        { joint_angle joint_velocity angular_velocity gravity }
+  builtin scenario     { cruise stop restart push omnidirectional squat }
+  builtin pose         { tumbling standing crouched kneeling sitting supine prone onside airborne }
+
+  syntax PolicyDocument  = Policy:Policy Trailing:TrailingToken*;
+  syntax ComposeDocument = Compose:Compose Trailing:TrailingToken*;
+  syntax TrailingToken   = Number / Word / LooseString / Punct;
+  syntax Num             = Negative:"-"? Value:Number { out Amount : float? = null; Amount = PolicyValues.Parse(Value.Text, Negative is not null); }
+
+  // ---- policy ----
+  syntax Policy         = "policy" Name:Word "{" Items:PolicyItem* "}"
+  {
+    check PV0001 PolicyValues.PolicyHas(Semantics, Node, "rig") : "policy is missing 'requires rig'" at Name;
+    check PV0001 PolicyValues.PolicyHas(Semantics, Node, "scene") : "policy is missing 'requires scene'" at Name;
+    check PV0001 PolicyValues.PolicyHas(Semantics, Node, "observe") : "policy is missing an 'observe' block" at Name;
+    check PV0001 PolicyValues.PolicyHas(Semantics, Node, "goal") : "policy needs at least one 'goal'" at Name;
+    check PV0001 PolicyValues.PolicyHas(Semantics, Node, "train") : "policy is missing a 'train' block" at Name;
+    check PV0001 PolicyValues.PolicyHas(Semantics, Node, "evaluate") : "policy is missing an 'evaluate' block" at Name;
+  }
+  syntax PolicyItem     = Requires / Reference / Actuate / Observe / Goal / Train / Evaluate;
+  syntax Requires       = "requires" Target:("rig" / "scene") Asset:String;
+  syntax Reference      = "reference" Name:Word ":" "skill" Skill:String Recording:("on" "scene" String)?  declares reference Name;
+  syntax Actuate        = "actuate" "{" Items:ActuateItem* "}" { check PV0001 Items.Count > 0 : "actuate block needs rate_limit, scale, smoothing or clamp"; }
+  syntax ActuateItem    = ActuateSetting / Clamp;
+  syntax ActuateSetting = Setting:("rate_limit" / "scale" / "smoothing") Value:Num
+  {
+    check PV0004 PolicyValues.ActuateProblem(Setting.Text, Value.Amount) is null : PolicyValues.ActuateProblem(Setting.Text, Value.Amount)! at Value;
+  }
+  syntax Clamp          = "clamp" Fragment:Word Radians:Num
+  {
+    out AngleRadians : float? = null;
+    AngleRadians = Radians.Amount;
+    check PV0004 !(Radians.Amount <= 0f) : $"actuate clamp '{Fragment}' radians must be positive" at Radians;
+  }
+
+  syntax Observe         = "observe" "{" Items:ObserveItem* "}";
+  syntax ObserveItem     = Noise / Latency / ObsReference / ObservePelvis / ObserveJoints / ObserveContacts / ObserveCom / ObserveBare;
+  syntax Noise           = "noise" "{" Channels:NoiseChannel* "}";
+  syntax NoiseChannel    = Channel:Word Sigma:Num  references noise Channel { check PV0004 !(Sigma.Amount < 0f) : $"noise '{Channel}' must be non-negative" at Sigma; }
+  syntax Latency         = "latency" Low:Num ".." High:Num
+  {
+    check PV0002 PolicyValues.Integer(Low.Amount) : PolicyValues.NotInteger(Low.Amount) at Low;
+    check PV0002 PolicyValues.Integer(High.Amount) : PolicyValues.NotInteger(High.Amount) at High;
+    check PV0004 !PolicyValues.Integer(Low.Amount) || !PolicyValues.Integer(High.Amount) || !(Low.Amount < 0f || High.Amount < Low.Amount)
+      : $"latency {PolicyValues.Whole(Low.Amount)}..{PolicyValues.Whole(High.Amount)} is not a valid range";
+  }
+  syntax ObsReference    = Block:("clock" / "reference_delta") Reference:Word  references reference Reference
+  {
+    check PV0005 PolicyValues.ObservationClockProblem(Semantics, Node, Block.Text) is null : PolicyValues.ObservationClockProblem(Semantics, Node, Block.Text)!;
+  }
+  syntax ObservePelvis   = "pelvis" Parts:("height" / "velocity" / "angular")+;
+  syntax ObserveJoints   = "joints" Parts:("angle" / "velocity" / "previous_action")+;
+  syntax ObserveContacts = "contacts" Parts:("feet" / "air_time")+;
+  syntax ObserveCom      = "com" Parts:("offset" / "velocity")+;
+  syntax ObserveBare     = Block:("gravity" / "command" / "state")
+  {
+    check PV0005 PolicyValues.ObservationClockProblem(Semantics, Node, Block.Text) is null : PolicyValues.ObservationClockProblem(Semantics, Node, Block.Text)!;
+  }
+
+  syntax Goal       = "goal" Name:Word "{" Items:GoalItem* "}"
+  {
+    check PV0001 PolicyValues.GoalHas(Semantics, Node, "clock") : $"goal '{Name}' is missing 'clock'" at Name;
+    check PV0001 PolicyValues.GoalHas(Semantics, Node, "reward") : $"goal '{Name}' is missing 'reward'" at Name;
+    check PV0001 PolicyValues.GoalHas(Semantics, Node, "start") : $"goal '{Name}' is missing 'start'" at Name;
+    check PV0001 PolicyValues.GoalHas(Semantics, Node, "terminate") : $"goal '{Name}' is missing 'terminate'" at Name;
+    check PV0001 PolicyValues.GoalHas(Semantics, Node, "success") : $"goal '{Name}' is missing 'success'" at Name;
+    check PV0001 PolicyValues.SecondGoalProblem(Semantics, Node) is null : PolicyValues.SecondGoalProblem(Semantics, Node)! at Name;
+    check PV0006 PolicyValues.TermPresenceProblem(Semantics, Node) is null : PolicyValues.TermPresenceProblem(Semantics, Node)! at Name;
+  }
+  syntax GoalItem   = StepsClock / RefClock / Reward / Start / Terminate / Perturb / Command / Randomize / Success;
+  syntax StepsClock = "clock" "steps" Steps:Num
+  {
+    check PV0002 PolicyValues.Integer(Steps.Amount) : PolicyValues.NotInteger(Steps.Amount) at Steps;
+    check PV0004 !PolicyValues.Integer(Steps.Amount) || !(Steps.Amount <= 0f) : "clock steps must be positive" at Steps;
+    check PV0005 PolicyValues.StepClockProblem(Semantics, Node) is null : PolicyValues.StepClockProblem(Semantics, Node)!;
+  }
+  syntax RefClock   = "clock" Reference:ClockRef Mode:Word Hold:("hold" Num)?  references reference Reference
+  {
+    check PV0003 Mode.Text is "time_driven" or "steps" : $"clock mode '{Mode}' is not supported (time_driven, steps)" at Mode;
+    check PV0002 PolicyValues.Integer(Hold?.Amount) : PolicyValues.NotInteger(Hold?.Amount);
+    check PV0004 !PolicyValues.Integer(Hold?.Amount) || !(Hold?.Amount < 0f) : "clock hold must be non-negative";
+  }
+
+  syntax Reward         = "reward" "{" Terms:RewardTerm* "}";
+  syntax RewardTerm     = TrackTerm / JointLimitTerm / GoalTrackTerm / SimpleTerm / GaitTerm;
+  syntax TrackTerm      = "track" Reference:Word Channel:("pose" / "velocity" / "root" / "rotation")
+                          Weight:Num "sharpness" Sharpness:Num Options:TrackOption*  references reference Reference
+  {
+    check PV0004 !(Weight.Amount == 0f) : "reward term 'track' has weight zero; delete the line instead of disabling it" at Weight;
+    check PV0004 !(Weight.Amount < 0f) : "a track weight must be positive" at Weight;
+    check PV0004 !(Sharpness.Amount <= 0f) : "a track sharpness must be positive" at Sharpness;
+    check PV0005 !PolicyValues.StepGoal(Semantics, Node) : "a step clock has no reference: `track` terms are not allowed";
+  }
+  syntax TrackOption    = Rms / Weights / Anchored;
+  syntax Rms            = "rms";
+  syntax Weights        = "weights" "{" Items:JointWeight* "}"  scope;
+  syntax JointWeight    = Motor:Word Weight:Num  declares weight Motor { check PV0004 !(Weight.Amount <= 0f) : $"joint weight for '{Motor}' must be positive" at Weight; }
+  syntax Anchored       = "anchored" Frame:("xz" / "xyz");
+  syntax JointLimitTerm = "joint_limit" Weight:Num "margin" Margin:Num Gate:Gate?
+  {
+    check PV0004 !(Weight.Amount == 0f) : "reward term 'joint_limit' has weight zero; delete the line instead of disabling it" at Weight;
+    check PV0004 !(Weight.Amount > 0f) : "regulariser 'joint_limit' must have a non-positive weight" at Weight;
+    check PV0004 !(Margin.Amount <= 0f || Margin.Amount >= 0.5f) : "joint_limit margin must be in (0, 0.5)" at Margin;
+    check PV0006 PolicyValues.GateProblem(Semantics, Node, "joint_limit", false) is null : PolicyValues.GateProblem(Semantics, Node, "joint_limit", false)!;
+  }
+  syntax GoalTrackTerm  = "goal_track" Family:Word Weight:Num "halving" Halving:Num Gate:Gate?  references family Family
+  {
+    check PV0004 !(Weight.Amount == 0f) : "reward term 'goal_track' has weight zero; delete the line instead of disabling it" at Weight;
+    check PV0004 !(Weight.Amount < 0f) : "a goal_track weight must be positive" at Weight;
+    check PV0004 !(Halving.Amount <= 0f) : "goal_track halving must be positive" at Halving;
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : "goal_track needs a command block and a step clock";
+    check PV0006 PolicyValues.GoalTrackFamilyProblem(Semantics, Node) is null : PolicyValues.GoalTrackFamilyProblem(Semantics, Node)!;
+  }
+  syntax SimpleTerm     = Term:("action_rate" / "torque" / "goal_hit") Weight:Num Gate:Gate?
+  {
+    check PV0004 !(Weight.Amount == 0f) : $"reward term '{Term}' has weight zero; delete the line instead of disabling it" at Weight;
+    check PV0004 PolicyValues.SimpleTermProblem(Term.Text, Weight.Amount) is null : PolicyValues.SimpleTermProblem(Term.Text, Weight.Amount)! at Weight;
+    check PV0005 Term.Text != "goal_hit" || !PolicyValues.RefGoal(Semantics, Node) : "goal_hit needs a command block and a step clock";
+    check PV0006 Term.Text != "goal_hit" || PolicyValues.FirstGoalHit(Semantics, Node) : "one goal_hit term per goal";
+    check PV0006 Term.Text == "goal_hit" || PolicyValues.GateProblem(Semantics, Node, Term.Text, false) is null : PolicyValues.GateProblem(Semantics, Node, Term.Text, false)!;
+  }
+  syntax GaitTerm       = Term:("alive" / "stride" / "foot_clearance" / "knee_scaffold" / "base_height" / "orientation"
+                          / "torso_pose" / "foot_slip" / "forbidden_contact" / "vertical_vel" / "roll_pitch_rate"
+                          / "arm_pose" / "step_cost" / "stand_still" / "leg_pose" / "leg_parallel" / "com_balance"
+                          / "termination") Weight:Num Params:GaitParam* Gate:Gate?
+  {
+    check PV0004 !(Weight.Amount == 0f) : $"reward term '{Term}' has weight zero; delete the line instead of disabling it" at Weight;
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : $"'{Term}' is a gait term and needs a step clock";
+    check PV0006 PolicyValues.GaitParamProblem(Semantics, Node) is null : PolicyValues.GaitParamProblem(Semantics, Node)!;
+    check PV0006 PolicyValues.GateProblem(Semantics, Node, Term.Text, true) is null : PolicyValues.GateProblem(Semantics, Node, Term.Text, true)!;
+  }
+  syntax GaitParam      = Name:("sigma" / "gate_sigma_sq" / "target" / "full_flex" / "ankle_full_flex" / "free") Value:Num;
+  syntax Gate           = "when" Name:("goal_met" / "height_commanded" / "bare_stand" / "moving");
+
+  syntax Start           = "start" "{" Cases:StartCase* "}"
+  {
+    check PV0007 PolicyValues.StartSumProblem(Semantics, Node) is null : PolicyValues.StartSumProblem(Semantics, Node)!;
+  }
+  syntax StartCase       = SpawnCase / CrumpleCase / StandingCase / ReferenceCase;
+  syntax SpawnCase       = Case:("supine" / "spawn") Probability:Num Options:("{" SpawnOption* "}")?
+  {
+    check PV0004 !(Probability.Amount <= 0f || Probability.Amount > 1f) : $"start '{Case}' probability must be in (0, 1]" at Probability;
+  }
+  syntax SpawnOption     = Option:("settle" / "joint_noise") Value:Num
+  {
+    check PV0002 Option.Text != "settle" || PolicyValues.Integer(Value.Amount) : PolicyValues.NotInteger(Value.Amount) at Value;
+    check PV0004 (Option.Text == "settle" && !PolicyValues.Integer(Value.Amount)) || !(Value.Amount < 0f) : "settle and joint_noise must be non-negative" at Value;
+  }
+  syntax CrumpleCase     = "crumple" Probability:Num "{" Options:CrumpleOption* "}"
+  {
+    check PV0004 !(Probability.Amount <= 0f || Probability.Amount > 1f) : "start 'crumple' probability must be in (0, 1]" at Probability;
+    check PV0006 PolicyValues.HasReferences(Semantics, Node) : "start crumple stands on the reference's last frame; declare a reference";
+  }
+  syntax CrumpleOption   = CrumpleShove / CrumpleSetting;
+  syntax CrumpleShove    = "shove" Low:Num ".." High:Num
+  {
+    check PV0004 !(Low.Amount < 0f || High.Amount < Low.Amount) : $"crumple shove {PolicyValues.F(Low.Amount)}..{PolicyValues.F(High.Amount)} must satisfy 0 <= a <= b";
+  }
+  syntax CrumpleSetting  = Option:("cut" / "settle" / "joint_noise") Value:Num
+  {
+    check PV0002 Option.Text != "settle" || PolicyValues.Integer(Value.Amount) : PolicyValues.NotInteger(Value.Amount) at Value;
+    check PV0004 Option.Text == "cut" || (Option.Text == "settle" && !PolicyValues.Integer(Value.Amount)) || !(Value.Amount < 0f) : "settle and joint_noise must be non-negative" at Value;
+    check PV0004 Option.Text != "cut" || !(Value.Amount <= 0f) : $"crumple cut {PolicyValues.F(Value.Amount)} must be positive" at Value;
+  }
+  syntax StandingCase    = "standing" Probability:Num
+  {
+    check PV0004 !(Probability.Amount <= 0f || Probability.Amount > 1f) : "start 'standing' probability must be in (0, 1]" at Probability;
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : "start standing needs `clock steps`";
+  }
+  syntax ReferenceCase   = "reference" Probability:Num Reference:Word Window:ReferenceWindow  references reference Reference
+  {
+    check PV0004 !(Probability.Amount <= 0f || Probability.Amount > 1f) : "start 'reference' probability must be in (0, 1]" at Probability;
+  }
+  syntax ReferenceWindow = Uniform / WindowRange;
+  syntax Uniform         = "uniform";
+  syntax WindowRange     = "range" Low:Num ".." High:Num
+  {
+    check PV0004 !(Low.Amount < 0f || High.Amount > 1f || Low.Amount >= High.Amount)
+      : $"reference start range {PolicyValues.F(Low.Amount)}..{PolicyValues.F(High.Amount)} must satisfy 0 <= a < b <= 1";
+  }
+
+  syntax Terminate          = "terminate" "{" Items:Termination* "}";
+  syntax Termination        = Nonfinite / BelowTermination / AboveTermination / ContactTermination;
+  syntax Nonfinite          = "nonfinite";
+  syntax BelowTermination   = "height" "<" Threshold:Num
+  {
+    check PV0004 !(Threshold.Amount <= 0f) : "termination 'height' threshold must be positive" at Threshold;
+    check PV0004 !(Threshold.Amount >= 1f) : "termination height is a fraction of standing height and must be below 1" at Threshold;
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : "termination 'height' needs `clock steps` (a reference clock uses height_error / rotation_error)";
+  }
+  syntax AboveTermination   = Measure:("tilt" / "height_error" / "rotation_error") ">" Threshold:Num
+  {
+    check PV0004 !(Threshold.Amount <= 0f) : $"termination '{Measure}' threshold must be positive" at Threshold;
+    check PV0005 Measure.Text != "tilt" || !PolicyValues.RefGoal(Semantics, Node) : "termination 'tilt' needs `clock steps` (a reference clock uses height_error / rotation_error)";
+  }
+  syntax ContactTermination = "forbidden_contact_steps" ">=" Threshold:Num
+  {
+    check PV0002 PolicyValues.Integer(Threshold.Amount) : PolicyValues.NotInteger(Threshold.Amount) at Threshold;
+    check PV0004 !PolicyValues.Integer(Threshold.Amount) || !(Threshold.Amount <= 0f) : "termination 'forbidden_contact_steps' threshold must be positive" at Threshold;
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : "termination 'forbidden_contact_steps' needs `clock steps` (a reference clock uses height_error / rotation_error)";
+  }
+
+  syntax Perturb = "perturb" "{" Pushes:Push* "}" { check PV0001 Pushes.Count > 0 : "perturb block needs a push line"; }
+  syntax Push    = "push" Max:Num "every" Low:Num ".." High:Num
+  {
+    check PV0004 !(Max.Amount <= 0f) : "perturb push max must be positive" at Max;
+    check PV0004 !(Low.Amount <= 0f || Low.Amount >= High.Amount) : $"perturb every {PolicyValues.F(Low.Amount)}..{PolicyValues.F(High.Amount)} must satisfy 0 < a < b";
+    check PV0001 PolicyValues.FirstPush(Semantics, Node) : "perturb takes exactly one push line in v1";
+  }
+
+  syntax Command        = "command" "{" Items:CommandItem* "}"  scope
+  {
+    check PV0001 PolicyValues.CommandHas(Semantics, Node, "channels") : "command block needs 'channels'";
+    check PV0001 PolicyValues.CommandHas(Semantics, Node, "families") : "command block needs 'families'";
+    check PV0001 PolicyValues.CommandHas(Semantics, Node, "resample") : "command block needs 'resample every a..b'";
+    check PV0001 PolicyValues.CommandHas(Semantics, Node, "standing_height") : "command block needs 'standing_height'";
+    check PV0005 PolicyValues.CommandClockProblem(Semantics, Node) is null : PolicyValues.CommandClockProblem(Semantics, Node)!;
+  }
+  syntax CommandItem    = StandingHeight / Channels / Families / Box / Resample;
+  syntax StandingHeight = "standing_height" Value:Num;
+  syntax Channels       = "channels" Names:ChannelDecl+;
+  syntax ChannelDecl    = Name:ChannelWord  declares channel Name references goal_channel Name;
+  syntax Families       = "families" "{" Items:Family* "}"
+  {
+    check PV0007 PolicyValues.FamiliesProblem(Semantics, Node) is null : PolicyValues.FamiliesProblem(Semantics, Node)!;
+  }
+  syntax Family         = Name:Word Probability:Num FadeFrom:("from" Num)?  references family Name
+  {
+    check PV0004 !(Probability.Amount <= 0f) : $"family '{Name}' probability must be positive; omit the family instead" at Probability;
+    check PV0004 !(FadeFrom?.Amount < 0f || FadeFrom?.Amount >= 1f) : $"family '{Name}' fade-in start must be in [0, 1)";
+    check PV0007 Name.Text != "velocity" || FadeFrom is null : "velocity is the remainder and cannot fade in";
+  }
+  syntax Box            = "box" "{" Items:BoxEntry* "}";
+  syntax BoxEntry       = Channel:Word StartLow:Num ".." StartHigh:Num Cap:("to" Num ".." Num)?  references channel Channel
+  {
+    check PV0004 PolicyValues.BoxProblem(Semantics, Node) is null : PolicyValues.BoxProblem(Semantics, Node)!;
+  }
+  syntax Resample       = "resample" "every" Low:Num ".." High:Num
+  {
+    check PV0004 High.Amount <= 0f || !(Low.Amount <= 0f || Low.Amount >= High.Amount) : $"resample every {PolicyValues.F(Low.Amount)}..{PolicyValues.F(High.Amount)} must satisfy 0 < a < b";
+  }
+
+  syntax Randomize       = "randomize" "{" Items:RandomizeItem* "}"
+  {
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : "randomize needs `clock steps`";
+    check PV0008 PolicyValues.EvaluateRandomizeProblem(Semantics, Node) is null : PolicyValues.EvaluateRandomizeProblem(Semantics, Node)!;
+  }
+  syntax RandomizeItem   = RandomizeRange / RandomizeJitter;
+  syntax RandomizeRange  = Setting:("friction" / "gain" / "torque_scale" / "latency") Low:Num ".." High:Num
+  {
+    check PV0002 Setting.Text != "latency" || PolicyValues.Integer(Low.Amount) : PolicyValues.NotInteger(Low.Amount) at Low;
+    check PV0002 Setting.Text != "latency" || PolicyValues.Integer(High.Amount) : PolicyValues.NotInteger(High.Amount) at High;
+    check PV0004 PolicyValues.RandomizeProblem(Setting.Text, Low.Amount, High.Amount) is null : PolicyValues.RandomizeProblem(Setting.Text, Low.Amount, High.Amount)!;
+  }
+  syntax RandomizeJitter = Setting:("pose_jitter" / "velocity_jitter") Value:Num { check PV0004 !(Value.Amount < 0f) : "randomize jitters must be non-negative" at Value; }
+
+  syntax Success         = "success" Body:SuccessBody "at" "end";
+  syntax SuccessBody     = TrackingSuccess / SupineSuccess / StandingSuccess;
+  syntax TrackingSuccess = "tracking" "{" "error" "<" Error:Num "}"
+  {
+    check PV0004 !(Error.Amount <= 0f) : "success tracking error bar must be positive" at Error;
+    check PV0005 !PolicyValues.RefGoal(Semantics, Node) : "success tracking needs `clock steps`";
+  }
+  syntax SupineSuccess   = "supine" "{" "facing" "<" Facing:Num "}" { check PV0004 !(Facing.Amount <= -1f || Facing.Amount > 0f) : "success supine: facing bar must be in (-1, 0]" at Facing; }
+  syntax StandingSuccess = "standing" "{" "height" Height:Num "tolerance" Tolerance:Num "upright" ">" Upright:Num "}"
+  {
+    check PV0004 !(Tolerance.Amount <= 0f || Upright.Amount <= 0f || Upright.Amount > 1f) : "success: tolerance must be positive and upright in (0, 1]";
+  }
+
+  syntax Train        = "train" "{" Items:TrainItem* "}"
+  {
+    check PV0001 PolicyValues.TrainMissing(Semantics, Node) is null : PolicyValues.TrainMissing(Semantics, Node)!;
+  }
+  syntax TrainItem    = Algorithm / TrainCount / Timesteps / Network / LearningRate / ScheduleItem / Normalize;
+  syntax Algorithm    = "algorithm" Name:Word { check PV0003 Name.Text == "ppo" : $"algorithm '{Name}' is not supported; v1 compiles only 'ppo'" at Name; }
+  syntax TrainCount   = Setting:("worlds" / "seed") Value:Num
+  {
+    check PV0002 PolicyValues.Integer(Value.Amount) : PolicyValues.NotInteger(Value.Amount) at Value;
+    check PV0004 Setting.Text != "worlds" || !PolicyValues.Integer(Value.Amount) || !(Value.Amount <= 0f) : "train worlds must be positive" at Value;
+  }
+  syntax Timesteps    = "timesteps" Value:Count
+  {
+    check PV0002 PolicyValues.CountProblem(Value.Text) is null : PolicyValues.CountProblem(Value.Text)! at Value;
+    check PV0004 !(PolicyValues.Count(Value.Text) <= 0) : "train timesteps must be positive" at Value;
+  }
+  syntax Network      = "network" "[" Sizes:Num* "]" Bounded:"bounded"?
+  {
+    check PV0002 Sizes.All(s => PolicyValues.Integer(s.Amount)) : PolicyValues.NotInteger(Sizes.First(s => !PolicyValues.Integer(s.Amount)).Amount);
+    check PV0004 !Sizes.All(s => PolicyValues.Integer(s.Amount)) || !(Sizes.Count == 0 || Sizes.Any(s => s.Amount <= 0f)) : "train network needs at least one positive layer width";
+  }
+  syntax LearningRate = "learning_rate" Initial:Num "hold" Hold:Num "then" "decay" Decay:Num
+  {
+    check PV0004 !(Hold.Amount < 0f || Hold.Amount > 1f) : "learning_rate schedule fraction must be in [0, 1]" at Hold;
+  }
+  syntax ScheduleItem = Setting:("entropy" / "std_cap" / "command_box" / "family_mix" / "step_length" / "posture_depth" / "push_scale")
+                        From:Num "to" To:Num "from" Start:Num Over:("over" Count)?
+  {
+    check PV0004 !(Start.Amount < 0f || Start.Amount > 1f) : $"{Setting} schedule fraction must be in [0, 1]" at Start;
+    check PV0004 PolicyValues.ProgressProblem(Setting.Text, From.Amount, To.Amount) is null : PolicyValues.ProgressProblem(Setting.Text, From.Amount, To.Amount)!;
+    check PV0002 Over is null || PolicyValues.CountProblem(PolicyValues.OverCount(Over.Value.Text)) is null : PolicyValues.CountProblem(PolicyValues.OverCount(Over!.Value.Text))!;
+    check PV0007 Setting.Text is not ("command_box" or "family_mix" or "step_length" or "posture_depth" or "push_scale") || PolicyValues.FirstGoalHasCommand(Semantics, Node) : "command_box, family_mix, step_length, posture_depth and push_scale schedules need a command block";
+  }
+  syntax Normalize    = "normalize" "observations" "clip" Observations:Num "rewards" "clip" Rewards:Num
+  {
+    check PV0004 !(Observations.Amount <= 0f) : "observations clip must be positive" at Observations;
+    check PV0007 PolicyValues.RewardClipProblem(Semantics, Node) is null : PolicyValues.RewardClipProblem(Semantics, Node)!;
+  }
+
+  syntax Evaluate      = "evaluate" "{" Items:EvaluateItem* "}"
+  {
+    check PV0001 PolicyValues.EvaluateMissing(Semantics, Node) is null : PolicyValues.EvaluateMissing(Semantics, Node)!;
+    check PV0008 PolicyValues.EvaluateCountProblem(Semantics, Node) is null : PolicyValues.EvaluateCountProblem(Semantics, Node)!;
+    check PV0008 PolicyValues.ScenarioProblem(Semantics, Node, false) is null : PolicyValues.ScenarioProblem(Semantics, Node, false)!;
+    check PV0008 PolicyValues.ScenarioProblem(Semantics, Node, true) is null : PolicyValues.ScenarioProblem(Semantics, Node, true)!;
+  }
+  syntax EvaluateItem  = EvaluateCount / Randomize / Scenarios / EvaluateStart / Toggle / Deterministic / Report;
+  syntax EvaluateCount = Setting:("episodes" / "seeds") Value:Num { check PV0002 PolicyValues.Integer(Value.Amount) : PolicyValues.NotInteger(Value.Amount) at Value; }
+  syntax Scenarios     = "scenarios" Names:ScenarioName* { check PV0001 PolicyValues.ScenariosNamed(Semantics, Node) : "scenarios needs at least one scenario name"; }
+  syntax ScenarioName  = Name:ScenarioWord  references scenario Name;
+  syntax EvaluateStart = "start" Case:Word
+  {
+    check PV0003 PolicyValues.StartKind(Case.Text) : $"evaluate start '{Case}' is not a start kind (supine, spawn, reference, standing, crumple)" at Case;
+    check PV0008 PolicyValues.StartCaseProblem(Semantics, Node) is null : PolicyValues.StartCaseProblem(Semantics, Node)! at Case;
+  }
+  syntax Toggle        = Setting:("noise" / "perturb") State:("on" / "off")
+  {
+    check PV0008 PolicyValues.PerturbToggleProblem(Semantics, Node) is null : PolicyValues.PerturbToggleProblem(Semantics, Node)!;
+  }
+  syntax Deterministic = "deterministic";
+  syntax Report        = "report" Items:("success" / "survival" / "tracking_per_phase" / "falls" / "tracking_error")+
+  {
+    check PV0008 PolicyValues.ReportProblem(Semantics, Node) is null : PolicyValues.ReportProblem(Semantics, Node)!;
+  }
+
+  // ---- compose ----
+  syntax Compose        = "compose" Name:Word "{" Items:ComposeItem* "}"
+  {
+    check PV0001 PolicyValues.ComposeHas(Semantics, Node, "scene") : "compose needs `requires scene`" at Name;
+    check PV0001 PolicyValues.ComposeHas(Semantics, Node, "walk") : "compose needs a `walk` policy" at Name;
+    check PV0001 PolicyValues.ComposeHas(Semantics, Node, "getup") : "compose needs at least one `getup`" at Name;
+  }
+  syntax ComposeItem    = ComposeScene / Walk / Getup / Rules / Commands;
+  syntax ComposeScene   = "requires" "scene" Asset:String;
+  syntax Walk           = "walk" Document:String;
+  syntax Getup          = "getup" Document:String "when" Poses:PoseName+;
+  syntax PoseName       = Name:PoseWord  references pose Name
+  {
+    check PV0009 PolicyValues.PoseProblem(Semantics, Node) is null : PolicyValues.PoseProblem(Semantics, Node)!;
+  }
+  syntax Rules          = "rules" "{" Items:Rule* "}";
+  syntax Rule           = Setting:("stand_to_walk" / "hand_over" / "settle_cap" / "retries") Value:Num
+  {
+    check PV0002 Setting.Text != "retries" || PolicyValues.Integer(Value.Amount) : PolicyValues.NotInteger(Value.Amount) at Value;
+    check PV0009 PolicyValues.RuleProblem(Semantics, Node) is null : PolicyValues.RuleProblem(Semantics, Node)! at Value;
+  }
+  syntax Commands       = "commands" "{" Items:ComposeCommand* "}";
+  syntax ComposeCommand = Name:Word "{" Channels:CommandChannel+ "}"  declares command Name scope;
+  syntax CommandChannel = Channel:Word Value:Num  declares setting Channel
+  {
+    check PV0009 PolicyValues.NonFiniteProblem(Semantics, Node) is null : PolicyValues.NonFiniteProblem(Semantics, Node)! at Value;
+  }
+}

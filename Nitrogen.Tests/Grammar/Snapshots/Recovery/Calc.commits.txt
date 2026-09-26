@@ -1,0 +1,24 @@
+// commit points: 12 committed elements (11 composed) in 9 sequences
+ExprStatement: Expr ";"
+  1 ";"  static  insert {"(", "-", Identifier, Number, $}  sync {";"} @1
+Expr.Call: Callee:Identifier "(" Args:(Expr; ",")* ")"
+  1 "("  composed  insert {"(", ")", "-", Identifier, Number}  sync {"("} @1, {"(", "-", Identifier, Number} @2, {")"} @3
+  3 ")"  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {")"} @3, {"(", "-", Identifier, Number} @2
+Expr.Paren: "(" Expr ")"
+  1 Expr  composed  insert {")"}  sync {"(", "-", Identifier, Number} @1, {")"} @2
+  2 ")"  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {")"} @2
+Expr.Neg: "-" Expr
+  1 Expr  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {"(", "-", Identifier, Number} @1
+Expr.Add: Expr "+" Expr
+  2 Expr  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {"(", "-", Identifier, Number} @2
+Expr.Sub: Expr "-" Expr
+  2 Expr  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {"(", "-", Identifier, Number} @2
+Expr.Mul: Expr "*" Expr
+  2 Expr  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {"(", "-", Identifier, Number} @2
+Expr.Pow: Expr "^" Expr
+  2 Expr  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {"(", "-", Identifier, Number} @2
+Expr.Invoke: Callee:Identifier "(" Args:(Expr; ",")* ")"
+  1 "("  composed  insert {"(", ")", "-", Identifier, Number}  sync {"("} @1, {"(", "-", Identifier, Number} @2, {")"} @3
+  3 ")"  composed  insert {")", "*", "+", ",", "-", ";", "=", "^"}  sync {")"} @3, {"(", "-", Identifier, Number} @2
+// calls with recovery bits: 1
+call ExprStatement:0  fail  after

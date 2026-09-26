@@ -1,0 +1,48 @@
+// The semantics engine's test language (issue 239). Lets declare typed values, exported so other
+// files see them. Expressions synthesize a Type and inherit an Expected type, and checks report
+// mismatches. 'cyc hint' is a cycle and 'boom' throws. TypedExtra.ngr adds an alternative.
+syntax module Typed
+{
+  symbols { value }
+  builtin value { pi yes }
+  symbol property Type for value : string = TypedTypes.Builtin(kind, name);
+
+  token IdStart    = ['a'..'z' 'A'..'Z' '_'];
+  token IdPart     = ['a'..'z' 'A'..'Z' '0'..'9' '_'];
+  token Identifier = IdStart IdPart* except "let" "sum" "num" "bool" "true" "cyc" "hint" "boom";
+  token Number     = ['0'..'9']+;
+
+  syntax File      = Items:Statement*;
+  syntax Statement = Let / Sum;
+  syntax Let       = "let" Name:Identifier Annotation:(":" TypeName)? "=" Value:Expr ";"  declares value Name export
+  {
+    symbol.Type = Annotation?.Spelled ?? Value.Type;
+    Value.Expected = Annotation?.Spelled;
+    check TY0001 Annotation is null || Value.Type == "error" || Annotation.Value.Spelled == Value.Type
+      : $"'{Name}' is {Annotation?.Spelled}, not {Value.Type}";
+    check TY0003 Name.Text != "reserved" : "'reserved' is a reserved name" at Name;
+  }
+  syntax Sum       = "sum" Items:(Expr; ",")+ ";" { Items.Expected = "num"; }
+  syntax TypeName  = Word:("num" / "bool") { out Spelled : string = ""; Spelled = Word.Text; }
+
+  extensible syntax Expr
+  {
+    out hover Type : string = "error";
+    in expected Expected : string? = null;
+
+    | Num   = Number                              { Type = "num"; }
+    | True  = "true"                              { Type = "bool"; }
+    | Ref   = Identifier  references value this   { Type = Symbol?.Type ?? "error"; }
+    | Paren = "(" Expr ")"                        { Type = Expr.Type; Expr.Expected = Expected; }
+    | Hint  = "hint"                              { Type = Expected ?? "error"; }
+    | Cyc   = "cyc" Expr                          { Type = Expr.Type; Expr.Expected = Type; }
+    | Boom  = "boom"                              { Type = TypedTypes.Throw(); }
+    | Add   = Expr "+" Expr precedence 6 left
+      {
+        Type = "num";
+        Expr1.Expected = "num";
+        Expr2.Expected = "num";
+        check TY0002 Expr1.Type != "bool" && Expr2.Type != "bool" : "'+' needs numbers";
+      }
+  }
+}

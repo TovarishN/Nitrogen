@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>preview</LangVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nitrogen.MotionDsl\Nitrogen.MotionDsl.csproj" />
+    <ProjectReference Include="..\Nitrogen.Workspace\Nitrogen.Workspace.csproj" />
+    <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Nitrogen.Tests\Mutation\Mutator.cs" Link="Mutator.cs" />
+  </ItemGroup>
+
+</Project>

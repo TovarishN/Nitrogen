@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The self-hosted .ngr parser, for tooling. The generator keeps the netstandard2.0 bootstrap
+    parser in Nitrogen.Grammar; SelfHostingTests hold the two to the same GrammarModel.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>preview</LangVersion>
+    <RootNamespace>Nitrogen.Ngr</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nitrogen.Runtime\Nitrogen.Runtime.csproj" />
+    <ProjectReference Include="..\Nitrogen.Grammar\Nitrogen.Grammar.csproj" />
+    <ProjectReference Include="..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="Nitrogen.ngr" Namespace="Nitrogen.Ngr.Syntax" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+  </ItemGroup>
+
+</Project>

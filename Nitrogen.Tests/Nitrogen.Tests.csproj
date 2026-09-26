@@ -1,0 +1,67 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Nitrogen.Runtime\Nitrogen.Runtime.csproj" />
+    <ProjectReference Include="..\Nitrogen.Grammar\Nitrogen.Grammar.csproj" />
+    <ProjectReference Include="..\Nitrogen.Ngr\Nitrogen.Ngr.csproj" />
+    <ProjectReference Include="..\Nitrogen.Geometry\Nitrogen.Geometry.csproj" />
+    <ProjectReference Include="..\Nitrogen.Workspace\Nitrogen.Workspace.csproj" />
+    <ProjectReference Include="..\Nitrogen.Cli\Nitrogen.Cli.csproj" />
+    <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />
+  </ItemGroup>
+
+  <!-- Gravity-specific adapter tests are retained as source but excluded from the standalone suite. -->
+  <ItemGroup>
+    <Compile Remove="MotionDsl\**\*.cs" />
+    <Compile Remove="Geometry\GeometryDefinitionExpansionTests.cs;Geometry\GeometryDefinitionIntegrationTests.cs;Geometry\GeometryDefinitionSyntaxTests.cs;Geometry\GeometryIntegrationTests.cs" />
+    <Compile Remove="Workspace\WorkspaceEquivalenceTests.cs;Workspace\Admission\GeneratedBoxAdmissionTests.cs;Workspace\Admission\HostCapabilitySetTests.cs;Workspace\Admission\ModuleAdmissionCompositionTests.cs;Workspace\Admission\ModuleAdmissionServiceTests.cs" />
+    <Compile Remove="RecoverySoundnessTests.cs;ExpressionRecoveryTests.cs" />
+    <Compile Remove="Semantic\AngleProofTests.cs;Semantic\HirExecutionIntegrationTests.cs;Semantic\HirNodeTests.cs;Semantic\HirPreflightTests.cs;Semantic\SemanticTypeTests.cs" />
+    <Compile Remove="LanguageService\LspCommandTests.cs;LanguageService\SemanticInspectionTests.cs;LanguageService\LanguageServiceTypingTests.cs" />
+    <Compile Remove="Mutation\MutationCorpus.cs;Mutation\MutationCorpusTests.cs;Grammar\CommitSnapshotTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- The runtime tests run against modules generated from these grammars. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="Grammars\Calc.ngr" Namespace="Nitrogen.Tests.Calc" />
+    <AdditionalFiles Include="Grammars\Power.ngr" Namespace="Nitrogen.Tests.Calc" />
+    <AdditionalFiles Include="Grammars\Clash.ngr" Namespace="Nitrogen.Tests.Calc" />
+    <AdditionalFiles Include="Grammars\Mini.ngr" Namespace="Nitrogen.Tests.Mini" />
+    <AdditionalFiles Include="Grammars\Lexical.ngr" Namespace="Nitrogen.Tests.Lexical" />
+    <AdditionalFiles Include="Grammars\Recovery.ngr" Namespace="Nitrogen.Tests.Recovery" />
+    <AdditionalFiles Include="Grammars\Lists.ngr" Namespace="Nitrogen.Tests.Lists" />
+    <AdditionalFiles Include="Grammars\Base.ngr" Namespace="Nitrogen.Tests.Base" />
+    <AdditionalFiles Include="Grammars\Uses.ngr" Namespace="Nitrogen.Tests.Uses" />
+    <AdditionalFiles Include="Grammars\Scopes.ngr" Namespace="Nitrogen.Tests.Scopes" />
+    <AdditionalFiles Include="Grammars\Typed.ngr" Namespace="Nitrogen.Tests.Typed" />
+    <AdditionalFiles Include="Grammars\TypedExtra.ngr" Namespace="Nitrogen.Tests.Typed.Extra" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+  </ItemGroup>
+
+</Project>

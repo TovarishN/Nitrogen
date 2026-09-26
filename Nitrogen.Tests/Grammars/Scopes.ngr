@@ -1,0 +1,32 @@
+// The binding engine's test language (issue 237): units export and open scopes, lets declare,
+// blocks nest (and alone see `here`), Ref/Call/Member reference, and a generated name (x$1) is dynamic.
+syntax module Scopes
+{
+  symbols { unit value func }
+  builtin value { pi time sys.clock }
+  builtin func { max }
+  builtin value in Block { here }
+
+  token IdStart    = ['a'..'z' 'A'..'Z' '_'];
+  token IdPart     = ['a'..'z' 'A'..'Z' '0'..'9' '_'];
+  token Identifier = IdStart IdPart* except "unit" "let" "use" "block" "gen";
+  token Number     = ['0'..'9']+;
+
+  syntax File    = Units:Unit*;
+  syntax Unit    = "unit" Name:Identifier "{" Items:Item* "}"  declares unit Name export scope;
+  syntax Item    = Let / Use / Block / Gen;
+  syntax Let     = "let" Name:Identifier "=" Value:Expr ";"     declares value Name;
+  syntax Use     = "use" Target:Identifier ";"                  references unit Target;
+  syntax Block   = "block" "{" Items:Item* "}"                  scope;
+  syntax Gen     = "gen" Name:GenName ";"                       declares value Name;
+  syntax GenName = Head:Identifier "$" Seq:Number               dynamic;
+
+  extensible syntax Expr
+  {
+    | Num    = Number
+    | Ref    = Identifier                                       references (value | func) this
+    | Call   = Callee:Identifier "(" Args:(Expr; ",")* ")"      references func Callee
+    | Member = Expr "." Property:Identifier precedence 9 left   references? value this
+    | Add    = Expr "+" Expr precedence 6 left
+  }
+}

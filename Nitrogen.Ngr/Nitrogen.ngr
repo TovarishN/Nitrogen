@@ -1,0 +1,81 @@
+// The grammar language, described in itself. Nitrogen.Ngr generates its parser from this file;
+// SelfHostingTests require it to map every .ngr file to the bootstrap parser's GrammarModel.
+syntax module Nitrogen
+{
+  token IdStart    = ['a'..'z' 'A'..'Z' '_'];
+  token IdPart     = ['a'..'z' 'A'..'Z' '0'..'9' '_'];
+  token Identifier = IdStart IdPart*;
+  token DottedName = Identifier ("." Identifier)+;
+  token Integer    = ['0'..'9']+;
+  token Hex        = ['0'..'9' 'a'..'f' 'A'..'F'];
+  token Escape     = "\\" (['n' 'r' 't' '0' '\\' '"' '\''] / "u" Hex Hex Hex Hex);
+  token String     = "\"" (Escape / [^ '"' '\\' '\n'])* "\"";
+  token Char       = "'" (Escape / [^ '\'' '\\' '\n']) "'";
+
+  // Semantics (issue 239): C# is text up to a top-level stop character, as CSharpCapture scans it:
+  // brackets nest and must match; strings, chars and comments are skipped.
+  token CsEsc     = "\\" .;
+  token CsString  = ("$@" / "@$" / "@") "\"" ("\"\"" / [^ '"'])* "\"" / "$"? "\"" (CsEsc / [^ '"' '\\' '\n'])* "\"";
+  token CsChar    = "'" (CsEsc / [^ '\'' '\\' '\n'])+ "'";
+  token CsComment = "//" [^ '\n']* / "/*" (!"*/" .)* "*/";
+  token CsNested  = "(" CsInner ")" / "[" CsInner "]" / "{" CsInner "}";
+  token CsInner   = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\''])*;
+  token CsCode    = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';'])+;
+  token CsCond    = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';' ':'])+;
+  token CsType    = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';' '='])+;
+  token CheckCode = ['A'..'Z'] ['A'..'Z']+ ['0'..'9'] ['0'..'9'] ['0'..'9'] ['0'..'9'] !IdPart;
+  // `check … : message at Child;` (issue 241): the message stops before a trailing `at Name ;`.
+  token CsAtTail  = [' ' '\t' '\r' '\n']+ "at" [' ' '\t' '\r' '\n']+ IdStart IdPart* [' ' '\t' '\r' '\n']* ";";
+  token CsMessage = (!CsAtTail (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';']))+;
+
+  // Binding (issue 238): modules and rules, for outlines and colour. References are optional: a
+  // qualified or used name from another module simply stays unresolved and unreported.
+  symbols { module rule property }
+
+  syntax File           = Modules:Module*;
+  syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope;
+  syntax Member         = Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax Symbols        = "symbols" "{" Kinds:Identifier+ "}";
+  syntax Builtin        = "builtin" SymbolKind:Identifier Within:("in" Identifier)? "{" Names:QualifiedName+ "}";
+  syntax Using          = "using" Module:QualifiedName ";"  references? module Module;
+  syntax TokenRule      = "token" Name:Identifier "=" Body:Expression Except:("except" String+)? ";"  declares rule Name;
+  syntax SyntaxRule     = "syntax" Name:Identifier "=" Body:Expression Clauses:Clause* End:(";" / Semantics)  declares rule Name scope;
+  syntax ExtensibleRule = "extensible" "syntax" Name:Identifier "{" Properties:PropertyDecl* Alternatives:Alternative* "}"  declares rule Name scope;
+  syntax Extend         = "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"  references? rule Target;
+  syntax Alternative    = "|" Named:(Identifier "=")? Body:Expression Precedence:("precedence" Integer Associativity?)? Clauses:Clause* Semantics:Semantics?;
+  syntax Associativity  = "left" / "right";
+
+  // Binding clauses (issue 237).
+  syntax Clause         = Declares / References / ScopeClause / DynamicClause;
+  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Export:"export"?;
+  syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:("in" Identifier)?;
+  syntax KindList       = KindGroup / Identifier;
+  syntax KindGroup      = "(" Kinds:(Identifier; "|")+ ")";
+  syntax ScopeClause    = "scope";
+  syntax DynamicClause  = "dynamic";
+
+  // Semantics (issue 239).
+  syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
+  syntax Semantics      = "{" Items:SemanticItem* "}";
+  syntax SemanticItem   = PropertyDecl / Check / Assignment;
+  syntax PropertyDecl   = Direction:("out" / "in") Flags:PropertyFlag* Name:Identifier ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
+  syntax PropertyFlag   = "hover" / "expected";
+  syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:("at" Identifier)? ";";
+  syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target;
+
+  syntax Expression     = Choices:(Sequence; "/")+;
+  syntax Sequence       = Elements:Element+;
+  syntax Element        = Label:(Identifier ":")? Body:Unary;
+  syntax Unary          = Prefixes:PredicateOp* Body:Postfix;
+  syntax PredicateOp    = "!" / "&";
+  syntax Postfix        = Body:Primary Operators:RepeatOp*;
+  syntax RepeatOp       = "?" / "*" / "+";
+  syntax Primary        = String / CharClass / Any / Parenthesized / Reference;
+  syntax Any            = ".";
+  syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / ")");
+  syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+");
+  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" Name:QualifiedName  references? rule Name;
+  syntax QualifiedName  = DottedName / Identifier;
+  syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]";
+  syntax ClassItem      = First:Char Last:(".." Char)?;
+}
