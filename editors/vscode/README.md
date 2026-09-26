@@ -11,6 +11,7 @@ for example `Nitrogen.Cli/bin/Release/net10.0/nitrogen` after `dotnet build Nitr
 A workspace grammar language:
 
 ```json
-{ "languages": [ { "name": "calc", "extensions": [".calc"], "grammars": ["grammars/*.ngr"],
-                   "start": "Calc.File", "tokens": { "var": "variable", "fn": "function" } } ] }
+{ "languages": [ { "name": "calc", "extensions": [".calc"],
+                   "grammars": ["Nitrogen.Tests/Grammars/Calc.ngr"],
+                   "start": "Calc.Program" } ] }
 ```
