@@ -16,6 +16,8 @@ dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj
 
 The solution contains the standalone Nitrogen projects. `Nitrogen.MotionDsl` and `Nitrogen.Benchmarks` are retained Gravity integrations. They reference Gravity's `MotionDSL` project and its asset corpus, so they are outside the standalone solution. Gravity-specific tests remain in `Nitrogen.Tests` as source but are excluded from its standalone build. The original `Gravity/Nitrogen` tree is still present because Gravity currently consumes it; this repository is an extracted copy, not yet a replacement for that dependency.
 
+The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document the six Nitrogen milestones and their migration from Gravity.
+
 ## Use the CLI
 
 ```sh
