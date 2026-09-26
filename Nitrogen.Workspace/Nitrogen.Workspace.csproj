@@ -2,10 +2,6 @@
 
   <!-- The grammar authoring loop (issue 236): .ngr compiled in-process into collectible assemblies. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>preview</LangVersion>
     <RootNamespace>Nitrogen.Workspace</RootNamespace>
   </PropertyGroup>
 

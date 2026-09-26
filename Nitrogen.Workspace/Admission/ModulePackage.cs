@@ -150,10 +150,10 @@ public static class ModulePackageLoader
     }
 
     static bool SafeGrammarName(string name) => name.Length > 4 && name.EndsWith(".ngr", StringComparison.Ordinal) &&
-        name.IndexOfAny(['/', '\\']) < 0 && !Path.IsPathRooted(name) && name is not "." or "..";
+        name.IndexOfAny(['/', '\\']) < 0 && !Path.IsPathRooted(name) && name is not ("." or "..");
 
     static bool SafeExamplePath(string path) => path.Length > 0 && path.IndexOfAny(['/', '\\']) < 0 &&
-        path is not "." or ".." && !Path.IsPathRooted(path);
+        path is not ("." or "..") && !Path.IsPathRooted(path);
 
     static void CheckObject(JsonElement element, HashSet<string> allowed)
     {

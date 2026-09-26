@@ -101,6 +101,23 @@ public sealed class ModulePackageTests
         Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "NA0001");
     }
 
+    [Theory]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("../outside.box")]
+    [InlineData("/tmp/outside.box")]
+    public void Rejects_unsafe_example_paths(string path)
+    {
+        using var fixture = new Fixture();
+        fixture.Manifest(Valid(examples:
+        [
+            new { id = "valid", path, source = "box 1;", diagnostics = Array.Empty<string>(), expectedResult = "box:1" }
+        ]));
+        var result = ModulePackageLoader.Load(fixture.Root);
+        Assert.Null(result.Package);
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.Code == "NA0001");
+    }
+
     [Fact]
     public void Rejects_duplicate_grammar_path_and_example_id()
     {

@@ -27,7 +27,7 @@ public class EquatableArrayTests
     public void Default_is_empty()
     {
         EquatableArray<string> empty = default;
-        Assert.Equal(0, empty.Count);
+        Assert.Empty(empty);
         Assert.Equal(empty, (EquatableArray<string>)new string[0]);
         Assert.Empty(empty);
         Assert.Equal("[]", empty.ToString());

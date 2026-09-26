@@ -5,11 +5,7 @@
     parser in Nitrogen.Grammar; SelfHostingTests hold the two to the same GrammarModel.
   -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>preview</LangVersion>
     <RootNamespace>Nitrogen.Ngr</RootNamespace>
   </PropertyGroup>
 
