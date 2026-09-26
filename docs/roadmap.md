@@ -1,10 +1,25 @@
 # Nitrogen roadmap
 
+## Current state (standalone repository, 2026-09-27)
+
+Milestones 1–6 are present here: module descriptors and composition diagnostics, exact host operation binding and the finite numeric HIR evaluator, the `.geom` box mesh module, cross-file typed definitions, reviewed-local module admission, and typed capability requests. `dotnet build Nitrogen.slnx` is warning-free and `Nitrogen.Tests` passes 624/624; CI runs both on every push and pull request.
+
+Not in this repository: Motion/Policy grammars and HIR lowerers, the RagdollEditor mesh adapter, `Nitrogen.Benchmarks`, and the Gravity-dependent integration tests. Those stay in Gravity. References to them below describe the Gravity snapshot.
+
+Known gaps, in suggested order:
+
+1. **Grammar checks are not typed by `SemanticType`.** `.ngr` semantics compare type names as strings (for example `Geometry.ngr` sets `Type = "Core.Scalar"`), while HIR uses `SemanticType`. The two agree by convention only. Typed `.ngr` properties that resolve to catalog types would close this.
+2. **The built-in type vocabulary is small.** `SemanticTypes` has `Core.Scalar`, `Core.Bool`, `Core.Error`, and `Units.Angle`. There is no unit algebra, reference frame, overload resolution, or type variable support.
+3. **Execution is per-domain.** `HirEvaluator` handles the finite numeric slice; `GeometryExecutor` accepts only `Geometry.BoxMesh` with constant arguments. A general way to execute non-numeric results is not yet defined.
+4. **Admission is a trusted local gate.** It requires human-reviewed declarative `.ngr` packages and pure capabilities; it is not a sandbox for untrusted generated code.
+
+## Historical snapshot (Gravity, 2026-09-25)
+
 > Historical architecture snapshot from 2026-09-25. Milestones 1–6 were implemented, merged into Gravity `master` on 2026-09-26, and extracted into this standalone repository. The milestone notes below describe the work as it stood on the issue branches; Gravity-specific adapters and Motion/Policy integration remain in Gravity.
 
 Repository inspection, 2026-09-25. This describes code present on `master`, not a proposed replacement for the working MotionDSL pipeline. “Module” currently has three distinct meanings: a `.ngr` syntax module, a C# `SemanticModule`, and a Motion/Policy document or asset. They do not yet form one deployable unit.
 
-## Current architecture
+### Current architecture
 
 | Area | Projects, types, and important APIs | Current boundary |
 | --- | --- | --- |
@@ -20,7 +35,7 @@ Repository inspection, 2026-09-25. This describes code present on `master`, not 
 | Existing DSL examples | `Motion.ngr` includes bodies, geometry primitives in `Shape`, `repeat`/`for`, behaviors, motion, skills, phases, nested skills, and expressions. `Policy.ngr` includes training/evaluation policies and `.compose` orchestration. `Nitrogen.Tests/Grammars/{Base,Uses,Calc,Power,Typed,TypedExtra,Scopes}.ngr` demonstrate cross-module syntax, extension, binding, and typing. `Game3D.Tests/Fixtures/Skills/two-joint-balance.skill` is tracked. `MotionCorpus` reads `.motion`, `.skill`, `.policy`, and `.compose` examples from `$GRAVITY_ASSETS` (default `~/work/GravityAssets`). | The substantial authoring corpus is external to this repository; tests that depend on it need that asset store. Body shapes are an existing domain feature, not a general procedural geometry DSL. |
 | Tests and execution integration | `Nitrogen.Tests` has grammar/compiler/snapshot/self-hosting, parser recovery and mutation, binding, semantic catalog/HIR/source-origin, workspace, language-service/LSP, and Motion/Policy parity/value tests; `Nitrogen.Benchmarks` covers parsing, binding, service, and workspace compilation. `Gravity.MotionDSL.Compiler.MotionCompiler`, `PolicyCompiler`, and `ComposeCompiler` produce Gravity IR; `Game3D/Ragdoll/RagdollDefinition` and `Game3D/Training/Policy/PolicyLinker` still invoke the hand-written lexer/parser. | Nitrogen's parity adapters and HIR proof are exercised in tests and tools, but the app's runtime compilation does not execute Nitrogen HIR. Keep the existing runtime path until a vertical slice demonstrates equivalent output. |
 
-## Planned capabilities against this baseline
+### Planned capabilities against this baseline
 
 | Capability | Existing support | Smallest missing piece |
 | --- | --- | --- |
@@ -31,7 +46,7 @@ Repository inspection, 2026-09-25. This describes code present on `master`, not 
 | 5. Reusable generated abstractions | Syntax modules, exported project symbols, and `HirTraversal.Rewrite` provide reuse at different layers. | For the first geometry slice, add named, typed parameters and a reusable definition/call lowering that expands or invokes HIR while retaining declaration and call-site origins. Prove reuse across two files before adding generic templates or packaging. |
 | 6. Typed agent capabilities | Module-qualified types and operation signatures can describe inputs/results. | Define capability contracts as named operation signatures plus required host permissions/effects and bind them explicitly. Validate an agent-produced module against a granted contract before execution; start with one read-only or pure capability. |
 
-## Smallest implementation path
+### Smallest implementation path
 
 1. **Freeze the shared contract.** Add a small module descriptor around existing `SyntaxModule`, `SemanticModule`, start rules, and host operation requirements. Add composition tests for missing imports, duplicate IDs, syntax conflicts, and missing runtime handlers. Keep the present `.ngr` generator and `LanguageBuilder` as its implementation.
 2. **Execute one typed proof.** Implement a host registry and evaluator for `HirConstant`, `HirSymbolRef`, and `HirOperation`; bind signatures before running. Use the existing `Policy.Clamp` or `Motion.AngleSlot` HIR proof, check exact values/errors, and retain `SourceOrigin` in runtime diagnostics. No app-path switch yet.

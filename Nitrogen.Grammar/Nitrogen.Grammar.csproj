@@ -7,8 +7,6 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Nitrogen.Grammar</RootNamespace>
     <IsPackable>false</IsPackable>
   </PropertyGroup>

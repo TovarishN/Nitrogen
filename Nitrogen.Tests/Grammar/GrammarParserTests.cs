@@ -81,7 +81,7 @@ public class GrammarParserTests
     public void Several_modules_and_an_empty_file()
     {
         Assert.Equal(2, ParseOk("syntax module A { } syntax module B { }").Modules.Count);
-        Assert.Equal(0, ParseOk("  // nothing\n").Modules.Count);
+        Assert.Empty(ParseOk("  // nothing\n").Modules);
     }
 
     [Fact]

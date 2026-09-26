@@ -2,10 +2,6 @@
 
   <!-- The IDE surface (issue 238): a pure language-service API over Nitrogen trees and binding, and an LSP server. -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <LangVersion>preview</LangVersion>
     <RootNamespace>Nitrogen.LanguageService</RootNamespace>
   </PropertyGroup>
 
