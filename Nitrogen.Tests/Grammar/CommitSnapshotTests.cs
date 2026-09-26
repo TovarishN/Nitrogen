@@ -21,12 +21,10 @@ public class CommitSnapshotTests
         "Mini" => new[] { TestGrammarFileTests.ReadGrammar("Mini.ngr") },
         "Lexical" => new[] { TestGrammarFileTests.ReadGrammar("Lexical.ngr") },
         "Nitrogen" => new[] { Nitrogen("Nitrogen.Ngr/Nitrogen.ngr") },
-        "Motion" => new[] { Nitrogen("Nitrogen.MotionDsl/Motion.ngr") },
-        "Policy" => new[] { Nitrogen("Nitrogen.MotionDsl/Policy.ngr") },
         _ => throw new ArgumentException(name),
     };
 
-    public static TheoryData<string> Names() => new() { "Calc", "Mini", "Lexical", "Nitrogen", "Motion", "Policy" };
+    public static TheoryData<string> Names() => new() { "Calc", "Mini", "Lexical", "Nitrogen" };
 
     [Theory]
     [MemberData(nameof(Names))]
@@ -68,17 +66,4 @@ public class CommitSnapshotTests
             listing);
     }
 
-    [Fact]
-    public void Policy_getup_commits_after_its_keyword()
-    {
-        var analysis = CommitAnalysisTests.Analyze(Grammars("Policy"));
-        Assert.Equal("Getup:1 Getup:2 Getup:3", CommitAnalysisTests.Names(analysis, "Getup"));
-    }
-
-    [Fact]
-    public void Motion_skill_commits_after_its_keyword()
-    {
-        var analysis = CommitAnalysisTests.Analyze(Grammars("Motion"));
-        Assert.StartsWith("Skill:1 Skill:2 Skill:3", CommitAnalysisTests.Names(analysis, "Skill"));
-    }
 }

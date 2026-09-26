@@ -1,6 +1,3 @@
-using Nitrogen.MotionDsl;
-using Nitrogen.MotionDsl.PolicySyntax;
-using Nitrogen.MotionDsl.Syntax;
 using Nitrogen.Ngr;
 using Nitrogen.Ngr.Syntax;
 using Xunit;
@@ -22,44 +19,6 @@ public class RecoverySoundnessTests
         Assert.True(recovering.Success, recovering.Success ? "" :
             $"{what}: the recovery pass repaired valid input: {recovering.FormatMessage(recovering.Diagnostics[0])} at {recovering.Diagnostics[0].Span}");
         Assert.Equal(SyntaxDumper.Dump(clean.Tree), SyntaxDumper.Dump(recovering.Tree));
-    }
-
-    public static TheoryData<string> MotionFiles() => Data(MotionCorpus.Files().Concat(MotionCorpus.SkillFiles()));
-
-    public static TheoryData<string> PolicyFiles() => Data(MotionCorpus.PolicyFiles());
-
-    public static TheoryData<string> ComposeFiles() => Data(MotionCorpus.ComposeFiles());
-
-    static TheoryData<string> Data(IEnumerable<string> files)
-    {
-        var data = new TheoryData<string>();
-        foreach (string file in files) data.Add(file);
-        if (data.Count == 0) data.Add("");
-        return data;
-    }
-
-    [Theory]
-    [MemberData(nameof(MotionFiles))]
-    public void Motion_and_skill_files(string path)
-    {
-        if (path.Length == 0) return;
-        AssertSound(NitrogenMotionParser.Language, MotionModule.File, File.ReadAllText(path), path);
-    }
-
-    [Theory]
-    [MemberData(nameof(PolicyFiles))]
-    public void Policy_files(string path)
-    {
-        if (path.Length == 0) return;
-        AssertSound(NitrogenPolicyParser.Language, PolicyModule.PolicyDocument, File.ReadAllText(path), path);
-    }
-
-    [Theory]
-    [MemberData(nameof(ComposeFiles))]
-    public void Compose_files(string path)
-    {
-        if (path.Length == 0) return;
-        AssertSound(NitrogenPolicyParser.Language, PolicyModule.ComposeDocument, File.ReadAllText(path), path);
     }
 
     [Theory]

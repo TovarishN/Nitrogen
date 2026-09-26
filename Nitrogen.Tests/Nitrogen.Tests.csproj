@@ -29,17 +29,6 @@
     <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />
   </ItemGroup>
 
-  <!-- Gravity-specific adapter tests are retained as source but excluded from the standalone suite. -->
-  <ItemGroup>
-    <Compile Remove="MotionDsl\**\*.cs" />
-    <Compile Remove="Geometry\GeometryDefinitionExpansionTests.cs;Geometry\GeometryDefinitionIntegrationTests.cs;Geometry\GeometryDefinitionSyntaxTests.cs;Geometry\GeometryIntegrationTests.cs" />
-    <Compile Remove="Workspace\WorkspaceEquivalenceTests.cs;Workspace\Admission\GeneratedBoxAdmissionTests.cs;Workspace\Admission\HostCapabilitySetTests.cs;Workspace\Admission\ModuleAdmissionCompositionTests.cs;Workspace\Admission\ModuleAdmissionServiceTests.cs" />
-    <Compile Remove="RecoverySoundnessTests.cs;ExpressionRecoveryTests.cs" />
-    <Compile Remove="Semantic\AngleProofTests.cs;Semantic\HirExecutionIntegrationTests.cs;Semantic\HirNodeTests.cs;Semantic\HirPreflightTests.cs;Semantic\SemanticTypeTests.cs" />
-    <Compile Remove="LanguageService\LspCommandTests.cs;LanguageService\SemanticInspectionTests.cs;LanguageService\LanguageServiceTypingTests.cs" />
-    <Compile Remove="Mutation\MutationCorpus.cs;Mutation\MutationCorpusTests.cs;Grammar\CommitSnapshotTests.cs" />
-  </ItemGroup>
-
   <ItemGroup>
     <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
