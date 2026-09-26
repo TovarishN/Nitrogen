@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitrogen.local/schemas/typed-abstraction-reuse-run-record.json",
+  "title": "Typed abstraction reuse experiment run record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "runId", "pairId", "condition", "model", "seed", "environmentHash",
+    "taskAHash", "taskBHash", "budgets", "artifact", "attempts", "outcome"
+  ],
+  "properties": {
+    "runId": { "type": "string", "minLength": 1 },
+    "pairId": { "type": "string", "minLength": 1 },
+    "condition": { "enum": ["artifact", "no-carry", "text-only"] },
+    "model": { "type": "string", "minLength": 1 },
+    "seed": { "type": "integer" },
+    "environmentHash": { "$ref": "#/$defs/sha256" },
+    "taskAHash": { "$ref": "#/$defs/sha256" },
+    "taskBHash": { "$ref": "#/$defs/sha256" },
+    "budgets": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maxAttemptsA", "maxAttemptsB", "maxSecondsA", "maxSecondsB", "maxTokensA", "maxTokensB"],
+      "properties": {
+        "maxAttemptsA": { "type": "integer", "minimum": 1 },
+        "maxAttemptsB": { "type": "integer", "minimum": 1 },
+        "maxSecondsA": { "type": "number", "exclusiveMinimum": 0 },
+        "maxSecondsB": { "type": "number", "exclusiveMinimum": 0 },
+        "maxTokensA": { "type": "integer", "minimum": 1 },
+        "maxTokensB": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["admitted", "hash", "path"],
+      "properties": {
+        "admitted": { "type": "boolean" },
+        "hash": { "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "path": { "type": ["string", "null"] }
+      }
+    },
+    "attempts": { "type": "array", "items": { "$ref": "#/$defs/attempt" } },
+    "outcome": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bValid", "bOracleCorrect", "bResolvedArtifactCall", "bSeconds", "bTokens", "failureStage"],
+      "properties": {
+        "bValid": { "type": "boolean" },
+        "bOracleCorrect": { "type": "boolean" },
+        "bResolvedArtifactCall": { "type": "boolean" },
+        "bSeconds": { "type": "number", "minimum": 0 },
+        "bTokens": { "type": "integer", "minimum": 0 },
+        "failureStage": {
+          "enum": ["none", "recognition", "definition", "composition", "program", "repair", "reuse", "budget", "other"]
+        },
+        "oracleReportPath": { "type": ["string", "null"] },
+        "resolvedCallTracePath": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "attempt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["phase", "index", "sourceHash", "diagnosticsPath", "stagesPassed", "hostInvoked"],
+      "properties": {
+        "phase": { "enum": ["A", "B"] },
+        "index": { "type": "integer", "minimum": 1 },
+        "sourceHash": { "$ref": "#/$defs/sha256" },
+        "diagnosticsPath": { "type": "string", "minLength": 1 },
+        "stagesPassed": {
+          "type": "array", "uniqueItems": true,
+          "items": { "enum": ["composition", "parse", "binding", "type", "lowering", "preflight", "execution"] }
+        },
+        "hostInvoked": { "type": "boolean" },
+        "repairOf": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    }
+  }
+}
