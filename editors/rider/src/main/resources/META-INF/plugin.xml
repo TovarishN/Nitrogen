@@ -1,0 +1,12 @@
+<idea-plugin>
+  <id>org.nitrogen.rider</id>
+  <name>Nitrogen DSL</name>
+  <vendor>Nitrogen</vendor>
+  <depends>com.intellij.modules.platform</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <fileType name="Nitrogen grammar" language="Nitrogen" extensions="ngr" implementationClass="org.nitrogen.rider.NitrogenFileType" />
+  </extensions>
+  <extensions defaultExtensionNs="com.intellij.platform.lsp">
+    <integrationProvider implementation="org.nitrogen.rider.NitrogenLspSupport" />
+  </extensions>
+</idea-plugin>

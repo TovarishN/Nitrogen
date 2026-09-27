@@ -19,6 +19,7 @@ For example, Geometry accepts the syntax of `box 0 2 3;` but reports `GE0001` be
 
 - .NET 10 SDK or newer
 - Node.js and npm only if building the VS Code extension
+- Gradle/JDK only if building the Rider plugin
 
 ## Build and test
 
@@ -77,6 +78,24 @@ The [VS Code extension](editors/vscode/README.md) starts `nitrogen lsp`. The ser
    ```
 
 Open a `.calc` file such as `sample.calc` containing `1 + 2;`. The server recompiles the declared grammar when it changes and updates diagnostics for its files. Adjust the grammar path and start rule for another language.
+
+## Rider and generated plugin support
+
+The generic Rider plugin is in `editors/rider` and uses the same `nitrogen lsp`
+server as VS Code. Build it with `gradle buildPlugin`, then install the ZIP in
+Rider. The default executable is `nitrogen` on `PATH`.
+
+To generate a grammar-specific plugin from a workspace configuration:
+
+```sh
+dotnet run --project Nitrogen.Cli -- generate rider \
+  --config nitrogen.json --output generated/rider
+```
+
+Use `--language NAME` for a configuration containing multiple languages, or
+use `--grammar FILE --start Module.Rule` when no `nitrogen.json` exists. An
+explicit local server executable can be passed to generated output through the
+plugin settings; optional local platform bundles are never downloaded.
 
 ## Project map
 
