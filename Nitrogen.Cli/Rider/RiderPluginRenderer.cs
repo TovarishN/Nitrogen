@@ -63,10 +63,10 @@ repositories {
 }
 
 dependencies {
-    intellijPlatform { rider("2024.3") }
+    intellijPlatform { rider("2026.2") }
 }
 
-intellijPlatform { pluginConfiguration { ideaVersion { sinceBuild = "243" } } }
+intellijPlatform { pluginConfiguration { ideaVersion { sinceBuild = "262" } } }
 """;
 
     const string SettingsKt = """
@@ -90,9 +90,10 @@ class NitrogenSettings : PersistentStateComponent<NitrogenSettings.State> {
   <id>org.nitrogen.rider.{{model.PluginId}}</id>
   <name>{{Escape(model.DisplayName)}} for Rider</name>
   <vendor>Nitrogen</vendor>
-  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.lsp</depends>
+  <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
-    <fileType name="{{Escape(model.DisplayName)}}" language="Nitrogen" fileNames="{{string.Join(';', model.Extensions.Select(Escape))}}" implementationClass="org.nitrogen.rider.NitrogenFileType" />
+    <fileType name="{{Escape(model.DisplayName)}}" language="Nitrogen" extensions="{{string.Join(';', model.Extensions.Select(x => x.TrimStart('.')).Select(Escape))}}" implementationClass="org.nitrogen.rider.NitrogenFileType" />
   </extensions>
   <extensions defaultExtensionNs="com.intellij.platform.lsp">
     <integrationProvider implementation="org.nitrogen.rider.NitrogenLspSupport" />
@@ -120,12 +121,28 @@ class NitrogenFileType : LanguageFileType(NitrogenLanguage) {
 package org.nitrogen.rider
 
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.platform.lsp.api.LspClientStarter
+import com.intellij.platform.lsp.api.LspIntegrationProvider
+import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 
-object NitrogenLspSupport {
-    const val defaultExecutable = "{{EscapeKotlin(request.NitrogenPath)}}"
-    const val startRule = "{{EscapeKotlin(request.Model.StartRule)}}"
-    fun command(executable: String = defaultExecutable): GeneralCommandLine =
-        GeneralCommandLine(executable, "lsp")
+class NitrogenLspSupport : LspIntegrationProvider {
+    companion object {
+        const val defaultExecutable = "{{EscapeKotlin(request.NitrogenPath)}}"
+        const val startRule = "{{EscapeKotlin(request.Model.StartRule)}}"
+    }
+
+    override fun fileOpened(project: Project, file: VirtualFile, clientStarter: LspClientStarter) {
+        if (file.extension in setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})) {
+            clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
+        }
+    }
+
+    private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
+        override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})
+        override fun createCommandLine(): GeneralCommandLine = GeneralCommandLine(defaultExecutable, "lsp")
+    }
 }
 """;
 

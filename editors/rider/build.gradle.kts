@@ -10,11 +10,11 @@ repositories {
 }
 
 dependencies {
-    intellijPlatform { rider("2024.3") }
+    intellijPlatform { rider("2026.2") }
 }
 
 intellijPlatform {
     pluginConfiguration {
-        ideaVersion { sinceBuild = "243" }
+        ideaVersion { sinceBuild = "262" }
     }
 }

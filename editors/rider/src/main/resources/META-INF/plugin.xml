@@ -2,7 +2,8 @@
   <id>org.nitrogen.rider</id>
   <name>Nitrogen DSL</name>
   <vendor>Nitrogen</vendor>
-  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.lsp</depends>
+  <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
     <fileType name="Nitrogen grammar" language="Nitrogen" extensions="ngr" implementationClass="org.nitrogen.rider.NitrogenFileType" />
   </extensions>
