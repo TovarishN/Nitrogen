@@ -30,6 +30,18 @@ dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj
 
 The solution contains the Nitrogen projects listed below.
 
+### Build everything, including the editor plugins
+
+```sh
+./build.sh                                     # add --config nitrogen.json [--language NAME] for a language plugin
+```
+
+This builds and tests Nitrogen, then writes the plugins to `artifacts/`: the VS Code extension
+(`nitrogen-*.vsix`) and Rider plugins (`rider/*-rider.zip`) that bundle a single-file server for the
+current machine. It needs the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 21 or newer. The
+[Plugins workflow](.github/workflows/plugins.yml) runs the same script on Linux and publishes the
+plugins as build artifacts.
+
 The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
 
 ## Use the CLI

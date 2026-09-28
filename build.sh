@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Builds and tests Nitrogen, then produces the editor plugins:
+#   artifacts/nitrogen-*.vsix         the VS Code extension
+#   artifacts/rider/*-rider.zip       Rider plugins, each bundling a server for this machine
+#   artifacts/server/<target>/        the bundled single-file server
+#
+# Usage: ./build.sh [--config nitrogen.json [--language NAME]]
+#   Always builds the Rider plugin for .ngr grammars; --config also builds one for that language.
+# Requires the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 21 or newer.
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")" && pwd)"
+artifacts="$root/artifacts"
+config=""
+language=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --config) config="$2"; shift 2 ;;
+        --language) language="$2"; shift 2 ;;
+        *) echo "usage: ./build.sh [--config nitrogen.json [--language NAME]]" >&2; exit 2 ;;
+    esac
+done
+
+# The .NET runtime identifier and Rider bundle target of this machine.
+case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) rid=osx-arm64; target=macos-aarch64 ;;
+    Darwin-x86_64) rid=osx-x64; target=macos-x64 ;;
+    Linux-x86_64) rid=linux-x64; target=linux-x64 ;;
+    MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) rid=win-x64; target=windows-x64 ;;
+    *) rid=""; target="" ;;
+esac
+
+step() { printf '\n==> %s\n' "$*"; }
+
+rm -rf "$artifacts"
+mkdir -p "$artifacts/rider"
+
+step "Build and test Nitrogen"
+dotnet build "$root/Nitrogen.slnx" -c Release -warnaserror
+dotnet test "$root/Nitrogen.Tests/Nitrogen.Tests.csproj" -c Release --no-build
+nitrogen=(dotnet "$root/Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll")
+
+bundle=()
+if [[ -n "$rid" ]]; then
+    step "Publish a single-file server for $target"
+    dotnet publish "$root/Nitrogen.Cli/Nitrogen.Cli.csproj" -c Release -r "$rid" --self-contained \
+        -p:PublishSingleFile=true -o "$artifacts/server/$target"
+    server="$artifacts/server/$target/nitrogen"
+    if [[ "$rid" == win-x64 ]]; then server="$server.exe"; fi
+    bundle=(--bundle "$target=$server")
+else
+    echo "warning: no Rider bundle target for $(uname -s) $(uname -m); plugins will use the Nitrogen setting or PATH" >&2
+fi
+
+step "Package the VS Code extension"
+(cd "$root/editors/vscode" && npm ci && npm run compile && npm run package)
+mv "$root"/editors/vscode/*.vsix "$artifacts/"
+
+step "Test the shared Rider plugin code"
+(cd "$root/editors/rider" && gradle test --console=plain)
+
+# Generates a Rider plugin into artifacts/rider-src/<name>, builds it, and collects its ZIP.
+rider_plugin() {
+    local out="$artifacts/rider-src/$1"
+    shift
+    "${nitrogen[@]}" generate rider "$@" ${bundle[@]+"${bundle[@]}"} --output "$out"
+    (cd "$out" && gradle buildPlugin --console=plain)
+    cp "$out"/build/distributions/*.zip "$artifacts/rider/"
+}
+
+step "Build the Rider plugin for .ngr grammars"
+rider_plugin ngr --grammar "$root/Nitrogen.Ngr/Nitrogen.ngr" --start Nitrogen.File
+
+if [[ -n "$config" ]]; then
+    step "Build the Rider plugin for $config"
+    args=(--config "$config")
+    if [[ -n "$language" ]]; then args+=(--language "$language"); fi
+    rider_plugin language "${args[@]}"
+fi
+
+step "Done"
+find "$artifacts" -maxdepth 2 \( -name '*.vsix' -o -name '*.zip' \) -print

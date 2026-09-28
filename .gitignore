@@ -12,3 +12,4 @@ editors/rider/build/
 *.user
 .idea/
 .vs/
+artifacts/
