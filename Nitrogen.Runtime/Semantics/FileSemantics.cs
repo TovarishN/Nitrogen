@@ -23,6 +23,7 @@ public sealed class FileSemantics
     readonly HashSet<(int Node, string Property, string Code)> _reported = new();
     Dictionary<int, Reference>? _references;
     List<SemanticDiagnostic>? _checks;
+    Nitrogen.Semantic.DeclarativeTypes? _declarative;
 
     internal FileSemantics(ProjectSemantics project, FileBinding binding)
     {
@@ -40,6 +41,10 @@ public sealed class FileSemantics
 
     /// <summary>A document already bound in the same project, for cross-file lowering.</summary>
     public FileSemantics RelatedFile(string path) => _project[path];
+
+    /// <summary>Types from the language's declarative clauses (issue 251).</summary>
+    public Nitrogen.Semantic.DeclarativeTypes DeclarativeTypes =>
+        _declarative ??= new Nitrogen.Semantic.DeclarativeTypes(this, _language.Declarative, _language.SemanticCatalog);
 
     sealed class Slot<T>(int count)
     {

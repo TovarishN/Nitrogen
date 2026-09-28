@@ -43,13 +43,21 @@ public sealed unsafe class LanguageBuilder
 
     public bool TryBuild(out Language? language, out IReadOnlyList<CompositionDiagnostic> diagnostics)
     {
+        language = null;
         var catalog = SemanticCatalog.Compose(_semanticModules, out diagnostics);
-        if (catalog is null) { language = null; return false; }
-        language = BuildSyntax(catalog);
+        if (catalog is null) return false;
+        if (!DeclarativeLowering.TryResolve(_modules, catalog, out var declarative, out var registrations, out diagnostics))
+            return false;
+        if (registrations is not null)
+        {
+            catalog = SemanticCatalog.Compose(_semanticModules.Append(registrations), out diagnostics);
+            if (catalog is null) return false;
+        }
+        language = BuildSyntax(catalog, declarative!);
         return true;
     }
 
-    Language BuildSyntax(SemanticCatalog catalog)
+    Language BuildSyntax(SemanticCatalog catalog, DeclarativeLowering declarative)
     {
         var registry = new ExtensionRegistry();
         foreach (var module in _modules)
@@ -59,6 +67,6 @@ public sealed unsafe class LanguageBuilder
         }
         registry.Current = null;
         var modules = _modules.ToArray();
-        return new Language(modules, registry.Freeze(modules), _trivia, _triviaStart, catalog);
+        return new Language(modules, registry.Freeze(modules), _trivia, _triviaStart, catalog, declarative);
     }
 }

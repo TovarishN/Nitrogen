@@ -10,10 +10,12 @@ public sealed unsafe class Language
     internal readonly delegate*<ReadOnlySpan<char>, int, int> Trivia;
     internal readonly AsciiSet TriviaStart;
 
-    internal Language(SyntaxModule[] modules, ExtensionPoint?[] points, delegate*<ReadOnlySpan<char>, int, int> trivia, AsciiSet triviaStart, SemanticCatalog semanticCatalog)
+    internal Language(SyntaxModule[] modules, ExtensionPoint?[] points, delegate*<ReadOnlySpan<char>, int, int> trivia, AsciiSet triviaStart, SemanticCatalog semanticCatalog,
+        DeclarativeLowering declarative)
     {
         Modules = modules;
         SemanticCatalog = semanticCatalog;
+        Declarative = declarative;
         _points = points;
         Trivia = trivia;
         TriviaStart = triviaStart;
@@ -24,6 +26,9 @@ public sealed unsafe class Language
     public IReadOnlyList<SyntaxModule> Modules { get; }
 
     public SemanticCatalog SemanticCatalog { get; }
+
+    /// <summary>The composed declarative rules (issue 251).</summary>
+    public DeclarativeLowering Declarative { get; }
 
     /// <summary>The module with process-wide id <paramref name="id"/>, when it is part of this language.</summary>
     internal SyntaxModule? ModuleById(int id) => (uint)id < (uint)_modulesById.Length ? _modulesById[id] : null;
