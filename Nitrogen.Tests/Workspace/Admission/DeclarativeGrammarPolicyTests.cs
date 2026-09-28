@@ -67,4 +67,21 @@ public sealed class DeclarativeGrammarPolicyTests
         Assert.Equal("rules.ngr", diagnostic.Path);
         Assert.Equal(3, diagnostic.Line);
     }
+
+    [Fact]
+    public void Declarative_typing_and_lowering_clauses_are_allowed()
+    {
+        const string grammar = """
+            syntax module Rules
+            {
+              symbols { thing }
+              token Word = ['a'..'z']+;
+              token Digits = ['0'..'9']+;
+              syntax Doc = "use" Name:Word ":" Kind:Word declares thing Name type Kind;
+              syntax Num = Text:Digits lowers literal Core.Scalar Text;
+              syntax Pair = "pair" Left:Num Right:Num lowers Rules.Pair(Left, Right);
+            }
+            """;
+        Assert.Empty(DeclarativeGrammarPolicy.Validate(Package(grammar)));
+    }
 }

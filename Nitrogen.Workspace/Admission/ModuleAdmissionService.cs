@@ -264,6 +264,19 @@ public sealed class ModuleAdmissionService : IDisposable
                 snapshot.Dispose();
                 return Reject("NA0003", "module", "host descriptor does not allow the package start rule");
             }
+            var unrequested = modules[0].DeclarativeRules
+                .Where(rule => rule.Form == DeclarativeForm.Operation)
+                .Select(rule => rule.Target!)
+                .Distinct(StringComparer.Ordinal)
+                .Where(id => !package.RequestedCapabilities.Contains(id, StringComparer.Ordinal))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+            if (unrequested.Length > 0)
+            {
+                snapshot.Dispose();
+                return new CandidateResult(null, unrequested.Select(id =>
+                    CapabilityError($"operation '{id}' is lowered by the grammar but not requested")).ToArray());
+            }
             ModuleDescriptor[] descriptors = [descriptor, ..profile.Dependencies];
             if (!TrySelectCapabilities(package.RequestedCapabilities, profile.Capabilities, descriptors,
                     out var bindings, out var capabilityDiagnostics))

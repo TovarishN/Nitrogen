@@ -71,6 +71,14 @@ public sealed class DeclarativeCompositionTests
     }
 
     [Fact]
+    public void Language_without_semantic_modules_leaves_rules_dormant()
+    {
+        var language = new LanguageBuilder().Add(LoweredModule.Instance).Build();
+        Assert.True(language.Declarative.IsEmpty);
+        Assert.Empty(language.SemanticCatalog.LowerersFor(LoweredKinds.Add));
+    }
+
+    [Fact]
     public void Language_without_rules_builds_unchanged()
     {
         var language = new LanguageBuilder().Add(Nitrogen.Tests.Scopes.ScopesModule.Instance).Build();

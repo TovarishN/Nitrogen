@@ -46,7 +46,12 @@ public sealed unsafe class LanguageBuilder
         language = null;
         var catalog = SemanticCatalog.Compose(_semanticModules, out diagnostics);
         if (catalog is null) return false;
-        if (!DeclarativeLowering.TryResolve(_modules, catalog, out var declarative, out var registrations, out diagnostics))
+        // A syntax-only language (no semantic modules, as the workspace and CLI build) has no catalog
+        // to resolve declarative clauses against; they stay dormant until semantics are supplied.
+        var declarative = DeclarativeLowering.Empty;
+        SemanticModule? registrations = null;
+        if (_semanticModules.Count > 0 &&
+            !DeclarativeLowering.TryResolve(_modules, catalog, out declarative, out registrations, out diagnostics))
             return false;
         if (registrations is not null)
         {
