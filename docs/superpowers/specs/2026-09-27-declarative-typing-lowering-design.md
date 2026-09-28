@@ -20,24 +20,24 @@ Two clause forms join the existing `declares` and `references` clauses on syntax
 syntax Box          = "box" Width:Dimension Height:Dimension Depth:Dimension ";"
                       lowers Geometry.BoxMesh(Width, Height, Depth);
 syntax Dimension    = Num / ParameterRef;
-syntax Num          = Value:SignedNumber  lowers literal Core.Scalar Value;
+syntax Num          = Sign:("+" / "-")? Value:Number  lowers literal Core.Scalar this;
 syntax Parameter    = Name:Identifier ":" Annotation:TypeName
                       declares parameter Name type Annotation;
 syntax ParameterRef = Name:Identifier  references parameter Name;
 ```
 
 - `lowers Op.Id(Field, ...)` lowers the node to a `HirOperation` for a catalog operation. Arguments are named fields of the rule, in the operation's parameter order.
-- `lowers literal Type.Id Field` lowers the node to a `HirConstant` of the named type. The field's source text, without trivia, is parsed as an invariant-culture float. Signs belong inside the token. There is no unit conversion.
+- `lowers literal Type.Id Field` lowers the node to a `HirConstant` of the named type. The field's tokens (or, for `this`, the node's tokens), without trivia, are parsed as an invariant-culture float, so a separate sign token is included. There is no unit conversion.
 - `type Field` or `type Qualified.Name` follows a `declares` clause and gives the declared symbol a type. The field form reads the type name from the field's source text; the qualified form names the type directly.
 - In the argument position of a `lowers` clause, a node without its own `lowers` clause is typed as follows. If it carries `references`, it lowers to a `HirSymbolRef` typed by the resolved symbol's `type`. Otherwise, if it has exactly one child that is typed by these rules, it passes that child's type and HIR through; `Dimension` above uses this. Nodes outside any `lowers` argument are never typed, so existing grammars are unaffected.
 
-The grammar front end treats these clauses as syntax only. The bootstrap `GrammarParser` and the self-hosted `Nitrogen.ngr` both accept them, and `SelfHostingTests` hold the two to the same `GrammarModel` (`LowersClause`, `TypeClause`). `GrammarValidator` checks that referenced fields exist, that a rule has at most one `lowers` clause, and that `type Field` names a field of the same rule. The grammar compiler never sees the semantic catalog.
+The grammar front end treats these clauses as syntax only. The bootstrap `GrammarParser` and the self-hosted `Nitrogen.ngr` both accept them, and `SelfHostingTests` hold the two to the same `GrammarModel`. The clauses are `BindingClause` values: kinds `Lowers` and `LowersLiteral` with `Target` and `Arguments`, and `Declares` with an optional `Target` for its type. This reuses the clause loop, span rules, and the existing duplicate-clause check. `GrammarValidator` checks that referenced fields exist, that a rule has at most one `lowers` clause, and that `type Field` names a field of the same rule. The grammar compiler never sees the semantic catalog.
 
 ## 3. Generated data and composition
 
-The generator emits each rule's clauses as an immutable `LoweringRule` record returned by a new virtual `SyntaxModule.GetLowering(int localKind)`, alongside the binding tables. The record holds the kind, either an operation ID and argument field indices or a literal type name and field index, and any declared-symbol type. It is data; no authored C# is emitted.
+The generator emits each kind's clauses as an immutable `DeclarativeRule` in a new virtual `SyntaxModule.DeclarativeRules` list, alongside the binding tables. A rule holds the local kind, its form (none, operation, or literal), the operation ID or literal type, the argument child indices, and any declared-symbol type (a qualified name or a child index). A list rather than a per-kind lookup lets admission enumerate lowered operations. It is data; no authored C# is emitted.
 
-When `LanguageBuilder` or `ModuleComposer` composes a language, a new `DeclarativeLowering` component in `Nitrogen.Runtime/Semantic` resolves every `LoweringRule` against the composed `SemanticCatalog`:
+When `LanguageBuilder` or `ModuleComposer` composes a language, a new `DeclarativeLowering` component in `Nitrogen.Runtime/Semantic` resolves every `DeclarativeRule` against the composed `SemanticCatalog`:
 
 | Code | Condition |
 | --- | --- |
@@ -68,8 +68,8 @@ A node whose child is already in error is not reported again. The registered low
 
 ## 6. Geometry migration
 
-- `Box` keeps its three `Num` fields and gains `lowers Geometry.BoxMesh(Width, Height, Depth)`; `Num` gains `lowers literal Core.Scalar Value`. `TemplateBox` gets no `lowers` clause, because definition bodies are expanded by C#, not lowered as roots. `GeometryHirLowerer.cs` and the string `Type` properties on `Box` and `Num` are removed. The sign moves into a `SignedNumber` token.
-- The `Type` symbol property and `symbol.Type = Annotation.Text` are replaced by `declares parameter Name type Annotation`.
+- `Box` keeps its three `Num` fields and gains `lowers Geometry.BoxMesh(Width, Height, Depth)`; `Num` gains `lowers literal Core.Scalar Value`. `TemplateBox` gets no `lowers` clause, because definition bodies are expanded by C#, not lowered as roots. `Num` keeps its `Sign` field and uses `lowers literal Core.Scalar this`. `GeometryHirLowerer.cs` and the string `Type` properties on `Box` and `Num` are removed.
+- The `Type` symbol property and `symbol.Type = Annotation.Text` are replaced by `declares parameter Name type Annotation`. `ParameterRef`'s string `GD0001` check is removed; `Parameter`'s `GD0001` already rejects any non-`Scalar` parameter.
 - `GE0001` (finite, positive dimension) remains a C# check; trusted modules may combine declarative typing with C# value checks.
 - `def`/`make` expansion remains in `GeometryDefinitionExpander` but reads parameter types from `DeclarativeTypes` instead of hard-coding `SemanticTypes.Scalar`. `GD0001` remains.
 - `box 1 2 3;` must produce the same HIR, origins, and executor result as before.
@@ -84,7 +84,7 @@ Each step starts with a failing focused test.
 
 - Parser and self-hosting: each clause form in both parsers, with model parity.
 - Validator: unknown field, duplicate `lowers`, `type Field` naming another rule's field.
-- Generator: a snapshot of the emitted `LoweringRule` tables.
+- Generator: a snapshot of the emitted `DeclarativeRules` table.
 - Composition: `NM0008`, `NM0009`, `NM0010`, and `NC0005` with a conflicting C# lowerer.
 - Typing: a new `Nitrogen.Tests/Grammars/Lowered.ngr` covering operations, literals, pass-through, references, a nested operation producing one root, a `references` node outside any `lowers` argument staying untyped, qualified and unqualified type names, and `NT0001`–`NT0004`. The mismatch case passes a `Core.Scalar` literal to an operation that takes `Units.Angle`.
 - Geometry: existing tests pass unchanged; a hover test expects `Geometry.Mesh`.
