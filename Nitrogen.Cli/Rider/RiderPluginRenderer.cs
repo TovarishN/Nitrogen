@@ -110,7 +110,7 @@ class NitrogenSettings : PersistentStateComponent<NitrogenSettings.State> {
   <depends>com.intellij.modules.lsp</depends>
   <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
-    <fileType name="{{Escape(model.DisplayName)}}" language="Nitrogen" extensions="{{string.Join(';', model.Extensions.Select(x => x.TrimStart('.')).Select(Escape))}}" implementationClass="org.nitrogen.rider.NitrogenFileType" />
+    <fileType name="{{Escape(model.PluginId)}}" language="Nitrogen" extensions="{{string.Join(';', model.Extensions.Select(x => x.TrimStart('.')).Select(Escape))}}" implementationClass="org.nitrogen.rider.NitrogenFileType" />
   </extensions>
   <extensions defaultExtensionNs="com.intellij.platform.lsp">
     <integrationProvider implementation="org.nitrogen.rider.NitrogenLspSupport" />

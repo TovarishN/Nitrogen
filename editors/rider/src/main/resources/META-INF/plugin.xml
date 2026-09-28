@@ -5,7 +5,7 @@
   <depends>com.intellij.modules.lsp</depends>
   <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
-    <fileType name="Nitrogen grammar" language="Nitrogen" extensions="ngr" implementationClass="org.nitrogen.rider.NitrogenFileType" />
+    <fileType name="NitrogenGrammar" language="Nitrogen" extensions="ngr" implementationClass="org.nitrogen.rider.NitrogenFileType" />
   </extensions>
   <extensions defaultExtensionNs="com.intellij.platform.lsp">
     <integrationProvider implementation="org.nitrogen.rider.NitrogenLspSupport" />

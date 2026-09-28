@@ -147,6 +147,36 @@ public sealed class RiderPluginGenerationTests
             Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void File_type_name_matches_the_class_in_rendered_and_template_plugins()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc Language", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var request = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+
+        // IntelliJ rejects a <fileType> whose name differs from the class's getName().
+        AssertFileTypeNamesMatch(request.OutputDirectory);
+        AssertFileTypeNamesMatch(Path.Combine(RepositoryRoot(), "editors", "rider"));
+    }
+
+    static void AssertFileTypeNamesMatch(string plugin)
+    {
+        string xml = File.ReadAllText(Path.Combine(plugin, "src/main/resources/META-INF/plugin.xml"));
+        string kotlin = File.ReadAllText(Path.Combine(plugin, "src/main/kotlin/org/nitrogen/rider/NitrogenFileType.kt"));
+        string declared = System.Text.RegularExpressions.Regex.Match(xml, "<fileType name=\"([^\"]*)\"").Groups[1].Value;
+        string returned = System.Text.RegularExpressions.Regex.Match(kotlin, "getName\\(\\) = \"([^\"]*)\"").Groups[1].Value;
+        Assert.NotEqual("", returned);
+        Assert.Equal(returned, declared);
+    }
+
+    static string RepositoryRoot([System.Runtime.CompilerServices.CallerFilePath] string path = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
+
     static string Snapshot(string root) => string.Join("\n", Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
         .Where(path => !path.Contains(Path.DirectorySeparatorChar + ".", StringComparison.Ordinal))
         .OrderBy(path => path, StringComparer.Ordinal)
