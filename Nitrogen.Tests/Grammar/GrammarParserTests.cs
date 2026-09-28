@@ -303,4 +303,29 @@ public class GrammarParserTests
         var clause = Assert.Single(rule.Clauses);
         Assert.Equal(("value", "N", "skill"), (clause.Kinds[0].Name, clause.Field, clause.Qualifier!.Name));
     }
+
+    [Theory]
+    [InlineData("syntax R = \"r\" A:X B:Y lowers M.Op(A, B);", "(lowers M.Op(A, B))")]
+    [InlineData("syntax R = \"r\" lowers Op();", "(lowers Op())")]
+    [InlineData("syntax R = V:X lowers literal Core.Scalar V;", "(lowers literal Core.Scalar V)")]
+    [InlineData("syntax R = \"-\"? V:X lowers literal Core.Scalar this;", "(lowers literal Core.Scalar this)")]
+    [InlineData("syntax R = \"r\" A:X lowers literal(A);", "(lowers literal(A))")]
+    [InlineData("syntax R = N:X T:Y declares v N type T;", "(declares v N type T)")]
+    [InlineData("syntax R = N:X declares v N export type Units.Angle;", "(declares v N export type Units.Angle)")]
+    public void Declarative_clauses_parse(string rule, string clause)
+    {
+        var file = ParseOk("syntax module M { symbols { v } " + rule + " }");
+        var syntax = (SyntaxRule)file.Modules[0].Rules[0];
+        Assert.Equal(clause, GrammarDumper.Dump(Assert.Single(syntax.Clauses)));
+    }
+
+    [Fact]
+    public void Lowers_clause_spans_its_keyword_to_the_closing_parenthesis()
+    {
+        const string text = "syntax module M { syntax R = \"r\" A:X lowers M.Op(A) ; }";
+        var clause = Assert.Single(((SyntaxRule)ParseOk(text).Modules[0].Rules[0]).Clauses);
+        Assert.Equal("lowers M.Op(A)", text.Substring(clause.Span.Start, clause.Span.Length));
+        Assert.Equal("M.Op", clause.Target!.Name);
+        Assert.Equal(["A"], clause.Arguments.Select(argument => argument.Name));
+    }
 }

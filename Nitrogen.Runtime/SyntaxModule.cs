@@ -48,6 +48,9 @@ public abstract class SyntaxModule
     /// <summary>The symbol properties this module declares (issue 239).</summary>
     public virtual IReadOnlyList<Nitrogen.Semantics.SymbolProperty> SymbolProperties => [];
 
+    /// <summary>Declarative typing and lowering clauses (issue 251); empty when the grammar has none.</summary>
+    public virtual IReadOnlyList<Nitrogen.Semantic.DeclarativeRule> DeclarativeRules => [];
+
     public override string ToString() => Name;
 }
 

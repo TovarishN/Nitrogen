@@ -401,7 +401,7 @@ public static class GrammarParser
             return inner;
         }
 
-        static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic";
+        static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic" or "lowers";
 
         static NameDecl Name(GrammarToken token) => new(token.Value, token.Span);
 
@@ -423,8 +423,17 @@ public static class GrammarParser
                         end = Advance().End;
                         export = true;
                     }
+                    NameDecl? type = null;
+                    if (AtKeyword("type"))
+                    {
+                        Advance();
+                        if (!At(TokenKind.Identifier) && !At(TokenKind.QualifiedName)) throw Error("expected a field label or a qualified type name");
+                        var name = Advance();
+                        type = Name(name);
+                        end = name.End;
+                    }
                     clauses.Add(new BindingClause(BindingClauseKind.Declares, new[] { kind }, field.Value, field.Span,
-                        false, export, GrammarSpan.FromBounds(keyword.Start, end)));
+                        false, export, GrammarSpan.FromBounds(keyword.Start, end), Target: type));
                 }
                 else if (AtKeyword("references"))
                 {
@@ -448,6 +457,37 @@ public static class GrammarParser
                     }
                     clauses.Add(new BindingClause(BindingClauseKind.References, kinds.ToArray(), field.Value, field.Span,
                         optional, false, GrammarSpan.FromBounds(keyword.Start, end), qualifier));
+                }
+                else if (AtKeyword("lowers"))
+                {
+                    var keyword = Advance();
+                    if (AtKeyword("literal") && Next.Kind is TokenKind.Identifier or TokenKind.QualifiedName)
+                    {
+                        Advance();
+                        var type = Name(Advance());
+                        var field = Expect(TokenKind.Identifier, "a field label or 'this'");
+                        clauses.Add(new BindingClause(BindingClauseKind.LowersLiteral, default, field.Value, field.Span,
+                            false, false, GrammarSpan.FromBounds(keyword.Start, field.End), Target: type));
+                    }
+                    else
+                    {
+                        if (!At(TokenKind.Identifier) && !At(TokenKind.QualifiedName)) throw Error("expected an operation name or 'literal'");
+                        var operation = Name(Advance());
+                        Expect(TokenKind.LParen, "'('");
+                        var arguments = new List<NameDecl>();
+                        if (!At(TokenKind.RParen))
+                        {
+                            arguments.Add(Name(Expect(TokenKind.Identifier, "a field label")));
+                            while (At(TokenKind.Comma))
+                            {
+                                Advance();
+                                arguments.Add(Name(Expect(TokenKind.Identifier, "a field label")));
+                            }
+                        }
+                        var close = Expect(TokenKind.RParen, "',' or ')'");
+                        clauses.Add(new BindingClause(BindingClauseKind.Lowers, default, "", default, false, false,
+                            GrammarSpan.FromBounds(keyword.Start, close.End), Target: operation, Arguments: arguments.ToArray()));
+                    }
                 }
                 else if (AtKeyword("scope") || AtKeyword("dynamic"))
                 {

@@ -30,6 +30,7 @@ internal enum TokenKind
     Dot,
     DotDot,
     Caret,
+    Comma,
 }
 
 /// <param name="Value">Source text for names, numbers and punctuation; the decoded value for strings and chars.</param>
@@ -129,6 +130,7 @@ internal static class GrammarLexer
             '&' => TokenKind.Amp,
             '.' => TokenKind.Dot,
             '^' => TokenKind.Caret,
+            ',' => TokenKind.Comma,
             _ => TokenKind.End,
         };
         if (punctuation == TokenKind.End)

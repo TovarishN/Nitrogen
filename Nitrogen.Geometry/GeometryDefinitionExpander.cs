@@ -65,8 +65,10 @@ public static class GeometryDefinitionExpander
                 candidate.Kind == "parameter" && candidate.Node == parameters[i].Index);
             var value = Dimension(context, caller, call.Args[i].Index, callerArguments);
             if (parameter is null || value is null) return null;
+            var parameterType = definitionFile.DeclarativeTypes.TypeOfSymbol(parameter);
+            if (parameterType is null || parameterType.Equals(SemanticTypes.Error)) return null;
             var declaration = new HirSymbolRef(
-                Nitrogen.Semantic.SemanticSymbol.From(parameter, "Geometry", SemanticTypes.Scalar),
+                Nitrogen.Semantic.SemanticSymbol.From(parameter, "Geometry", parameterType),
                 Origin(definitionFile, context.SnapshotId, parameter.Node));
             arguments.Add(parameter, HirTraversal.Rewrite(declaration, _ => value));
         }
@@ -95,15 +97,18 @@ public static class GeometryDefinitionExpander
         if (number >= 0)
         {
             var amount = new NumNodeSemantics(file, number).Amount;
-            return GeometryValues.Positive(amount)
-                ? new HirConstant(amount!.Value, SemanticTypes.Scalar, Origin(file, context.SnapshotId, number))
+            var numberType = file.DeclarativeTypes.TypeOf(number);
+            return GeometryValues.Positive(amount) && numberType is not null && !numberType.Equals(SemanticTypes.Error)
+                ? new HirConstant(amount!.Value, numberType, Origin(file, context.SnapshotId, number))
                 : null;
         }
         int referenceNode = Find(tree, node, GeometryKinds.ParameterRef);
         if (referenceNode < 0) return null;
         var binding = file.SymbolOf(referenceNode);
-        if (binding is null || !arguments.TryGetValue(binding, out var replacement)) return null;
-        var reference = new HirSymbolRef(Nitrogen.Semantic.SemanticSymbol.From(binding, "Geometry", SemanticTypes.Scalar),
+        var referenceType = file.DeclarativeTypes.TypeOf(referenceNode);
+        if (binding is null || referenceType is null || referenceType.Equals(SemanticTypes.Error) ||
+            !arguments.TryGetValue(binding, out var replacement)) return null;
+        var reference = new HirSymbolRef(Nitrogen.Semantic.SemanticSymbol.From(binding, "Geometry", referenceType),
             Origin(file, context.SnapshotId, referenceNode));
         return HirTraversal.Rewrite(reference, _ => replacement);
     }

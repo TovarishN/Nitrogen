@@ -1,0 +1,25 @@
+// Declarative typing and lowering (issue 251). Test.Add takes two Core.Scalar values and
+// Test.Turn one Units.Angle; inputs are typed by annotation, 'fixed' by a qualified type,
+// and 'plain' not at all. 'wrap' passes its one typed child through.
+syntax module Lowered
+{
+  symbols { input }
+
+  token Digits = ['0'..'9']+;
+  token Number = Digits ("." Digits)? ("e" Digits)?;
+  token Word   = ['a'..'z' 'A'..'Z' '_'] ['a'..'z' 'A'..'Z' '0'..'9' '_' '.']*;
+  token Name   = ['a'..'z' 'A'..'Z' '_'] ['a'..'z' 'A'..'Z' '0'..'9' '_']* except "input" "fixed" "plain" "add" "turn" "wrap";
+
+  syntax File      = Items:Item*;
+  syntax Item      = Input / Fixed / Plain / Statement;
+  syntax Input     = "input" Name:Name ":" Annotation:Word ";"  declares input Name type Annotation;
+  syntax Fixed     = "fixed" Name:Name ";"  declares input Name type Units.Angle;
+  syntax Plain     = "plain" Name:Name ";"  declares input Name;
+  syntax Statement = Body:Value ";";
+  syntax Value     = Add / Turn / Wrap / Num / Ref;
+  syntax Add       = "add" "(" Left:Value "," Right:Value ")"  lowers Test.Add(Left, Right);
+  syntax Turn      = "turn" "(" Amount:Value ")"  lowers Test.Turn(Amount);
+  syntax Wrap      = "wrap" "(" Inner:Value ")";
+  syntax Num       = Text:Number  lowers literal Core.Scalar Text;
+  syntax Ref       = Name:Name  references input Name;
+}

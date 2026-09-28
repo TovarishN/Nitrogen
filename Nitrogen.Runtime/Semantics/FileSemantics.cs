@@ -23,6 +23,7 @@ public sealed class FileSemantics
     readonly HashSet<(int Node, string Property, string Code)> _reported = new();
     Dictionary<int, Reference>? _references;
     List<SemanticDiagnostic>? _checks;
+    Nitrogen.Semantic.DeclarativeTypes? _declarative;
 
     internal FileSemantics(ProjectSemantics project, FileBinding binding)
     {
@@ -40,6 +41,10 @@ public sealed class FileSemantics
 
     /// <summary>A document already bound in the same project, for cross-file lowering.</summary>
     public FileSemantics RelatedFile(string path) => _project[path];
+
+    /// <summary>Types from the language's declarative clauses (issue 251).</summary>
+    public Nitrogen.Semantic.DeclarativeTypes DeclarativeTypes =>
+        _declarative ??= new Nitrogen.Semantic.DeclarativeTypes(this, _language.Declarative, _language.SemanticCatalog);
 
     sealed class Slot<T>(int count)
     {
@@ -120,14 +125,22 @@ public sealed class FileSemantics
     /// <summary>The symbol the node's own reference resolves to; null when it has none, or it is unresolved or ambiguous.</summary>
     public Symbol? SymbolOf(int node)
     {
+        if (!ReferencesByNode().TryGetValue(node, out var found)) return null;
+        var symbols = _project.Project.Resolve(found);
+        return symbols.Count == 1 ? symbols[0] : null;
+    }
+
+    /// <summary>Whether the node carries a reference clause (issue 251).</summary>
+    internal bool HasReference(int node) => ReferencesByNode().ContainsKey(node);
+
+    Dictionary<int, Reference> ReferencesByNode()
+    {
         if (_references is null)
         {
             _references = new Dictionary<int, Reference>();
             foreach (var reference in Binding.References) _references.TryAdd(reference.Node, reference);
         }
-        if (!_references.TryGetValue(node, out var found)) return null;
-        var symbols = _project.Project.Resolve(found);
-        return symbols.Count == 1 ? symbols[0] : null;
+        return _references;
     }
 
     public T GetSymbol<T>(Symbol symbol, SymbolProperty<T> property) => _project.GetSymbol(symbol, property);
@@ -176,7 +189,7 @@ public sealed class FileSemantics
                 for (int k = Tree.ChildCount(node) - 1; k >= 0; k--) stack.Push(Tree.Child(node, k));
             }
         }
-        return _checks.Concat(_evaluation)
+        return _checks.Concat(_evaluation).Concat(DeclarativeTypes.Diagnostics())
             .OrderBy(d => d.Span.Start)
             .ThenBy(d => d.Code, StringComparer.Ordinal)
             .ToList();

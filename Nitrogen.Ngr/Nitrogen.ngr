@@ -46,13 +46,18 @@ syntax module Nitrogen
   syntax Associativity  = "left" / "right";
 
   // Binding clauses (issue 237).
-  syntax Clause         = Declares / References / ScopeClause / DynamicClause;
-  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Export:"export"?;
+  syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;
+  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Export:"export"? Type:("type" QualifiedName)?;
   syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:("in" Identifier)?;
   syntax KindList       = KindGroup / Identifier;
   syntax KindGroup      = "(" Kinds:(Identifier; "|")+ ")";
   syntax ScopeClause    = "scope";
   syntax DynamicClause  = "dynamic";
+
+  // Declarative typing and lowering (issue 251).
+  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersCall);
+  syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier;
+  syntax LowersCall     = Operation:QualifiedName "(" Arguments:(Identifier; ",")* Close:")";
 
   // Semantics (issue 239).
   syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
@@ -74,7 +79,7 @@ syntax module Nitrogen
   syntax Any            = ".";
   syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / ")");
   syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+");
-  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" Name:QualifiedName  references? rule Name;
+  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" Name:QualifiedName  references? rule Name;
   syntax QualifiedName  = DottedName / Identifier;
   syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]";
   syntax ClassItem      = First:Char Last:(".." Char)?;

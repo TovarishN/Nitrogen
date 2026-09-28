@@ -117,14 +117,18 @@ public enum BindingClauseKind
     References,
     Scope,
     Dynamic,
+    Lowers,
+    LowersLiteral,
 }
 
-/// <summary>A binding clause after a syntax rule or an alternative (issue 237).</summary>
+/// <summary>A binding clause after a syntax rule or an alternative (issue 237), or a declarative lowering clause (issue 251).</summary>
 /// <param name="Kinds">Declares: one kind. References: one or more, in lookup order. Otherwise empty.</param>
-/// <param name="Field">A top-level label of the rule's elements, or <c>this</c>; empty for Scope and Dynamic.</param>
+/// <param name="Field">A top-level label of the rule's elements, or <c>this</c>; empty for Scope, Dynamic and Lowers.</param>
 /// <param name="Optional"><c>references?</c>: counts only when it resolves, and then hides the references inside it.</param>
 /// <param name="Export"><c>declares … export</c>: visible project-wide.</param>
 /// <param name="Qualifier"><c>references … in K</c> (issue 239): resolve in the scope of the symbol the nearest enclosing reference of kind K names.</param>
+/// <param name="Target">Declares: the <c>type</c> field label or qualified type name; Lowers: the operation ID; LowersLiteral: the literal's type (issue 251).</param>
+/// <param name="Arguments">Lowers: the argument field labels, in parameter order (issue 251).</param>
 public sealed record BindingClause(
     BindingClauseKind Kind,
     EquatableArray<NameDecl> Kinds,
@@ -133,7 +137,9 @@ public sealed record BindingClause(
     bool Optional,
     bool Export,
     GrammarSpan Span,
-    NameDecl? Qualifier = null);
+    NameDecl? Qualifier = null,
+    NameDecl? Target = null,
+    EquatableArray<NameDecl> Arguments = default);
 
 /// <summary>C# text from a semantics block (issue 239), trimmed at the end; the grammar compiler never parses it.</summary>
 public sealed record CodeText(string Text, GrammarSpan Span);

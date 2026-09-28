@@ -256,4 +256,43 @@ public class GrammarValidatorTests
         var d = Single(GrammarCodes.UnknownSymbolKind, "syntax module M { symbols { v } token A = \"a\"; syntax R = \"r\" N:A references v N in nope; }");
         Assert.Contains("nope", d.Message);
     }
+
+    [Fact]
+    public void Lowers_arguments_must_be_labels()
+    {
+        var d = Single(GrammarCodes.UnknownBindingField, "syntax module M { token T = \"t\"; syntax R = \"r\" A:T lowers M.Op(A, B); }");
+        Assert.Contains("'B'", d.Message);
+    }
+
+    [Fact]
+    public void Lowers_literal_field_must_be_a_label_or_this()
+    {
+        Single(GrammarCodes.UnknownBindingField, "syntax module M { token T = \"t\"; syntax R = \"r\" A:T lowers literal Core.Scalar Z; }");
+        Assert.Empty(Validate("syntax module M { token T = \"t\"; syntax R = \"-\" A:T lowers literal Core.Scalar this; }"));
+    }
+
+    [Fact]
+    public void A_rule_takes_one_lowers_clause()
+    {
+        var d = Single(GrammarCodes.DuplicateClause,
+            "syntax module M { token T = \"t\"; syntax R = \"r\" A:T lowers M.Op(A) lowers literal Core.Scalar A; }");
+        Assert.Contains("'lowers'", d.Message);
+    }
+
+    [Fact]
+    public void Declared_type_is_a_label_or_a_qualified_name()
+    {
+        Single(GrammarCodes.UnknownBindingField, "syntax module M { symbols { v } token T = \"t\"; syntax R = N:T declares v N type Missing; }");
+        Assert.Empty(Validate("syntax module M { symbols { v } token T = \"t\"; syntax R = N:T K:T declares v N type K; }"));
+        Assert.Empty(Validate("syntax module M { symbols { v } token T = \"t\"; syntax R = N:T declares v N type Units.Angle; }"));
+    }
+
+    [Fact]
+    public void Lowers_only_rule_emits_no_binding_table()
+    {
+        var result = GrammarCompiler.Compile([new GrammarInput("m.ngr",
+            "syntax module M { token T = \"t\"; syntax R = \"r\" A:T lowers M.Op(A); }", "N")]);
+        Assert.False(result.HasErrors);
+        Assert.DoesNotContain("GetBinding", Assert.Single(result.Sources).Code);
+    }
 }

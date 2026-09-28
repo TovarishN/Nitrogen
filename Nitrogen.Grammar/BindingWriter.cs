@@ -11,7 +11,7 @@ internal static class BindingWriter
 {
     public static void Write(StringBuilder b, ModuleInfo info)
     {
-        bool hasClauses = info.Kinds.Any(k => Clauses(k).Count > 0);
+        bool hasClauses = info.Kinds.Any(k => BindingClauses(k).Length > 0);
         if (hasClauses)
         {
             b.Append("    static readonly global::Nitrogen.Binding.BindingRule?[] s_bindings =\n    {\n        null,\n");
@@ -32,15 +32,19 @@ internal static class BindingWriter
         }
     }
 
-    static EquatableArray<BindingClause> Clauses(KindInfo kind) =>
+    internal static EquatableArray<BindingClause> Clauses(KindInfo kind) =>
         kind.Alternative is { } alternative ? alternative.Clauses
         : kind.Rule is SyntaxRule rule ? rule.Clauses
         : default;
 
+    static BindingClause[] BindingClauses(KindInfo kind) => Clauses(kind)
+        .Where(c => c.Kind is BindingClauseKind.Declares or BindingClauseKind.References or BindingClauseKind.Scope or BindingClauseKind.Dynamic)
+        .ToArray();
+
     static string Rule(KindInfo kind)
     {
-        var clauses = Clauses(kind);
-        if (clauses.Count == 0) return "null";
+        var clauses = BindingClauses(kind);
+        if (clauses.Length == 0) return "null";
         var elements = SyntaxCodeWriter.Elements(kind.Alternative?.Body ?? ((SyntaxRule)kind.Rule!).Body);
         string declares = "null", references = "null";
         bool scope = false, dynamic = false;
