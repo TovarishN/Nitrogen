@@ -11,7 +11,10 @@ repositories {
 
 dependencies {
     intellijPlatform { rider("2026.2") }
+    testImplementation(kotlin("test"))
 }
+
+tasks.test { useJUnitPlatform() }
 
 intellijPlatform {
     pluginConfiguration {

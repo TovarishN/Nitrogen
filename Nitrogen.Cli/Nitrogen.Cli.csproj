@@ -5,6 +5,9 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>nitrogen</AssemblyName>
     <RootNamespace>Nitrogen.Cli</RootNamespace>
+    <!-- Workspace grammars compile with Roslyn, which references assemblies by file path. A single-file
+         publish (a bundled Rider server) must extract its assemblies so those paths exist. -->
+    <IncludeAllContentForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeAllContentForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>

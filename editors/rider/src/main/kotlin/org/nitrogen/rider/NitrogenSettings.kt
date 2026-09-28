@@ -29,9 +29,12 @@ class NitrogenSettings : PersistentStateComponent<NitrogenSettings.State> {
             state.executable = value.trim()
         }
 
-    /** The executable to run: the setting, else [default]; a bare name is looked up on PATH. */
+    /**
+     * The executable to run: the setting when set (an invalid one is an error, never a fallback), else the
+     * plugin's bundled server for this machine, else [default]. A bare name is looked up on PATH.
+     */
     fun resolveExecutable(default: String): String {
-        val name = executable.ifBlank { default }
+        val name = executable.ifBlank { null } ?: NitrogenBundles.current() ?: default
         val file = File(name)
         val found = if (file.isAbsolute || name.contains(File.separatorChar)) file.takeIf { it.canExecute() }
             else PathEnvironmentVariableUtil.findInPath(name)

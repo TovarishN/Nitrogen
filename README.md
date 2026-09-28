@@ -93,9 +93,13 @@ dotnet run --project Nitrogen.Cli -- generate rider \
 ```
 
 Use `--language NAME` for a configuration containing multiple languages, or
-use `--grammar FILE --start Module.Rule` when no `nitrogen.json` exists. An
-explicit local server executable can be passed to generated output through the
-plugin settings; optional local platform bundles are never downloaded.
+use `--grammar FILE --start Module.Rule` when no `nitrogen.json` exists. The
+plugin runs the executable set in Rider's Settings | Tools page, else a bundled
+server for the current platform, else `nitrogen` (or `--nitrogen PATH`). To bundle
+a server, publish it as a self-contained single file and pass it per platform,
+for example `--bundle macos-aarch64=publish/nitrogen` after
+`dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o publish`.
+Bundles are copied from local files and never downloaded.
 
 ## Project map
 

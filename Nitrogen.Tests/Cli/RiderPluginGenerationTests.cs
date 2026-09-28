@@ -187,12 +187,36 @@ public sealed class RiderPluginGenerationTests
         }
 
         // The settings and page are shared verbatim, so the generator cannot drift from the template.
-        foreach (string file in new[] { "NitrogenSettings.kt", "NitrogenConfigurable.kt" })
+        foreach (string file in new[] { "NitrogenSettings.kt", "NitrogenConfigurable.kt", "NitrogenBundles.kt" })
         {
             string path = Path.Combine("src/main/kotlin/org/nitrogen/rider", file);
             Assert.Equal(File.ReadAllText(Path.Combine(template, path)).Replace("\r\n", "\n"),
                 File.ReadAllText(Path.Combine(request.OutputDirectory, path)).Replace("\r\n", "\n"));
         }
+    }
+
+    [Fact]
+    public void Bundled_server_is_packaged_with_a_descriptor_the_plugin_reads()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        string server = dir.Write("server/nitrogen", "#!/bin/sh\necho nitrogen\n");
+        var request = RiderPluginInput.ParseRequest(new[] { "generate", "rider", "--config", config,
+            "--bundle", "macos-aarch64=" + server, "--output", Path.Combine(dir.Path, "out") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+
+        string resources = Path.Combine(request.OutputDirectory, "src/main/resources");
+        Assert.Equal(File.ReadAllBytes(server), File.ReadAllBytes(Path.Combine(resources, "bundled/macos-aarch64/nitrogen")));
+        string hash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(server))).ToLowerInvariant();
+        // NitrogenBundles.kt reads entries with this pattern; keep the two in step.
+        var entry = System.Text.RegularExpressions.Regex.Match(File.ReadAllText(Path.Combine(resources, "nitrogen-bundles.json")),
+            "\\{\\s*\"target\":\\s*\"([^\"]+)\",\\s*\"file\":\\s*\"([^\"]+)\",\\s*\"sha256\":\\s*\"([0-9a-f]{64})\"\\s*}");
+        Assert.True(entry.Success);
+        Assert.Equal(("macos-aarch64", "bundled/macos-aarch64/nitrogen", hash),
+            (entry.Groups[1].Value, entry.Groups[2].Value, entry.Groups[3].Value));
     }
 
     static void AssertFileTypeNamesMatch(string plugin)
