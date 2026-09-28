@@ -6,7 +6,7 @@
 #
 # Usage: ./build.sh [--config nitrogen.json [--language NAME]]
 #   Always builds the Rider plugin for .ngr grammars; --config also builds one for that language.
-# Requires the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 21 or newer.
+# Requires the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 25 (Rider 2026.2's Java version).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")" && pwd)"

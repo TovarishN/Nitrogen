@@ -26,10 +26,11 @@ jobs:
           node-version: 20
           cache: npm
           cache-dependency-path: editors/vscode/package-lock.json
-      - uses: actions/setup-java@v4
+      # Rider 2026.2 runs on Java 25; the IntelliJ Platform Gradle plugin compiles with a matching toolchain.
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: 21
+          java-version: 25
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.7.1"

@@ -125,7 +125,7 @@ public sealed class RiderPluginGenerationTests
     }
 
     [Fact]
-    public void Rendered_build_targets_the_rider_jvm_and_platform_api()
+    public void Rendered_build_uses_the_template_plugins_and_platform_api()
     {
         using var dir = new TempDirectory();
         string config = dir.Write("nitrogen.json", """
@@ -137,9 +137,16 @@ public sealed class RiderPluginGenerationTests
         RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
         string Read(string path) => File.ReadAllText(Path.Combine(request.OutputDirectory, path));
 
-        // Both compilers target Rider's Java 21 runtime whatever JDK runs Gradle.
-        Assert.Contains("options.release = 21", Read("build.gradle.kts"), StringComparison.Ordinal);
-        Assert.Contains("JvmTarget.JVM_21", Read("build.gradle.kts"), StringComparison.Ordinal);
+        // Generated plugins build with the template's Kotlin and IntelliJ Platform Gradle plugins, and
+        // leave the JVM to the platform plugin, which takes it from the Rider SDK (Java 25 for 262).
+        static string[] Versions(string gradle) => System.Text.RegularExpressions.Regex
+            .Matches(gradle, "(kotlin\\(\"jvm\"\\)|id\\(\"org\\.jetbrains\\.intellij\\.platform\"\\)) version \"([^\"]+)\"")
+            .Select(match => match.Value).ToArray();
+        string template = File.ReadAllText(Path.Combine(RepositoryRoot(), "editors", "rider", "build.gradle.kts"));
+        Assert.Equal(2, Versions(template).Length);
+        Assert.Equal(Versions(template), Versions(Read("build.gradle.kts")));
+        Assert.DoesNotContain("JvmTarget", Read("build.gradle.kts"), StringComparison.Ordinal);
+        Assert.DoesNotContain("options.release", Read("build.gradle.kts"), StringComparison.Ordinal);
         // The IDE supplies the Kotlin standard library.
         Assert.Contains("kotlin.stdlib.default.dependency=false", Read("gradle.properties"), StringComparison.Ordinal);
         // LspClientStarter is nested in LspIntegrationProvider in the 262 platform.

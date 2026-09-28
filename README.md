@@ -38,7 +38,7 @@ The solution contains the Nitrogen projects listed below.
 
 This builds and tests Nitrogen, then writes the plugins to `artifacts/`: the VS Code extension
 (`nitrogen-*.vsix`) and Rider plugins (`rider/*-rider.zip`) that bundle a single-file server for the
-current machine. It needs the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 21 or newer. The
+current machine. It needs the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 25 (Rider 2026.2's Java version). The
 [Plugins workflow](.github/workflows/plugins.yml) runs the same script on Linux and publishes the
 plugins as build artifacts.
 
