@@ -146,7 +146,46 @@ public sealed class DeclarativeTypes
         return Lower(context, node);
     }
 
-    HirNode? Lower(LoweringContext context, int node) => null;
+    HirNode? Lower(LoweringContext context, int node)
+    {
+        var type = TypeOf(node);
+        if (type is null || type.Equals(SemanticTypes.Error)) return null;
+        var tree = _file.Tree;
+        int kind = tree.Kind(node);
+        if (kind == SyntaxKinds.Ambiguous) return Lower(context, tree.Child(node, 0));
+        if (_lowering.RuleFor(kind) is { } rule && rule.Rule.Form != DeclarativeForm.None)
+        {
+            if (rule.Rule.Form == DeclarativeForm.Literal)
+                return TryLiteral(node, rule.Rule, out var value) ? new HirConstant(value, type, context.Origin(node)) : null;
+            var operation = rule.Operation!;
+            var arguments = new HirNode[rule.Rule.Arguments.Count];
+            for (int i = 0; i < arguments.Length; i++)
+            {
+                var argument = Lower(context, tree.Child(node, rule.Rule.Arguments[i]));
+                if (argument is null || !argument.Type.Equals(operation.Inputs[i])) return null;
+                arguments[i] = argument;
+            }
+            return new HirOperation(operation, arguments, [context.Origin(node)]);
+        }
+        if (_file.HasReference(node))
+        {
+            var symbol = _file.SymbolOf(node)!;
+            return new HirSymbolRef(SemanticSymbol.From(symbol, ModuleOf(symbol), type), context.Origin(node));
+        }
+        for (int k = 0; k < tree.ChildCount(node); k++)
+        {
+            int child = tree.Child(node, k);
+            if (TypeOf(child) is not null) return Lower(context, child);
+        }
+        return null;
+    }
+
+    string ModuleOf(Symbol symbol)
+    {
+        var declaring = symbol.Path == _file.Path ? _file : _file.RelatedFile(symbol.Path!);
+        int kind = declaring.Tree.Kind(symbol.Node);
+        return declaring.Tree.Language!.ModuleById(SyntaxKinds.ModuleOf(kind))!.Name;
+    }
 
     bool TryLiteral(int node, DeclarativeRule rule, out float value)
     {
