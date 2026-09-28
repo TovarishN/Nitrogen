@@ -55,4 +55,21 @@ public sealed class GeometryModuleTests
         Assert.Contains(parsed.Diagnostics.ToArray(), diagnostic =>
             diagnostic.Span.Start == source.IndexOf("nope", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void Geometry_types_and_lowers_through_declarative_rules()
+    {
+        var rules = Nitrogen.Geometry.Syntax.GeometryModule.Instance.DeclarativeRules.ToDictionary(rule => rule.LocalKind);
+        var box = rules[Nitrogen.Geometry.Syntax.GeometryModule.LBox];
+        Assert.Equal(DeclarativeForm.Operation, box.Form);
+        Assert.Equal("Geometry.BoxMesh", box.Target);
+        Assert.Equal([1, 2, 3], box.Arguments);
+        var num = rules[Nitrogen.Geometry.Syntax.GeometryModule.LNum];
+        Assert.Equal(DeclarativeForm.Literal, num.Form);
+        Assert.Equal("Core.Scalar", num.Target);
+        Assert.Equal([-1], num.Arguments);
+        Assert.Equal(2, rules[Nitrogen.Geometry.Syntax.GeometryModule.LParameter].DeclaredTypeChild);
+        Assert.DoesNotContain(BoxMeshModule.Descriptor.Semantics!.Lowerers,
+            lowerer => lowerer.SyntaxKind == Nitrogen.Geometry.Syntax.GeometryKinds.Box);
+    }
 }
