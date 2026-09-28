@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using Microsoft.CodeAnalysis.CSharp;
 using Nitrogen.Grammar;
@@ -54,7 +55,7 @@ public sealed class GrammarWorkspace
         if (Usings.Count > 0)
             trees.Add(CSharpSyntaxTree.ParseText(string.Concat(Usings.Select(u => $"global using {u};\n")), parseOptions, path: "Usings.g.cs"));
         trees.AddRange(Sources.Select(s => CSharpSyntaxTree.ParseText(s.Value, parseOptions, path: s.Key)));
-        var references = s_references.Value.Concat(References.Select(a => (CodeAnalysis.MetadataReference)CodeAnalysis.MetadataReference.CreateFromFile(a.Location)));
+        var references = s_references.Value.Concat(References.Select(a => (CodeAnalysis.MetadataReference)CodeAnalysis.MetadataReference.CreateFromFile(PathOf(a))));
         var compilation = CSharpCompilation.Create($"NitrogenWorkspace{version}", trees, references,
             new CSharpCompilationOptions(CodeAnalysis.OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
                 optimizationLevel: CodeAnalysis.OptimizationLevel.Release, nullableContextOptions: CodeAnalysis.NullableContextOptions.Enable));
@@ -124,13 +125,24 @@ public sealed class GrammarWorkspace
     /// <summary>The framework assemblies plus Nitrogen.Runtime, loaded once per process (warm compiles reuse them).</summary>
     static CodeAnalysis.MetadataReference[] LoadReferences()
     {
-        string framework = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
+        string framework = Path.GetDirectoryName(PathOf(typeof(object).Assembly))!;
         string[] trusted = (AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES") as string)?.Split(Path.PathSeparator) ?? [];
         return trusted
             .Where(p => p.Length > 0 && string.Equals(Path.GetDirectoryName(p), framework, StringComparison.Ordinal))
-            .Append(typeof(Language).Assembly.Location)
+            .Append(PathOf(typeof(Language).Assembly))
             .Distinct(StringComparer.Ordinal)
             .Select(p => (CodeAnalysis.MetadataReference)CodeAnalysis.MetadataReference.CreateFromFile(p))
             .ToArray();
     }
+
+    /// <summary>
+    /// The file Roslyn references an assembly by. A single-file host has none unless it extracts its
+    /// assemblies; Nitrogen.Cli does (IncludeAllContentForSelfExtract), and any other host gets this error.
+    /// </summary>
+    [UnconditionalSuppressMessage("SingleFile", "IL3000",
+        Justification = "Checked here: single-file hosts must extract assemblies, as Nitrogen.Cli does, or compiles fail with a clear error.")]
+    static string PathOf(Assembly assembly) => assembly.Location is { Length: > 0 } path
+        ? path
+        : throw new InvalidOperationException(
+            $"Assembly '{assembly.GetName().Name}' has no file, so grammars cannot be compiled; a single-file host must set IncludeAllContentForSelfExtract.");
 }

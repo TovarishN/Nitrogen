@@ -1,0 +1,8 @@
+<Project>
+  <!-- The CLI ships as a single-file server (the bundled Rider server), so every net10.0 project it
+       includes is analyzed for single-file safety on every build, not only at publish time. Tests never
+       ship. Evaluated here, after each project sets its TargetFramework. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(IsTestProject)' != 'true'">
+    <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
+  </PropertyGroup>
+</Project>
