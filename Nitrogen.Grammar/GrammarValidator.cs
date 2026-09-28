@@ -325,17 +325,26 @@ public static class GrammarValidator
             var seen = new HashSet<BindingClauseKind>();
             foreach (var clause in clauses)
             {
-                if (!seen.Add(clause.Kind))
+                var key = clause.Kind == BindingClauseKind.LowersLiteral ? BindingClauseKind.Lowers : clause.Kind;
+                if (!seen.Add(key))
                     Report(GrammarCodes.DuplicateClause, $"a rule takes at most one '{Keyword(clause.Kind)}' clause", clause.Span, module);
                 foreach (var kind in clause.Kinds)
                     if (!kinds.Contains(kind.Name))
                         Report(GrammarCodes.UnknownSymbolKind, $"unknown symbol kind '{kind.Name}'", kind.Span, module);
                 if (clause.Qualifier is { } qualifier && !kinds.Contains(qualifier.Name))
                     Report(GrammarCodes.UnknownSymbolKind, $"unknown symbol kind '{qualifier.Name}'", qualifier.Span, module);
-                if (clause.Kind is BindingClauseKind.Declares or BindingClauseKind.References
+                if (clause.Kind is BindingClauseKind.Declares or BindingClauseKind.References or BindingClauseKind.LowersLiteral
                     && clause.Field != "this" && !labels.Contains(clause.Field))
                     Report(GrammarCodes.UnknownBindingField,
                         $"'{clause.Field}' is not a label of this rule's elements; name a labeled element or 'this'", clause.FieldSpan, module);
+                foreach (var argument in clause.Arguments)
+                    if (!labels.Contains(argument.Name))
+                        Report(GrammarCodes.UnknownBindingField,
+                            $"'{argument.Name}' is not a label of this rule's elements; name a labeled element", argument.Span, module);
+                if (clause.Kind == BindingClauseKind.Declares && clause.Target is { } type
+                    && type.Name.IndexOf('.') < 0 && !labels.Contains(type.Name))
+                    Report(GrammarCodes.UnknownBindingField,
+                        $"'{type.Name}' is not a label of this rule's elements; name a labeled element or a qualified type", type.Span, module);
             }
         }
 
@@ -344,6 +353,7 @@ public static class GrammarValidator
             BindingClauseKind.Declares => "declares",
             BindingClauseKind.References => "references",
             BindingClauseKind.Scope => "scope",
+            BindingClauseKind.Lowers or BindingClauseKind.LowersLiteral => "lowers",
             _ => "dynamic",
         };
 
