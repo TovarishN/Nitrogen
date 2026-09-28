@@ -71,10 +71,13 @@ public static class GrammarDumper
 
     public static string Dump(BindingClause clause) => clause.Kind switch
     {
-        BindingClauseKind.Declares => $"(declares {clause.Kinds[0].Name} {clause.Field}{(clause.Export ? " export" : "")})",
+        BindingClauseKind.Declares =>
+            $"(declares {clause.Kinds[0].Name} {clause.Field}{(clause.Export ? " export" : "")}{(clause.Target is { } type ? " type " + type.Name : "")})",
         BindingClauseKind.References =>
             $"(references{(clause.Optional ? "?" : "")} {string.Join("|", clause.Kinds.Select(k => k.Name))} {clause.Field}{(clause.Qualifier is { } q ? " in " + q.Name : "")})",
         BindingClauseKind.Scope => "(scope)",
+        BindingClauseKind.Lowers => $"(lowers {clause.Target!.Name}({string.Join(", ", clause.Arguments.Select(a => a.Name))}))",
+        BindingClauseKind.LowersLiteral => $"(lowers literal {clause.Target!.Name} {clause.Field})",
         _ => "(dynamic)",
     };
 
