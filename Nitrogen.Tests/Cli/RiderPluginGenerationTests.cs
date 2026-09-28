@@ -124,6 +124,29 @@ public sealed class RiderPluginGenerationTests
         Assert.Contains(".calc", File.ReadAllText(Path.Combine(request.OutputDirectory, "src/main/resources/META-INF/plugin.xml")), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Rendered_build_targets_the_rider_jvm_and_platform_api()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var request = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+        string Read(string path) => File.ReadAllText(Path.Combine(request.OutputDirectory, path));
+
+        // Both compilers target Rider's Java 21 runtime whatever JDK runs Gradle.
+        Assert.Contains("options.release = 21", Read("build.gradle.kts"), StringComparison.Ordinal);
+        Assert.Contains("JvmTarget.JVM_21", Read("build.gradle.kts"), StringComparison.Ordinal);
+        // The IDE supplies the Kotlin standard library.
+        Assert.Contains("kotlin.stdlib.default.dependency=false", Read("gradle.properties"), StringComparison.Ordinal);
+        // LspClientStarter is nested in LspIntegrationProvider in the 262 platform.
+        Assert.Contains("import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter",
+            Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"), StringComparison.Ordinal);
+    }
+
     static string Snapshot(string root) => string.Join("\n", Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
         .Where(path => !path.Contains(Path.DirectorySeparatorChar + ".", StringComparison.Ordinal))
         .OrderBy(path => path, StringComparer.Ordinal)

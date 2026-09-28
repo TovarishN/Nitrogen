@@ -3,8 +3,8 @@ package org.nitrogen.rider
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.platform.lsp.api.LspClientStarter
 import com.intellij.platform.lsp.api.LspIntegrationProvider
+import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 
 class NitrogenLspSupport : LspIntegrationProvider {

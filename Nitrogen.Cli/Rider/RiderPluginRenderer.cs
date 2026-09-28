@@ -16,7 +16,7 @@ internal static class RiderPluginRenderer
             var files = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["settings.gradle.kts"] = "rootProject.name = \"" + request.Model.PluginId + "-rider\"\n",
-                ["gradle.properties"] = "kotlin.code.style=official\n",
+                ["gradle.properties"] = GradleProperties,
                 ["build.gradle.kts"] = BuildGradle,
                 ["src/main/resources/META-INF/plugin.xml"] = PluginXml(request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenSettings.kt"] = SettingsKt,
@@ -50,10 +50,17 @@ internal static class RiderPluginRenderer
         }
     }
 
+    const string GradleProperties = """
+kotlin.code.style=official
+# The IDE provides the Kotlin standard library; plugins must not bundle their own.
+kotlin.stdlib.default.dependency=false
+
+""";
+
     const string BuildGradle = """
 plugins {
     id("java")
-    kotlin("jvm") version "2.0.21"
+    kotlin("jvm") version "2.4.0"
     id("org.jetbrains.intellij.platform") version "2.2.1"
 }
 
@@ -67,6 +74,16 @@ dependencies {
 }
 
 intellijPlatform { pluginConfiguration { ideaVersion { sinceBuild = "262" } } }
+
+// Rider 262 runs plugins on Java 21. Pin both compilers to it so the build does
+// not depend on the JDK that happens to run Gradle.
+tasks.withType<JavaCompile>().configureEach { options.release = 21 }
+kotlin {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+        freeCompilerArgs.add("-Xjdk-release=21")
+    }
+}
 """;
 
     const string SettingsKt = """
@@ -123,8 +140,8 @@ package org.nitrogen.rider
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.platform.lsp.api.LspClientStarter
 import com.intellij.platform.lsp.api.LspIntegrationProvider
+import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 
 class NitrogenLspSupport : LspIntegrationProvider {

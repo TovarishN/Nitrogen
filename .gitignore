@@ -4,6 +4,10 @@
 editors/vscode/node_modules/
 editors/vscode/out/
 editors/vscode/*.vsix
+editors/rider/.gradle/
+editors/rider/.intellijPlatform/
+editors/rider/.kotlin/
+editors/rider/build/
 .DS_Store
 *.user
 .idea/
