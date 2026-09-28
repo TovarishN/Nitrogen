@@ -25,6 +25,13 @@
     <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />
   </ItemGroup>
 
+  <!-- Gravity's MotionDSL adapter tests (Gravity issue 251) share these helpers. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>Nitrogen.MotionDsl.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
