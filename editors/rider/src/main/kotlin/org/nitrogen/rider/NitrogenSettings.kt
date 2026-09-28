@@ -11,7 +11,7 @@ import java.io.File
 
 /** The Nitrogen executable chosen in Settings | Tools | Nitrogen; blank means the plugin's default. */
 @Service(Service.Level.APP)
-@State(name = "NitrogenSettings", storages = [Storage("nitrogen.xml")])
+@State(name = NitrogenPlugin.SETTINGS_NAME, storages = [Storage(NitrogenPlugin.SETTINGS_FILE)])
 class NitrogenSettings : PersistentStateComponent<NitrogenSettings.State> {
     data class State(var executable: String = "")
 

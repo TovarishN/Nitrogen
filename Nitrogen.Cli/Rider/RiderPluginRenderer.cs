@@ -19,9 +19,10 @@ internal static class RiderPluginRenderer
                 ["gradle.properties"] = GradleProperties,
                 ["build.gradle.kts"] = BuildGradle,
                 ["src/main/resources/META-INF/plugin.xml"] = PluginXml(request.Model),
-                ["src/main/kotlin/org/nitrogen/rider/NitrogenSettings.kt"] = SettingsKt,
-                ["src/main/kotlin/org/nitrogen/rider/NitrogenConfigurable.kt"] = ConfigurableKt,
-                ["src/main/kotlin/org/nitrogen/rider/NitrogenBundles.kt"] = BundlesKt,
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenSettings.kt"] = InPackage(SettingsKt, request.Model),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenConfigurable.kt"] = InPackage(ConfigurableKt, request.Model),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenBundles.kt"] = InPackage(BundlesKt, request.Model),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenPlugin.kt"] = PluginKt(request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"] = LspKt(request),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenFileType.kt"] = FileTypeKt(request.Model),
                 ["README.md"] = Readme(request),
@@ -72,7 +73,8 @@ repositories {
 }
 
 dependencies {
-    intellijPlatform { rider("2026.2") }
+    // The Rider installer is not supported as a target; use the Maven distribution.
+    intellijPlatform { rider("2026.2") { useInstaller = false } }
 }
 
 intellijPlatform { pluginConfiguration { ideaVersion { sinceBuild = "262" } } }
@@ -92,7 +94,7 @@ import java.io.File
 
 /** The Nitrogen executable chosen in Settings | Tools | Nitrogen; blank means the plugin's default. */
 @Service(Service.Level.APP)
-@State(name = "NitrogenSettings", storages = [Storage("nitrogen.xml")])
+@State(name = NitrogenPlugin.SETTINGS_NAME, storages = [Storage(NitrogenPlugin.SETTINGS_FILE)])
 class NitrogenSettings : PersistentStateComponent<NitrogenSettings.State> {
     data class State(var executable: String = "")
 
@@ -265,6 +267,38 @@ object NitrogenBundles {
 
 """";
 
+    /// <summary>
+    /// The plugin's own Kotlin package. Rider registers services by class name, so plugins sharing
+    /// class names cannot be installed together: the second gets the first's settings service.
+    /// </summary>
+    static string KotlinPackage(RiderPluginModel model) => "org.nitrogen.rider.lang_" + model.PluginId.Replace('-', '_');
+
+    /// <summary>The plugin's language ID, unique like its package.</summary>
+    static string LanguageId(RiderPluginModel model) => "Nitrogen." + model.PluginId;
+
+    /// <summary>A template file shared verbatim with editors/rider, moved into the plugin's package.</summary>
+    static string InPackage(string kotlin, RiderPluginModel model)
+    {
+        const string template = "package org.nitrogen.rider\n";
+        if (!kotlin.StartsWith(template, StringComparison.Ordinal))
+            throw new InvalidOperationException("shared Kotlin must start with the template package");
+        return "package " + KotlinPackage(model) + "\n" + kotlin[template.Length..];
+    }
+
+    static string PluginKt(RiderPluginModel model) => $$"""
+package {{KotlinPackage(model)}}
+
+/**
+ * This plugin's application-wide names. Rider keeps settings state names for the whole IDE, so each
+ * generated plugin has its own and several Nitrogen plugins can be installed together.
+ */
+object NitrogenPlugin {
+    const val SETTINGS_NAME = "NitrogenSettings.{{model.PluginId}}"
+    const val SETTINGS_FILE = "nitrogen-{{model.PluginId}}.xml"
+}
+
+""";
+
     static string PluginXml(RiderPluginModel model) => $$"""
 <idea-plugin>
   <id>org.nitrogen.rider.{{model.PluginId}}</id>
@@ -273,22 +307,22 @@ object NitrogenBundles {
   <depends>com.intellij.modules.lsp</depends>
   <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
-    <fileType name="{{Escape(model.PluginId)}}" language="Nitrogen" extensions="{{string.Join(';', model.Extensions.Select(x => x.TrimStart('.')).Select(Escape))}}" implementationClass="org.nitrogen.rider.NitrogenFileType" />
-    <applicationConfigurable parentId="tools" instance="org.nitrogen.rider.NitrogenConfigurable" id="org.nitrogen.rider.{{model.PluginId}}.settings" displayName="{{Escape(model.DisplayName)}}" />
+    <fileType name="{{Escape(model.PluginId)}}" language="{{LanguageId(model)}}" extensions="{{string.Join(';', model.Extensions.Select(x => x.TrimStart('.')).Select(Escape))}}" implementationClass="{{KotlinPackage(model)}}.NitrogenFileType" />
+    <applicationConfigurable parentId="tools" instance="{{KotlinPackage(model)}}.NitrogenConfigurable" id="org.nitrogen.rider.{{model.PluginId}}.settings" displayName="{{Escape(model.DisplayName)}}" />
   </extensions>
   <extensions defaultExtensionNs="com.intellij.platform.lsp">
-    <integrationProvider implementation="org.nitrogen.rider.NitrogenLspSupport" />
+    <integrationProvider implementation="{{KotlinPackage(model)}}.NitrogenLspSupport" />
   </extensions>
 </idea-plugin>
 """;
 
     static string FileTypeKt(RiderPluginModel model) => $$"""
-package org.nitrogen.rider
+package {{KotlinPackage(model)}}
 
 import com.intellij.openapi.fileTypes.LanguageFileType
 import com.intellij.lang.Language
 
-object NitrogenLanguage : Language("Nitrogen")
+object NitrogenLanguage : Language("{{LanguageId(model)}}")
 
 class NitrogenFileType : LanguageFileType(NitrogenLanguage) {
     override fun getName() = "{{model.PluginId}}"
@@ -299,7 +333,7 @@ class NitrogenFileType : LanguageFileType(NitrogenLanguage) {
 """;
 
     static string LspKt(RiderPluginRequest request) => $$"""
-package org.nitrogen.rider
+package {{KotlinPackage(request.Model)}}
 
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.openapi.project.Project

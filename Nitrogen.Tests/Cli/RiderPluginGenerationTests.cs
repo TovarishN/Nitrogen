@@ -145,6 +145,8 @@ public sealed class RiderPluginGenerationTests
         string template = File.ReadAllText(Path.Combine(RepositoryRoot(), "editors", "rider", "build.gradle.kts"));
         Assert.Equal(2, Versions(template).Length);
         Assert.Equal(Versions(template), Versions(Read("build.gradle.kts")));
+        Assert.Contains("rider(\"2026.2\") { useInstaller = false }", template, StringComparison.Ordinal);
+        Assert.Contains("rider(\"2026.2\") { useInstaller = false }", Read("build.gradle.kts"), StringComparison.Ordinal);
         Assert.DoesNotContain("JvmTarget", Read("build.gradle.kts"), StringComparison.Ordinal);
         Assert.DoesNotContain("options.release", Read("build.gradle.kts"), StringComparison.Ordinal);
         // The IDE supplies the Kotlin standard library.
@@ -187,18 +189,25 @@ public sealed class RiderPluginGenerationTests
         foreach (string plugin in new[] { request.OutputDirectory, template })
         {
             string Read(string path) => File.ReadAllText(Path.Combine(plugin, path)).Replace("\r\n", "\n");
-            Assert.Contains("<applicationConfigurable parentId=\"tools\" instance=\"org.nitrogen.rider.NitrogenConfigurable\"",
+            Assert.Contains($"<applicationConfigurable parentId=\"tools\" instance=\"{KotlinPackage(plugin)}.NitrogenConfigurable\"",
                 Read("src/main/resources/META-INF/plugin.xml"), StringComparison.Ordinal);
             Assert.Contains("NitrogenSettings.getInstance().resolveExecutable(defaultExecutable)",
                 Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"), StringComparison.Ordinal);
         }
 
-        // The settings and page are shared verbatim, so the generator cannot drift from the template.
+        // The settings, page and bundles are shared verbatim apart from each plugin's own package line,
+        // so the generator cannot drift from the template.
+        static string AfterPackage(string text)
+        {
+            text = text.Replace("\r\n", "\n");
+            Assert.StartsWith("package ", text, StringComparison.Ordinal);
+            return text[text.IndexOf('\n')..];
+        }
         foreach (string file in new[] { "NitrogenSettings.kt", "NitrogenConfigurable.kt", "NitrogenBundles.kt" })
         {
             string path = Path.Combine("src/main/kotlin/org/nitrogen/rider", file);
-            Assert.Equal(File.ReadAllText(Path.Combine(template, path)).Replace("\r\n", "\n"),
-                File.ReadAllText(Path.Combine(request.OutputDirectory, path)).Replace("\r\n", "\n"));
+            Assert.Equal(AfterPackage(File.ReadAllText(Path.Combine(template, path))),
+                AfterPackage(File.ReadAllText(Path.Combine(request.OutputDirectory, path))));
         }
     }
 
@@ -225,6 +234,53 @@ public sealed class RiderPluginGenerationTests
         Assert.Equal(("macos-aarch64", "bundled/macos-aarch64/nitrogen", hash),
             (entry.Groups[1].Value, entry.Groups[2].Value, entry.Groups[3].Value));
     }
+
+    [Fact]
+    public void Generated_plugins_and_the_template_have_distinct_ide_identities()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [
+              { "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" },
+              { "name": "Mini Lang", "extensions": [".mini"], "grammars": ["b.ngr"], "start": "Mini.File" }
+            ] }
+            """);
+        var plugins = new[] { "Calc", "Mini Lang" }.Select(language =>
+        {
+            var request = RiderPluginInput.ParseRequest(new[] { "generate", "rider", "--config", config, "--language", language,
+                "--output", Path.Combine(dir.Path, language) }, out string error);
+            Assert.Equal("", error);
+            RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+            return request.OutputDirectory;
+        }).Append(Path.Combine(RepositoryRoot(), "editors", "rider")).ToArray();
+
+        // Rider registers services by class name and keeps language IDs and settings state names
+        // application-wide, so each installed plugin needs its own of each.
+        foreach (var identity in new Func<string, string>[] { KotlinPackage, LanguageId, SettingsName, SettingsFile })
+            Assert.Equal(plugins.Length, plugins.Select(identity).Distinct(StringComparer.Ordinal).Count());
+        foreach (string plugin in plugins)
+        {
+            string xml = File.ReadAllText(Path.Combine(plugin, "src/main/resources/META-INF/plugin.xml"));
+            Assert.Contains($"language=\"{LanguageId(plugin)}\"", xml, StringComparison.Ordinal);
+            foreach (var reference in System.Text.RegularExpressions.Regex.Matches(xml, "(?:implementationClass|instance|implementation)=\"([^\"]+)\"")
+                         .Select(match => match.Groups[1].Value))
+                Assert.StartsWith(KotlinPackage(plugin) + ".", reference, StringComparison.Ordinal);
+        }
+    }
+
+    static string Kotlin(string plugin, string file) => File.ReadAllText(Path.Combine(plugin, "src/main/kotlin/org/nitrogen/rider", file));
+
+    static string KotlinPackage(string plugin) =>
+        System.Text.RegularExpressions.Regex.Match(Kotlin(plugin, "NitrogenLspSupport.kt"), "^package ([\\w.]+)", System.Text.RegularExpressions.RegexOptions.Multiline).Groups[1].Value;
+
+    static string LanguageId(string plugin) =>
+        System.Text.RegularExpressions.Regex.Match(Kotlin(plugin, "NitrogenFileType.kt"), "Language\\(\"([^\"]+)\"\\)").Groups[1].Value;
+
+    static string SettingsName(string plugin) =>
+        System.Text.RegularExpressions.Regex.Match(Kotlin(plugin, "NitrogenPlugin.kt"), "SETTINGS_NAME = \"([^\"]+)\"").Groups[1].Value;
+
+    static string SettingsFile(string plugin) =>
+        System.Text.RegularExpressions.Regex.Match(Kotlin(plugin, "NitrogenPlugin.kt"), "SETTINGS_FILE = \"([^\"]+)\"").Groups[1].Value;
 
     static void AssertFileTypeNamesMatch(string plugin)
     {

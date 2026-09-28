@@ -10,8 +10,11 @@ repositories {
 }
 
 dependencies {
-    intellijPlatform { rider("2026.2") }
+    // The Rider installer is not supported as a target; use the Maven distribution.
+    intellijPlatform { rider("2026.2") { useInstaller = false } }
     testImplementation(kotlin("test"))
+    // The platform's JUnit 5 session listener, found on the test classpath, loads JUnit 4 classes.
+    testRuntimeOnly("junit:junit:4.13.2")
 }
 
 tasks.test { useJUnitPlatform() }
