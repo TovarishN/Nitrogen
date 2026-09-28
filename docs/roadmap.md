@@ -8,7 +8,7 @@ Not in this repository: Motion/Policy grammars and HIR lowerers, the RagdollEdit
 
 Known gaps, in suggested order:
 
-1. **Grammar checks are not typed by `SemanticType`.** `.ngr` semantics compare type names as strings (for example `Geometry.ngr` sets `Type = "Core.Scalar"`), while HIR uses `SemanticType`. The two agree by convention only. Typed `.ngr` properties that resolve to catalog types would close this.
+1. **Resolved in [issue 251](../issues/251-nitrogen-declarative-typing-lowering.md).** `.ngr` clauses (`lowers Op(...)`, `lowers literal T F`, `declares k N type T`) type nodes by catalog `SemanticType` and lower them to HIR without C#, for trusted modules and admitted packages. They stay dormant in languages built without semantic modules (workspace, language server, CLI `parse`). Semantics blocks remain for value checks such as `GE0001`.
 2. **The built-in type vocabulary is small.** `SemanticTypes` has `Core.Scalar`, `Core.Bool`, `Core.Error`, and `Units.Angle`. There is no unit algebra, reference frame, overload resolution, or type variable support.
 3. **Execution is per-domain.** `HirEvaluator` handles the finite numeric slice; `GeometryExecutor` accepts only `Geometry.BoxMesh` with constant arguments. A general way to execute non-numeric results is not yet defined.
 4. **Admission is a trusted local gate.** It requires human-reviewed declarative `.ngr` packages and pure capabilities; it is not a sandbox for untrusted generated code.

@@ -11,7 +11,7 @@ Nitrogen is a standalone .NET language workbench. `.ngr` grammars generate parse
 
 1. **Discover capabilities.** Find the task's grammar, `SyntaxModule`, `SemanticModule`, `ModuleDescriptor`, start rule, representative programs, and host operation bindings. Inspect exported `SemanticType`s, `OperationSignature`s, imports, lowerers, and diagnostics. A declared operation is executable only when the host supplies a matching binding.
 2. **Compose the smallest language.** Prefer existing modules and operations. Include required imports and a valid start rule. Use `ModuleComposer.TryCompose(...)` or `LanguageBuilder.TryBuild(...)` as appropriate, and resolve composition diagnostics before authoring a program. Do not create duplicate type or operation identities with different contracts.
-3. **Write the smallest typed program.** Follow the actual grammar. Preserve units, coordinate/reference frames, entity identities, and other domain types through every operation. Convert between them only with an explicit, declared conversion. Do not erase an `Angle`, `Time`, frame, or domain type to `Core.Scalar` merely to make validation pass. The only built-in semantic types are `Core.Scalar`, `Core.Bool`, `Core.Error`, and `Units.Angle`; confirm any other type (such as a time or frame type) in a module's exports before relying on it.
+3. **Write the smallest typed program.** Follow the actual grammar. Preserve units, coordinate/reference frames, entity identities, and other domain types through every operation. Convert between them only with an explicit, declared conversion. Do not erase an `Angle`, `Time`, frame, or domain type to `Core.Scalar` merely to make validation pass. The only built-in semantic types are `Core.Scalar`, `Core.Bool`, `Core.Error`, and `Units.Angle`; confirm any other type (such as a time or frame type) in a module's exports before relying on it. Prefer declarative clauses (`lowers`, `lowers literal`, `declares … type`) for typing and lowering; they are checked against the composed catalog (`NM0008`–`NM0010`, `NT0001`–`NT0004`).
 4. **Validate deterministically.** Parse, bind names, run semantic/type/value checks, lower to typed HIR where supported, inspect lowering diagnostics, and bind host operations. Run `HirPreflight.Check(...)` for its finite numeric slice; for other result types, inspect and use the host's domain-specific checks before its handler runs. Record which stages are available and passed. A successful parse alone is insufficient.
 5. **Execute the validated artifact.** Invoke an evaluator or host only after all applicable checks pass and the task authorizes execution. Validate again if source, modules, inputs, or host bindings change. Host handlers may have effects; apply the host's authorization boundary before calling them.
 
@@ -24,6 +24,8 @@ Use diagnostic code, message, and source span/origin to fix the earliest underly
 | `NC0001` / `NC0002` | Missing semantic import / import cycle |
 | `NC0003`–`NC0005` | Conflicting type, operation, or lowerer |
 | `NM` composition diagnostic | Descriptor, start rule, export, and exact host binding |
+| `NM0008`–`NM0010` | `lowers` operation, literal or declared type, and argument count against the catalog |
+| `NT0001`–`NT0004` | Argument type, type name, literal text, and missing declared type |
 | Parse, binding, or type diagnostic | Grammar, symbol scope, and qualified domain type |
 | `NE` preflight diagnostic | HIR node, input symbol identity/type, and host handler |
 
