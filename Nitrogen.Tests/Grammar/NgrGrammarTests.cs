@@ -9,7 +9,7 @@ public class NgrGrammarTests
     static readonly Language Ngr = new LanguageBuilder().Add(NitrogenModule.Instance).Build();
 
     public static TheoryData<string> GrammarFiles() =>
-        new() { "Calc.ngr", "Power.ngr", "Clash.ngr", "Mini.ngr", "Lexical.ngr", "Nitrogen.ngr", "Scopes.ngr", "Typed.ngr", "TypedExtra.ngr" };
+        new() { "Calc.ngr", "Power.ngr", "Clash.ngr", "Mini.ngr", "Lexical.ngr", "Nitrogen.ngr", "Scopes.ngr", "Typed.ngr", "TypedExtra.ngr", "Lowered.ngr" };
 
     [Fact]
     public void Nitrogen_grammar_compiles_without_diagnostics()

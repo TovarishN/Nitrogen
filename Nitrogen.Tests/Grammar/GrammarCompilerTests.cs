@@ -14,6 +14,7 @@ public class GrammarCompilerTests
         Input("Mini.ngr", "Nitrogen.Tests.Mini"),
         Input("Lexical.ngr", "Nitrogen.Tests.Lexical"),
         Input("Scopes.ngr", "Nitrogen.Tests.Scopes"),
+        Input("Lowered.ngr", "Nitrogen.Tests.Lowered"),
     };
 
     static GrammarInput Input(string file, string ns) => new(file, TestGrammarFileTests.ReadGrammar(file), ns);
@@ -33,7 +34,7 @@ public class GrammarCompilerTests
         Assert.Empty(result.Diagnostics);
         Assert.False(result.HasErrors);
         Assert.Equal(
-            new[] { "Calc.g.cs", "Calc.Power.g.cs", "Calc.Clash.g.cs", "Mini.g.cs", "Lexical.g.cs", "Scopes.g.cs" },
+            new[] { "Calc.g.cs", "Calc.Power.g.cs", "Calc.Clash.g.cs", "Mini.g.cs", "Lexical.g.cs", "Scopes.g.cs", "Lowered.g.cs" },
             result.Sources.Select(s => s.HintName));
     }
 

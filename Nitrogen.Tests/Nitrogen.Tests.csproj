@@ -45,6 +45,7 @@
     <AdditionalFiles Include="Grammars\Scopes.ngr" Namespace="Nitrogen.Tests.Scopes" />
     <AdditionalFiles Include="Grammars\Typed.ngr" Namespace="Nitrogen.Tests.Typed" />
     <AdditionalFiles Include="Grammars\TypedExtra.ngr" Namespace="Nitrogen.Tests.Typed.Extra" />
+    <AdditionalFiles Include="Grammars\Lowered.ngr" Namespace="Nitrogen.Tests.Lowered" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
     <CompilerVisibleProperty Include="RootNamespace" />
   </ItemGroup>

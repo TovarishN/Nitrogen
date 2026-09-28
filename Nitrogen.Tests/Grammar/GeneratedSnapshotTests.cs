@@ -14,7 +14,7 @@ public class GeneratedSnapshotTests
         Path.Combine(Path.GetDirectoryName(path)!, "Snapshots");
 
     public static TheoryData<string> HintNames() =>
-        new() { "Calc.g.cs", "Calc.Power.g.cs", "Calc.Clash.g.cs", "Mini.g.cs", "Lexical.g.cs", "Scopes.g.cs" };
+        new() { "Calc.g.cs", "Calc.Power.g.cs", "Calc.Clash.g.cs", "Mini.g.cs", "Lexical.g.cs", "Scopes.g.cs", "Lowered.g.cs" };
 
     [Theory]
     [MemberData(nameof(HintNames))]
