@@ -164,6 +164,37 @@ public sealed class RiderPluginGenerationTests
         AssertFileTypeNamesMatch(Path.Combine(RepositoryRoot(), "editors", "rider"));
     }
 
+    [Fact]
+    public void Executable_setting_page_is_registered_and_used_by_the_launcher()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var request = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+        string template = Path.Combine(RepositoryRoot(), "editors", "rider");
+
+        foreach (string plugin in new[] { request.OutputDirectory, template })
+        {
+            string Read(string path) => File.ReadAllText(Path.Combine(plugin, path)).Replace("\r\n", "\n");
+            Assert.Contains("<applicationConfigurable parentId=\"tools\" instance=\"org.nitrogen.rider.NitrogenConfigurable\"",
+                Read("src/main/resources/META-INF/plugin.xml"), StringComparison.Ordinal);
+            Assert.Contains("NitrogenSettings.getInstance().resolveExecutable(defaultExecutable)",
+                Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"), StringComparison.Ordinal);
+        }
+
+        // The settings and page are shared verbatim, so the generator cannot drift from the template.
+        foreach (string file in new[] { "NitrogenSettings.kt", "NitrogenConfigurable.kt" })
+        {
+            string path = Path.Combine("src/main/kotlin/org/nitrogen/rider", file);
+            Assert.Equal(File.ReadAllText(Path.Combine(template, path)).Replace("\r\n", "\n"),
+                File.ReadAllText(Path.Combine(request.OutputDirectory, path)).Replace("\r\n", "\n"));
+        }
+    }
+
     static void AssertFileTypeNamesMatch(string plugin)
     {
         string xml = File.ReadAllText(Path.Combine(plugin, "src/main/resources/META-INF/plugin.xml"));

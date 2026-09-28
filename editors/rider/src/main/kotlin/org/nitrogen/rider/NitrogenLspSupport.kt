@@ -16,6 +16,7 @@ class NitrogenLspSupport : LspIntegrationProvider {
 
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "Nitrogen") {
         override fun isSupportedFile(file: VirtualFile): Boolean = file.extension == "ngr"
-        override fun createCommandLine(): GeneralCommandLine = GeneralCommandLine(defaultExecutable, "lsp")
+        override fun createCommandLine(): GeneralCommandLine =
+            GeneralCommandLine(NitrogenSettings.getInstance().resolveExecutable(defaultExecutable), "lsp")
     }
 }
