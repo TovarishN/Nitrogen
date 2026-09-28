@@ -166,8 +166,35 @@ internal sealed class NgrMapper(SyntaxTree tree)
             {
                 var d = Cast<DeclaresNode>(node);
                 int end = d.Export.HasValue ? d.Export.Value.Span.End : d.Field.Span.End;
+                NameDecl? type = null;
+                if (d.Type.HasValue)
+                {
+                    var name = d.Type.Value.Child(1);
+                    type = new NameDecl(name.ToString(), Span(name.Span));
+                    end = name.Span.End;
+                }
                 clauses.Add(new BindingClause(BindingClauseKind.Declares, new[] { Name(d.SymbolKind) }, d.Field.ToString(),
-                    Span(d.Field.Span), false, d.Export.HasValue, GrammarSpan.FromBounds(d.Span.Start, end)));
+                    Span(d.Field.Span), false, d.Export.HasValue, GrammarSpan.FromBounds(d.Span.Start, end), Target: type));
+            }
+            else if (kind == NitrogenKinds.Lowers)
+            {
+                var l = Cast<LowersNode>(node);
+                if (l.Form.Kind == NitrogenKinds.LowersLiteral)
+                {
+                    var literal = Cast<LowersLiteralNode>(l.Form);
+                    clauses.Add(new BindingClause(BindingClauseKind.LowersLiteral, default, literal.Field.ToString(),
+                        Span(literal.Field.Span), false, false, GrammarSpan.FromBounds(l.Span.Start, literal.Field.Span.End),
+                        Target: new NameDecl(literal.Type.ToString(), Span(literal.Type.Span))));
+                }
+                else
+                {
+                    var call = Cast<LowersCallNode>(l.Form);
+                    var arguments = new List<NameDecl>();
+                    foreach (var argument in call.Arguments) arguments.Add(Name(argument));
+                    clauses.Add(new BindingClause(BindingClauseKind.Lowers, default, "", default, false, false,
+                        GrammarSpan.FromBounds(l.Span.Start, call.Close.Span.End),
+                        Target: new NameDecl(call.Operation.ToString(), Span(call.Operation.Span)), Arguments: arguments.ToArray()));
+                }
             }
             else if (kind == NitrogenKinds.References)
             {

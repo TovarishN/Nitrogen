@@ -59,6 +59,7 @@ public class SelfHostingTests
     [InlineData("X : A")]
     [InlineData("precedenceX")]
     [InlineData("scopeX declaresY")]
+    [InlineData("lowersX literalY")]
     public void Every_expression_form_maps_to_the_bootstrap_model(string body) =>
         AssertSameModel("syntax module M { syntax R = " + body + "; }");
 
@@ -77,6 +78,9 @@ public class SelfHostingTests
     [InlineData("syntax module M { syntax R = \"r\" N:A declares a N ; syntax S = \"s\" F:A references a F; }")]
     [InlineData("syntax module M { symbols { v } builtin v in B { here there.x } syntax B = \"b\" scope; }")]
     [InlineData("syntax module M { symbols { v } symbol property T for v : List<int> = new() { 1, 2 }; syntax R = \"r\" N:A declares v N { symbol.T = F(x => { return x; }); } }")]
+    [InlineData("syntax module M { symbols { v } syntax R = \"r\" N:A T:B declares v N type T; syntax S = N:A declares v N export type Units.Angle; }")]
+    [InlineData("syntax module M { syntax R = \"r\" A:X B:Y lowers M.Op(A, B); syntax S = V:X lowers literal Core.Scalar V { out T : int = 0; } syntax U = \"u\" lowers Op(); syntax W = \"w\" A:X lowers literal(A); }")]
+    [InlineData("syntax module M { extensible syntax E { | N = \"-\"? V:X lowers literal Core.Scalar this | P = L:E \"+\" R:E precedence 6 left lowers M.Add(L, R) } }")]
     [InlineData("syntax module M { extensible syntax E { out hover T : int = 0; in expected X : string? = null; | N = \"n\" { T = 1; } | P = E \"+\" E precedence 6 left { T = E1.T + E2.T; E1.X = \"a;b\"; check AB0001 (T > 0 ? true : false) : $\"bad {T}\"; } } }")]
     [InlineData("syntax module M { syntax R = \"r\" { out O : int = 0; O = 'c' == ';' ? 1 : /* ; */ 2; // ;\n check O >= 0 : @\"x\"\"y\"; } }")]
     [InlineData("syntax module M { symbols { v w } symbol property T for (v | w) : int = 0; }")]
