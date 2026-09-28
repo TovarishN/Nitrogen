@@ -48,9 +48,11 @@ internal static class RiderPluginInput
             else return FailRequest($"unknown option '{arg}'", out error);
         }
 
-        if (output is null) return FailRequest("no --output", out error);
+        // Input source first, as CliOptions reports it, then where to write.
         if (config is not null && grammar is not null) return FailRequest("use either --config or --grammar", out error);
         if (config is null && grammar is null) return FailRequest("no --config or --grammar", out error);
+        if (grammar is not null && start is null) return FailRequest("no --start", out error);
+        if (output is null) return FailRequest("no --output", out error);
 
         RiderPluginModel? model;
         if (config is not null)
@@ -59,10 +61,9 @@ internal static class RiderPluginInput
         }
         else
         {
-            if (start is null) return FailRequest("no --start", out error);
             string fullGrammar = Path.GetFullPath(grammar!);
             string displayName = Path.GetFileNameWithoutExtension(fullGrammar);
-            model = CreateModel(displayName, new[] { fullGrammar }, start, new[] { ".ngr" }, out error);
+            model = CreateModel(displayName, new[] { fullGrammar }, start!, new[] { ".ngr" }, out error);
         }
 
         if (model is null) return null;

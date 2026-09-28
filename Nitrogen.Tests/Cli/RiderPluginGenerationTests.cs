@@ -72,6 +72,21 @@ public sealed class RiderPluginGenerationTests
         Assert.Equal("no --start", error);
     }
 
+    [Theory]
+    [InlineData("--output out", "no --config or --grammar")]
+    [InlineData("--config a.json --grammar b.ngr --output out", "use either --config or --grammar")]
+    [InlineData("--grammar Calc.ngr --output out", "no --start")]
+    [InlineData("--grammar Calc.ngr --start Calc.Program", "no --output")]
+    [InlineData("--config nitrogen.json", "no --output")]
+    public void Missing_options_are_reported_source_first(string options, string expected)
+    {
+        var request = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider" }.Concat(options.Split(' ')).ToArray(), out string error);
+
+        Assert.Null(request);
+        Assert.Equal(expected, error);
+    }
+
     [Fact]
     public void Equivalent_language_order_produces_the_same_canonical_extensions()
     {
