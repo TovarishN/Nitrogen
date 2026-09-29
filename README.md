@@ -30,8 +30,10 @@ To make the maintained skill available to Codex from other projects, run the fol
 
 ```sh
 mkdir -p "$HOME/.codex/skills"
-ln -s "$(pwd)/.agents/skills/nitrogen" "$HOME/.codex/skills/nitrogen"
+cp -R .agents/skills/nitrogen "$HOME/.codex/skills/nitrogen"
 ```
+
+After updating Nitrogen, copy the updated skill files into that installed directory so the personal installation stays current. This environment uses a regular directory because its filesystem sandbox does not support a symlinked skill root.
 
 The skill also checks for an existing sibling catalog checkout. If the private repository is unavailable, the agent can finish the main task and keep catalog findings as an unpublished local draft. Catalog publication does not grant permission to execute a module: a receiving host must validate its exact contract and admission requirements.
 
