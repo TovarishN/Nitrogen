@@ -1,43 +1,27 @@
 ---
 name: nitrogen
-description: Use when authoring, composing, validating, or executing Nitrogen DSL programs and semantic modules, or changing Nitrogen grammars, runtime, CLI, language service, or tests in this repository.
+description: Use when solving tasks through typed domain capabilities, authoring Nitrogen DSL programs or modules, or gathering reusable concepts and ontology evidence across projects.
 ---
 
-# Nitrogen
+# Nitrogen-oriented task work
 
-Nitrogen is a standalone .NET language workbench. `.ngr` grammars generate parsers and typed syntax views through a C# source generator; runtime semantics, typed HIR, a language server, and a VS Code client support authored languages. Use semantic contracts to decide what a program means. Treat syntax and IDE presentation as ways to express and inspect those contracts.
+Treat a task as a request for capabilities under typed constraints. Search for existing concepts before inventing one, solve the user's task with the smallest suitable composition, and record what the outcome taught about reuse. A catalog entry is semantic knowledge; it is not automatically executable code.
 
-## Agent workflow
+## Apply → solve → gather
 
-1. **Discover capabilities.** Find the task's grammar, `SyntaxModule`, `SemanticModule`, `ModuleDescriptor`, start rule, representative programs, and host operation bindings. Inspect exported `SemanticType`s, `OperationSignature`s, imports, lowerers, and diagnostics. A declared operation is executable only when the host supplies a matching binding.
-2. **Compose the smallest language.** Prefer existing modules and operations. Include required imports and a valid start rule. Use `ModuleComposer.TryCompose(...)` or `LanguageBuilder.TryBuild(...)` as appropriate, and resolve composition diagnostics before authoring a program. Do not create duplicate type or operation identities with different contracts.
-3. **Write the smallest typed program.** Follow the actual grammar. Preserve units, coordinate/reference frames, entity identities, and other domain types through every operation. Convert between them only with an explicit, declared conversion. Do not erase an `Angle`, `Time`, frame, or domain type to `Core.Scalar` merely to make validation pass. The only built-in semantic types are `Core.Scalar`, `Core.Bool`, `Core.Error`, and `Units.Angle`; confirm any other type (such as a time or frame type) in a module's exports before relying on it. Prefer declarative clauses (`lowers`, `lowers literal`, `declares … type`) for typing and lowering; they are checked against the composed catalog (`NM0008`–`NM0010`, `NT0001`–`NT0004`).
-4. **Validate deterministically.** Parse, bind names, run semantic/type/value checks, lower to typed HIR where supported, inspect lowering diagnostics, and bind host operations. Run `HirPreflight.Check(...)` for its finite numeric slice; for other result types, inspect and use the host's domain-specific checks before its handler runs. Record which stages are available and passed. A successful parse alone is insufficient.
-5. **Execute the validated artifact.** Invoke an evaluator or host only after all applicable checks pass and the task authorizes execution. Validate again if source, modules, inputs, or host bindings change. Host handlers may have effects; apply the host's authorization boundary before calling them.
+1. **Frame the need.** Name the required capabilities, inputs, outputs, effects, invariants, units, reference frames, and domain identities that matter. Keep syntax secondary to meaning. Use the task's actual host and tools; this skill does not require every project to use a Nitrogen DSL.
+2. **Discover and compose.** Find the private semantic catalog using [the catalog reference](references/catalog.md). Search capability-first, then inspect candidate concepts, relations, realizations, examples, and both success and failure evidence. Prefer existing modules or abstractions. Record whether the match is exact, a specialization, adaptation, or composition, and identify any missing capability. A name match alone is insufficient: compare complete contracts and host availability.
+3. **Construct the smallest solution.** When Nitrogen is applicable, inspect the real grammar, imports, exported types and operation signatures, and required host bindings. Compose the smallest language and typed program for the task. Preserve units, frames, nominal domain types, and entity identities; convert only through declared operations. When the project uses another implementation language, retain those semantic distinctions in its native types and checks.
+4. **Validate, repair, then execute if authorized.** Compose → parse → bind → type/value check → lower to typed HIR where supported → bind exact host operations → run applicable preflight or domain checks. Diagnose the earliest underlying error from its code and source span; make one targeted repair and rerun all applicable stages. Never weaken a contract just to silence a diagnostic. Stop after bounded attempts and report unresolved diagnostics. Invoke a host handler only after deterministic checks pass and the task authorizes its effects; revalidate after source, module, input, or binding changes.
+5. **Finish the task and gather evidence.** Verify the user's requested result first. Record a reuse attempt only if a catalog concept or realization was actually tried; capture match, adaptation, outcome, verification, and why it worked or failed. Harvest a reusable observation, candidate concept, missing capability, counterexample, or relation only when supported by the task. Check duplicates and applicability limits. Prepare a catalog pull request when authorized and access works; otherwise keep a local draft and report that publication is pending. Routine tasks do not promote candidates or redesign the ontology.
 
-## Repair from diagnostics
+For an abstraction that recurs, propose a typed Nitrogen module only if current APIs and a host profile can express and validate it. Define imports, exported contracts, examples and counterexamples, requested host capabilities, and a content hash. A receiving host must revalidate or re-admit it before execution. Never treat catalog publication as automatic admission of agent-authored code.
 
-Use diagnostic code, message, and source span/origin to fix the earliest underlying cause. Repeat composition → parse/bind/semantic checks → HIR lowering → applicable preflight or domain checks after each targeted repair. Prefer fixing a missing import, wrong type, or mismatched operation signature over adding a cast or weakening a rule. If the missing concept recurs across tasks, define a reusable typed semantic module with explicit imports, exports, conversions, lowerers, and required host bindings; validate it with more than one consumer. After a bounded number of targeted repairs, report the remaining diagnostics and leave the program unexecuted.
+## Small example
 
-| Symptom | Check first |
-| --- | --- |
-| `NC0001` / `NC0002` | Missing semantic import / import cycle |
-| `NC0003`–`NC0005` | Conflicting type, operation, or lowerer |
-| `NM` composition diagnostic | Descriptor, start rule, export, and exact host binding |
-| `NM0008`–`NM0010` | `lowers` operation, literal or declared type, and argument count against the catalog |
-| `NT0001`–`NT0004` | Argument type, type name, literal text, and missing declared type |
-| Parse, binding, or type diagnostic | Grammar, symbol scope, and qualified domain type |
-| `NE` preflight diagnostic | HIR node, input symbol identity/type, and host handler |
+A task needs concurrent requests for one key to share pending work. Search for `Concurrency.CoalesceInFlight`; the catalog's `Concurrency.SingleFlight` candidate may explain the capability, but its cancellation policy is unresolved and it has no executable realization. Solve and test the task's actual cancellation behavior. Record exact reuse, adaptation, or rejection based on that result. A failed match is useful evidence; it does not make the candidate established.
 
-## Concrete example
+## References
 
-The repository's Geometry language accepts the complete program `box 1 2 3;` under start rule `Geometry.Document`. `BoxMeshModule.Descriptor` exports `Geometry.Mesh` and `Geometry.BoxMesh : (Core.Scalar, Core.Scalar, Core.Scalar) → Geometry.Mesh`. A zero, negative, or nonfinite dimension fails semantic validation even if it parses. Compose the descriptor with its exact host binding, parse, inspect `ProjectSemantics` diagnostics, and lower before calling `GeometryExecutor.Execute(...)`. The Geometry executor checks the HIR shape, signature, binding, and finite scalar arguments before invoking the handler; the generic numeric `HirPreflight` does not accept `Geometry.Mesh`. See `Nitrogen.Tests/Geometry` for the current executable path.
-
-For a new frame-aware geometry capability, first search existing exports. If absent, a *proposed* contract might use `Geometry.Vector3<Units.Length, Frames.World>` and a transform operation that states its input and result frames. Those names illustrate semantic intent; they are not verified built-in exports or `.ngr` syntax. Define and bind such a capability once, then import it wherever needed.
-
-## When changing Nitrogen itself
-
-- For `.ngr` changes, inspect `Nitrogen.Grammar`, `Nitrogen.Generator`, and `Nitrogen.Ngr`. Generated C# is build output; edit the grammar or generator.
-- For parsing or semantics, use `Nitrogen.Runtime` APIs and preserve existing behavior unless the task calls for a migration.
-- For editor behavior, trace `Nitrogen.Workspace`, `Nitrogen.LanguageService`, `Nitrogen.Cli`, and `editors/vscode` as applicable.
-- Verify core changes with `dotnet build Nitrogen.slnx` and `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj`. Keep build/test results distinct from validation of a particular DSL program.
+- Read [catalog.md](references/catalog.md) when locating the catalog, interpreting records, or proposing evidence and a pull request.
+- Read [repository-development.md](references/repository-development.md) when authoring Nitrogen programs or changing Nitrogen itself. It documents current APIs, diagnostics, the Geometry execution path, and repository checks.
