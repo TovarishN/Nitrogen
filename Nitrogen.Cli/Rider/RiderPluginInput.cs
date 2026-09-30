@@ -15,10 +15,12 @@ internal static class RiderPluginInput
         string? output = null;
         string nitrogen = "nitrogen";
         var bundles = new List<RiderBundleInput>();
+        bool selfContained = false;
+        string? server = null;
         for (int i = 2; i < args.Count; i++)
         {
             string arg = args[i];
-            if (arg is "--config" or "-c" or "--grammar" or "-g" or "--language" or "--start" or "-s" or "--output" or "-o" or "--nitrogen")
+            if (arg is "--config" or "-c" or "--grammar" or "-g" or "--language" or "--start" or "-s" or "--output" or "-o" or "--nitrogen" or "--server")
             {
                 if (++i >= args.Count) return FailRequest($"{arg} needs a value", out error);
                 string value = args[i];
@@ -30,8 +32,10 @@ internal static class RiderPluginInput
                     case "--start": case "-s": start = value; break;
                     case "--output": case "-o": output = value; break;
                     case "--nitrogen": nitrogen = value; break;
+                    case "--server": server = value; break;
                 }
             }
+            else if (arg is "--self-contained") selfContained = true;
             else if (arg is "--bundle")
             {
                 if (++i >= args.Count) return FailRequest("--bundle needs a value", out error);
@@ -51,6 +55,15 @@ internal static class RiderPluginInput
         if (config is null && grammar is null) return FailRequest("no --config or --grammar", out error);
         if (grammar is not null && start is null) return FailRequest("no --start", out error);
         if (output is null) return FailRequest("no --output", out error);
+        if (selfContained && bundles.Count > 0) return FailRequest("use either --self-contained or --bundle", out error);
+        if (server is not null && !selfContained) return FailRequest("--server needs --self-contained", out error);
+        string? selfContainedServer = null;
+        if (selfContained)
+        {
+            if (config is null) return FailRequest("--self-contained needs --config", out error);
+            selfContainedServer = server is null ? LanguageBundle.DefaultServer() : Path.GetFullPath(server);
+            if (selfContainedServer is null) return FailRequest("this nitrogen is a single-file build with no nitrogen.dll; pass --server", out error);
+        }
 
         LanguagePluginModel? model;
         if (config is not null)
@@ -67,7 +80,7 @@ internal static class RiderPluginInput
         if (model is null) return null;
         if (start is not null && config is not null)
             model = model with { StartRule = start };
-        return new RiderPluginRequest(model, Path.GetFullPath(output), nitrogen, bundles);
+        return new RiderPluginRequest(model, Path.GetFullPath(output), nitrogen, bundles, selfContainedServer);
     }
 
     static RiderPluginRequest? FailRequest(string message, out string error)

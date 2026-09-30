@@ -14,7 +14,7 @@ internal static class NitrogenCli
             if (request is null)
             {
                 output.WriteLine($"error: {generationError}");
-                output.WriteLine("usage: nitrogen generate rider --config <nitrogen.json> --output <directory> [--language <name>]");
+                output.WriteLine("usage: nitrogen generate rider --config <nitrogen.json> --output <directory> [--language <name>] [--self-contained [--server <directory>] | --bundle <target>=<path>]");
                 return 2;
             }
             return await RiderPluginCommand.RunAsync(request, output, cancel);
