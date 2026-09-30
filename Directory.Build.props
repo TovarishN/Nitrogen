@@ -6,4 +6,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <!-- NuGet packages (spec: Nitrogen as NuGet packages). Only projects that opt in are packed; a release
+       sets the version with -p:Version from its tag. RepositoryUrl links a package to this repository on
+       GitHub Packages. -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Authors>Nitrogen contributors</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/TovarishN/Nitrogen</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
 </Project>
