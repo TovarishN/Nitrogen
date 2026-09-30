@@ -71,6 +71,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         {
             _projects[document.Language].Remove(uri);
             document.Dispose();
+            // An indexed workspace file goes back to its text on disk.
+            if (System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile && InWorkspace(parsed.LocalPath) && File.Exists(parsed.LocalPath))
+                LoadClosed(parsed.LocalPath);
             affected.AddRange(OpenDocuments(document.Language));
         }
         affected.AddRange(GrammarHook(uri)); // a closed grammar goes back to its text on disk
@@ -195,9 +198,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         return project.NameAt(uri, document.Lines.OffsetOf(position)) is { } found ? (document, project, found.Span, found.Symbols) : null;
     }
 
-    DocumentLocation LocationOf(Symbol symbol) => new(symbol.Path!, _documents[symbol.Path!].Lines.RangeOf(symbol.NameSpan));
+    DocumentLocation LocationOf(Symbol symbol) => new(symbol.Path!, DocumentAt(symbol.Path!).Lines.RangeOf(symbol.NameSpan));
 
-    DocumentLocation LocationOf(Reference reference) => new(reference.Path, _documents[reference.Path].Lines.RangeOf(reference.NameSpan));
+    DocumentLocation LocationOf(Reference reference) => new(reference.Path, DocumentAt(reference.Path).Lines.RangeOf(reference.NameSpan));
 
     static string FileName(string uri) => uri[(uri.LastIndexOf('/') + 1)..];
 
@@ -235,7 +238,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         void Edit(string path, TextSpan span)
         {
             if (!edits.TryGetValue(path, out var list)) edits[path] = list = new List<DocumentEdit>();
-            var range = _documents[path].Lines.RangeOf(span);
+            var range = DocumentAt(path).Lines.RangeOf(span);
             if (!list.Exists(e => e.Range == range)) list.Add(new DocumentEdit(range, newName));
         }
         Edit(symbol.Path!, symbol.NameSpan);
@@ -257,7 +260,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>The new name must re-parse and re-bind as the same declaration: same kind, same place, that name.</summary>
     void CheckName(Symbol symbol, string newName)
     {
-        var document = _documents[symbol.Path!];
+        var document = DocumentAt(symbol.Path!);
         if (newName.Length > 0)
         {
             string text = document.Text[..symbol.NameSpan.Start] + newName + document.Text[symbol.NameSpan.End..];
@@ -287,6 +290,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         project.Set(uri, document.Parsed.Tree);
         if (_documents.Remove(uri, out var previous)) previous.Dispose();
         _documents[uri] = document;
+        if (_closed.Remove(uri, out var closed)) closed.Dispose(); // the editor's text now stands for the file
         var affected = OpenDocuments(language).ToList();
         affected.AddRange(GrammarHook(uri));
         return affected.Distinct().ToList();
@@ -322,6 +326,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         _inspection.Clear();
         foreach (var document in _documents.Values) document.Dispose();
         _documents.Clear();
+        DisposeClosed();
         DisposeGrammars();
     }
 }

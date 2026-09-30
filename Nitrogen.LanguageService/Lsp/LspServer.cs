@@ -17,7 +17,9 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     public const int RequestFailed = -32803;
 
     bool _shutdown;
-    string? _root;
+    string? _workspaceRoot;   // the client's folder: its files are indexed
+    string? _configRoot;      // whose nitrogen.json configures the languages: --config's directory, else the workspace
+    bool _watchDynamically;
 
     /// <returns>The process exit code: 0 after <c>shutdown</c> then <c>exit</c>; 1 for <c>exit</c> without shutdown, end of input or broken framing.</returns>
     public async Task<int> RunAsync(CancellationToken cancel)
@@ -43,6 +45,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 bool isRequest = root.TryGetProperty("id", out var idElement);
                 var id = isRequest ? idElement.Clone() : default;
                 var parameters = root.TryGetProperty("params", out var p) ? p : default;
+                if (isRequest && method.Length == 0) continue; // a response to our own request (client/registerCapability)
                 if (method == "exit") return _shutdown ? 0 : 1;
 
                 try
@@ -64,13 +67,14 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         switch (method)
         {
             case "initialize":
-                if (fixedRoot is not null) _root = fixedRoot;
-                else if (parameters.ValueKind == JsonValueKind.Object)
+                if (parameters.ValueKind == JsonValueKind.Object)
                 {
                     var initialize = parameters.Deserialize(LspJson.Default.InitializeParams);
                     string? root = initialize?.RootUri ?? initialize?.WorkspaceFolders?.FirstOrDefault()?.Uri;
-                    if (root is not null && System.Uri.TryCreate(root, UriKind.Absolute, out var uri) && uri.IsFile) _root = uri.LocalPath;
+                    if (root is not null && System.Uri.TryCreate(root, UriKind.Absolute, out var uri) && uri.IsFile) _workspaceRoot = uri.LocalPath;
+                    _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
                 }
+                _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(
                     new ServerCapabilities(1, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
@@ -180,7 +184,9 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 break;
             }
             case "initialized":
-                if (_root is not null) await PublishAsync(service.ConfigureWorkspace(_root), cancel);
+                if (_configRoot is not null) await PublishAsync(service.ConfigureWorkspace(_configRoot), cancel);
+                if (_workspaceRoot is not null) await PublishAsync(service.IndexWorkspace(_workspaceRoot), cancel);
+                if (_watchDynamically) await RegisterWatchersAsync(service.IndexedExtensions(), cancel);
                 break;
             case "workspace/didChangeWatchedFiles":
                 foreach (var change in Params(parameters, LspJson.Default.DidChangeWatchedFilesParams).Changes)
@@ -258,6 +264,35 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             w.WriteStartObject("error");
             w.WriteNumber("code", code);
             w.WriteString("message", message);
+            w.WriteEndObject();
+            w.WriteEndObject();
+        }, cancel);
+
+    /// <summary>Asks the client to report changes to the indexed files and nitrogen.json (<c>workspace/didChangeWatchedFiles</c>).</summary>
+    Task RegisterWatchersAsync(IReadOnlyList<string> extensions, CancellationToken cancel) =>
+        connection.WriteAsync(w =>
+        {
+            w.WriteStartObject();
+            w.WriteString("jsonrpc", "2.0");
+            w.WriteString("id", "nitrogen-watch");
+            w.WriteString("method", "client/registerCapability");
+            w.WriteStartObject("params");
+            w.WriteStartArray("registrations");
+            w.WriteStartObject();
+            w.WriteString("id", "nitrogen-watched-files");
+            w.WriteString("method", "workspace/didChangeWatchedFiles");
+            w.WriteStartObject("registerOptions");
+            w.WriteStartArray("watchers");
+            foreach (string pattern in extensions.Select(e => "**/*" + e).Append("**/nitrogen.json"))
+            {
+                w.WriteStartObject();
+                w.WriteString("globPattern", pattern);
+                w.WriteEndObject();
+            }
+            w.WriteEndArray();
+            w.WriteEndObject();
+            w.WriteEndObject();
+            w.WriteEndArray();
             w.WriteEndObject();
             w.WriteEndObject();
         }, cancel);
