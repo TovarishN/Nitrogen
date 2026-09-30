@@ -22,9 +22,19 @@ internal static class LspCommand
         ("module", TokenType.Namespace, OutlineKind.Module), ("rule", TokenType.Type, OutlineKind.Class),
         ("property", TokenType.Property, OutlineKind.Property));
 
-    public static async Task<int> RunAsync(Stream input, Stream output, TextWriter log, CancellationToken cancel)
+    /// <param name="configRoot">The directory of a <c>--config</c> nitrogen.json; null serves the client's workspace.</param>
+    public static async Task<int> RunAsync(Stream input, Stream output, TextWriter log, CancellationToken cancel, string? configRoot = null)
     {
         using var service = new NitrogenLanguageService(Registry());
-        return await new LspServer(new JsonRpcConnection(input, output), service, log).RunAsync(cancel);
+        return await new LspServer(new JsonRpcConnection(input, output), service, log, configRoot).RunAsync(cancel);
+    }
+
+    /// <summary>The directory of <paramref name="path"/>, which must be an existing file named nitrogen.json; null with an error otherwise.</summary>
+    public static string? ConfigRoot(string path, out string error)
+    {
+        string full = Path.GetFullPath(path);
+        error = Path.GetFileName(full) != "nitrogen.json" ? $"--config must name a nitrogen.json file, not '{path}'"
+            : !File.Exists(full) ? $"no file '{path}'" : "";
+        return error.Length == 0 ? Path.GetDirectoryName(full) : null;
     }
 }

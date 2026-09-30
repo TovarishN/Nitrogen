@@ -8,7 +8,8 @@ namespace Nitrogen.LanguageService.Lsp;
 /// error response and the loop goes on; broken framing ends the session. Diagnostics are pushed
 /// after every document change, for every document the change may affect.
 /// </summary>
-public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageService service, TextWriter log)
+/// <param name="fixedRoot">The directory whose <c>nitrogen.json</c> configures the languages, whatever root the client sends (<c>nitrogen lsp --config</c>); null to use the client's root.</param>
+public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageService service, TextWriter log, string? fixedRoot = null)
 {
     public const int MethodNotFound = -32601;
     public const int InvalidParams = -32602;
@@ -63,7 +64,8 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         switch (method)
         {
             case "initialize":
-                if (parameters.ValueKind == JsonValueKind.Object)
+                if (fixedRoot is not null) _root = fixedRoot;
+                else if (parameters.ValueKind == JsonValueKind.Object)
                 {
                     var initialize = parameters.Deserialize(LspJson.Default.InitializeParams);
                     string? root = initialize?.RootUri ?? initialize?.WorkspaceFolders?.FirstOrDefault()?.Uri;
