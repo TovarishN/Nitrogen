@@ -135,6 +135,18 @@ for example `--bundle macos-aarch64=publish/nitrogen` after
 `dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o publish`.
 Bundles are copied from local files and never downloaded.
 
+## Installable plugins for a language
+
+A language project packages its `nitrogen.json` language as editor plugins:
+
+```sh
+nitrogen package --config nitrogen.json --output dist            # both
+nitrogen package --config nitrogen.json --output dist --vscode   # dist/<id>-<version>.vsix
+nitrogen package --config nitrogen.json --output dist --rider    # dist/<id>-<version>-rider.zip
+```
+
+Each plugin carries the grammar, helper sources, and a portable Nitrogen server, and runs it with the user's .NET 10 runtime (`dotnet`), so it works in any folder and on any OS. The server is started as `nitrogen lsp --config <bundled nitrogen.json>`, which ignores any `nitrogen.json` in the opened folder. Install the `.vsix` with **Extensions: Install from VSIX...**, and the ZIP with Rider's **Settings → Plugins → ⚙ → Install Plugin from Disk**. Packaging needs npm for VS Code, and Gradle with JDK 25 for Rider; the bundled server is the `nitrogen` that runs `package`, or `--server <directory>` for another framework-dependent build. `nitrogen generate vscode` and `nitrogen generate rider --self-contained` write the projects without building them. The optional `"version"` field of a language entry sets the plugin version (default `0.1.0`).
+
 ## Project map
 
 | Project | Role |
