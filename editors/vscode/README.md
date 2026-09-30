@@ -15,3 +15,5 @@ A workspace grammar language:
                    "grammars": ["Nitrogen.Tests/Grammars/Calc.ngr"],
                    "start": "Calc.Program" } ] }
 ```
+
+For a single language, `nitrogen package` builds a self-contained extension instead; see the repository README.

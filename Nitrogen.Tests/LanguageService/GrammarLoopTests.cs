@@ -68,6 +68,58 @@ public sealed class GrammarLoopTests : IDisposable
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     [Fact]
+    public async Task A_fixed_config_root_serves_its_language_and_ignores_the_workspace_one()
+    {
+        // The bundled language wants "!"; the workspace's own nitrogen.json would accept "hello bob".
+        Write("bundle/nitrogen.json", Config);
+        Write("bundle/grammars/greet.ngr", WorkspaceTests.Greet.Replace("Name:Word;", "Name:Word \"!\";"));
+        Write("workspace/nitrogen.json", Config);
+        Write("workspace/grammars/greet.ngr", WorkspaceTests.Greet);
+        string sample = Uri(Path.Combine(_root, "workspace", "a.greet"));
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+
+        string[] bodies =
+        [
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + Uri(Path.Combine(_root, "workspace")) + "\",\"capabilities\":{}}}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + sample + "\",\"languageId\":\"greet\",\"version\":1,\"text\":\"hello bob\"}}}",
+            "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
+        ];
+        var input = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
+        var output = new MemoryStream();
+        await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, Path.Combine(_root, "bundle"))
+            .RunAsync(CancellationToken.None);
+
+        output.Position = 0;
+        var counts = new List<int>();
+        var reader = new JsonRpcConnection(output, Stream.Null);
+        while (await reader.ReadAsync(CancellationToken.None) is { } message)
+            using (message)
+                if (message.RootElement.TryGetProperty("method", out var m) && m.GetString() == "textDocument/publishDiagnostics"
+                    && message.RootElement.GetProperty("params").GetProperty("uri").GetString() == sample)
+                    counts.Add(message.RootElement.GetProperty("params").GetProperty("diagnostics").GetArrayLength());
+        Assert.Equal(1, counts.Last()); // "!" missing: the bundled grammar, not the workspace's
+    }
+
+    [Theory]
+    [InlineData("missing/nitrogen.json", "no file")]
+    [InlineData("bundle/other.json", "nitrogen.json")]
+    public void An_unusable_lsp_config_is_rejected(string relative, string expected)
+    {
+        Write("bundle/other.json", Config);
+        Assert.Null(LspCommand.ConfigRoot(Path.Combine(_root, relative), out string error));
+        Assert.Contains(expected, error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_lsp_config_names_its_directory()
+    {
+        Write("bundle/nitrogen.json", Config);
+        Assert.Equal(Path.Combine(_root, "bundle"), LspCommand.ConfigRoot(Path.Combine(_root, "bundle", "nitrogen.json"), out _));
+    }
+
+    [Fact]
     public void A_grammar_with_checks_but_no_properties_reports_its_checks()
     {
         Write("nitrogen.json", Config);

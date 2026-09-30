@@ -17,17 +17,19 @@ internal static class RiderPluginRenderer
             {
                 ["settings.gradle.kts"] = "rootProject.name = \"" + request.Model.PluginId + "-rider\"\n",
                 ["gradle.properties"] = GradleProperties,
-                ["build.gradle.kts"] = BuildGradle,
+                ["build.gradle.kts"] = BuildGradle(request),
                 ["src/main/resources/META-INF/plugin.xml"] = PluginXml(request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenSettings.kt"] = InPackage(SettingsKt, request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenConfigurable.kt"] = InPackage(ConfigurableKt, request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenBundles.kt"] = InPackage(BundlesKt, request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenPlugin.kt"] = PluginKt(request.Model),
-                ["src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"] = LspKt(request),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"] = request.SelfContainedServer is null ? LspKt(request) : SelfContainedLspKt(request),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenFileType.kt"] = FileTypeKt(request.Model),
                 ["README.md"] = Readme(request),
                 ["src/main/resources/nitrogen-bundles.json"] = BundlesJson(request.Bundles),
             };
+            if (request.SelfContainedServer is not null)
+                files["src/main/kotlin/org/nitrogen/rider/NitrogenLanguageBundle.kt"] = LanguageBundleKt(request.Model);
             foreach (var (relative, content) in files.OrderBy(x => x.Key, StringComparer.Ordinal))
             {
                 cancel.ThrowIfCancellationRequested();
@@ -42,6 +44,8 @@ internal static class RiderPluginRenderer
                 Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
                 File.Copy(bundle.Path, destination, overwrite: true);
             }
+
+            if (request.SelfContainedServer is { } server) LanguageBundle.Stage(request.Model, server, Path.Combine(staging, "bundle"));
 
             if (Directory.Exists(outputDirectory)) Directory.Delete(outputDirectory, recursive: true);
             Directory.Move(staging, outputDirectory);
@@ -60,12 +64,14 @@ kotlin.stdlib.default.dependency=false
 
 """;
 
-    const string BuildGradle = """
+    static string BuildGradle(RiderPluginRequest request) => $$"""
 plugins {
     id("java")
     kotlin("jvm") version "2.4.0"
     id("org.jetbrains.intellij.platform") version "2.19.0"
 }
+
+version = "{{request.Model.Version}}"
 
 repositories {
     mavenCentral()
@@ -78,7 +84,13 @@ dependencies {
 }
 
 intellijPlatform { pluginConfiguration { ideaVersion { sinceBuild = "262" } } }
-""";
+""" + (request.SelfContainedServer is null ? "" : """
+
+tasks.prepareSandbox {
+    // The language bundle (grammar, helper sources, portable server) sits beside lib/ in the installed plugin.
+    from(layout.projectDirectory.dir("bundle")) { into(pluginName.map { "$it/bundle" }) }
+}
+""");
 
     const string SettingsKt = """
 package org.nitrogen.rider
@@ -271,16 +283,16 @@ object NitrogenBundles {
     /// The plugin's own Kotlin package. Rider registers services by class name, so plugins sharing
     /// class names cannot be installed together: the second gets the first's settings service.
     /// </summary>
-    static string KotlinPackage(RiderPluginModel model) => "org.nitrogen.rider.lang_" + model.PluginId.Replace('-', '_');
+    static string KotlinPackage(LanguagePluginModel model) => "org.nitrogen.rider.lang_" + model.PluginId.Replace('-', '_');
 
     /// <summary>The plugin's language ID, unique like its package.</summary>
-    static string LanguageId(RiderPluginModel model) => "Nitrogen." + model.PluginId;
+    static string LanguageId(LanguagePluginModel model) => "Nitrogen." + model.PluginId;
 
     /// <summary>
     /// A template file shared verbatim with editors/rider, moved into the plugin's package. The templates
     /// are raw strings, so a CRLF checkout (core.autocrlf, core.eol) gives them CRLF line endings.
     /// </summary>
-    internal static string InPackage(string kotlin, RiderPluginModel model)
+    internal static string InPackage(string kotlin, LanguagePluginModel model)
     {
         kotlin = kotlin.Replace("\r\n", "\n");
         const string template = "package org.nitrogen.rider\n";
@@ -289,7 +301,7 @@ object NitrogenBundles {
         return "package " + KotlinPackage(model) + "\n" + kotlin[template.Length..];
     }
 
-    static string PluginKt(RiderPluginModel model) => $$"""
+    static string PluginKt(LanguagePluginModel model) => $$"""
 package {{KotlinPackage(model)}}
 
 /**
@@ -303,7 +315,7 @@ object NitrogenPlugin {
 
 """;
 
-    static string PluginXml(RiderPluginModel model) => $$"""
+    static string PluginXml(LanguagePluginModel model) => $$"""
 <idea-plugin>
   <id>org.nitrogen.rider.{{model.PluginId}}</id>
   <name>{{Escape(model.DisplayName)}} for Rider</name>
@@ -320,7 +332,7 @@ object NitrogenPlugin {
 </idea-plugin>
 """;
 
-    static string FileTypeKt(RiderPluginModel model) => $$"""
+    static string FileTypeKt(LanguagePluginModel model) => $$"""
 package {{KotlinPackage(model)}}
 
 import com.intellij.openapi.fileTypes.LanguageFileType
@@ -366,6 +378,83 @@ class NitrogenLspSupport : LspIntegrationProvider {
 }
 """;
 
+    static string SelfContainedLspKt(RiderPluginRequest request) => $$"""
+package {{KotlinPackage(request.Model)}}
+
+import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.platform.lsp.api.LspIntegrationProvider
+import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter
+import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
+
+class NitrogenLspSupport : LspIntegrationProvider {
+    companion object {
+        const val defaultExecutable = "{{EscapeKotlin(request.NitrogenPath)}}"
+        val extensions = setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})
+    }
+
+    override fun fileOpened(project: Project, file: VirtualFile, clientStarter: LspClientStarter) {
+        if (file.extension in extensions) clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
+    }
+
+    private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
+        override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in extensions
+
+        /** The executable set in Settings when there is one, else the bundled server on the dotnet host; both get the bundled config. */
+        override fun createCommandLine(): GeneralCommandLine {
+            val bundle = NitrogenLanguageBundle.directory()
+            val config = bundle.resolve("language/nitrogen.json").toString()
+            val settings = NitrogenSettings.getInstance()
+            return if (settings.executable.isNotBlank())
+                GeneralCommandLine(settings.resolveExecutable(defaultExecutable), "lsp", "--config", config)
+            else
+                GeneralCommandLine(NitrogenLanguageBundle.dotnet(), bundle.resolve("server/nitrogen.dll").toString(), "lsp", "--config", config)
+        }
+    }
+}
+""";
+
+    static string LanguageBundleKt(LanguagePluginModel model) => $$"""
+package {{KotlinPackage(model)}}
+
+import com.intellij.execution.ExecutionException
+import com.intellij.execution.configurations.PathEnvironmentVariableUtil
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.util.SystemInfo
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+
+/** The language bundle installed beside the plugin's lib/, and the dotnet host that runs its server. */
+object NitrogenLanguageBundle {
+    fun directory(): Path {
+        val plugin = PluginManagerCore.getPlugin(PluginId.getId("org.nitrogen.rider.{{model.PluginId}}"))
+            ?: throw ExecutionException("The {{EscapeKotlin(model.DisplayName)}} plugin is not installed.")
+        val bundle = plugin.pluginPath.resolve("bundle")
+        if (!Files.isRegularFile(bundle.resolve("server/nitrogen.dll")))
+            throw ExecutionException("The {{EscapeKotlin(model.DisplayName)}} plugin's language bundle is missing; reinstall the plugin.")
+        return bundle
+    }
+
+    /** dotnet: DOTNET_ROOT, then the standard install locations, then PATH. */
+    fun dotnet(): String {
+        val exe = if (SystemInfo.isWindows) "dotnet.exe" else "dotnet"
+        val candidates = listOfNotNull(
+            System.getenv("DOTNET_ROOT")?.let { File(it, exe) },
+            if (SystemInfo.isWindows) File(System.getenv("ProgramFiles") ?: "C:\\Program Files", "dotnet\\" + exe) else null,
+            if (SystemInfo.isMac) File("/usr/local/share/dotnet/dotnet") else null,
+            if (SystemInfo.isLinux) File("/usr/share/dotnet/dotnet") else null,
+            if (SystemInfo.isLinux) File("/usr/lib/dotnet/dotnet") else null)
+        candidates.firstOrNull { it.canExecute() }?.let { return it.absolutePath }
+        PathEnvironmentVariableUtil.findInPath(exe)?.let { return it.absolutePath }
+        throw ExecutionException(
+            "{{EscapeKotlin(model.DisplayName)}} needs the .NET 10 runtime: install it, set DOTNET_ROOT, or set a Nitrogen executable in Settings | Tools | {{EscapeKotlin(model.DisplayName)}}.")
+    }
+}
+""";
+
     static string Readme(RiderPluginRequest request) => $$"""
 # {{request.Model.DisplayName}} for Rider
 
@@ -376,7 +465,10 @@ The server runs the first of: the executable set in Settings | Tools | {{request
 A bundle must be a self-contained single-file server, for example `dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true`. Rider extracts it once, checks its SHA-256, and runs it from its system directory.
 
 Build with `gradle buildPlugin` and install the resulting ZIP from Rider's plugin settings.
-""";
+""" + (request.SelfContainedServer is null ? "" : """
+
+This plugin carries its language and a portable server in `bundle/`, run with `dotnet` (.NET 10); a Nitrogen executable set in Settings replaces the bundled server.
+""");
 
     static string BundlesJson(IReadOnlyList<RiderBundleInput> bundles)
     {

@@ -12,3 +12,5 @@ The launcher defaults to `nitrogen` on `PATH`. A generated plugin can instead
 be configured with an explicit executable or carry a locally supplied,
 platform-specific executable. No server binaries are downloaded by the plugin
 or generator.
+
+`nitrogen generate rider --self-contained` bundles the language and a portable server run with `dotnet`; `nitrogen package` builds the ZIP.
