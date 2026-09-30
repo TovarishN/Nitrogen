@@ -19,6 +19,17 @@ internal static class NitrogenCli
             }
             return await RiderPluginCommand.RunAsync(request, output, cancel);
         }
+        if (args.Count >= 2 && args[0] == "generate" && args[1] == "vscode")
+        {
+            var request = VsCodeInput.ParseRequest(args, out string generationError);
+            if (request is null)
+            {
+                output.WriteLine($"error: {generationError}");
+                output.WriteLine(VsCodeInput.Usage);
+                return 2;
+            }
+            return await VsCodeCommand.RunAsync(request, output, cancel);
+        }
         var options = CliOptions.Parse(args, out string error);
         if (options is null)
         {

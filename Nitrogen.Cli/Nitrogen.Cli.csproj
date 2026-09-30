@@ -16,6 +16,13 @@
     <ProjectReference Include="..\Nitrogen.Ngr\Nitrogen.Ngr.csproj" />
   </ItemGroup>
 
+  <!-- `generate vscode` builds on the checked-in extension's dependencies, lock, and TypeScript settings. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\editors\vscode\package.json" LogicalName="vscode/package.json" />
+    <EmbeddedResource Include="..\editors\vscode\package-lock.json" LogicalName="vscode/package-lock.json" />
+    <EmbeddedResource Include="..\editors\vscode\tsconfig.json" LogicalName="vscode/tsconfig.json" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>Nitrogen.Tests</_Parameter1>
