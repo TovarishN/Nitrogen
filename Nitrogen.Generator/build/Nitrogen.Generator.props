@@ -1,0 +1,12 @@
+<Project>
+  <!-- Consumers list grammars as <AdditionalFiles Include="X.ngr" Namespace="..." />. The generator reads
+       that Namespace metadata, falling back to RootNamespace. -->
+  <ItemGroup>
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+  </ItemGroup>
+  <!-- Generated parsers dispatch rules through function pointers. A project may still set it to false. -->
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+</Project>

@@ -66,6 +66,18 @@ plugins as build artifacts.
 
 The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
 
+## Use Nitrogen as packages
+
+Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.com/TovarishN/index.json`):
+
+```xml
+<PackageReference Include="Nitrogen.Runtime" Version="0.1.0" />
+<PackageReference Include="Nitrogen.Generator" Version="0.1.0" PrivateAssets="all" />
+<AdditionalFiles Include="MyLanguage.ngr" Namespace="My.Language.Syntax" />
+```
+
+and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.1.0`. Reading the feed needs a GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>` (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from freshly packed packages; a `v*` tag publishes them.
+
 ## Use the CLI
 
 ```sh

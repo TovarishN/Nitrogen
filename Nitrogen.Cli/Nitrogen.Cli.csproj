@@ -5,6 +5,11 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>nitrogen</AssemblyName>
     <RootNamespace>Nitrogen.Cli</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>nitrogen</ToolCommandName>
+    <PackageId>Nitrogen.Cli</PackageId>
+    <Description>The nitrogen command: parse and watch against .ngr grammars, the language server (nitrogen lsp), and editor plugin generation and packaging.</Description>
     <!-- Workspace grammars compile with Roslyn, which references assemblies by file path. A single-file
          publish (a bundled Rider server) must extract its assemblies so those paths exist. -->
     <IncludeAllContentForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeAllContentForSelfExtract>

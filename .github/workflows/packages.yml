@@ -1,0 +1,28 @@
+name: Packages
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+      - run: dotnet build Nitrogen.slnx -warnaserror
+      - run: dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build
+      - name: Pack
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for project in Nitrogen.Runtime Nitrogen.Generator Nitrogen.Cli; do
+            dotnet pack "$project/$project.csproj" -c Release -p:Version="$version" -o packages
+          done
+      - run: eng/package-smoke.sh packages "${GITHUB_REF_NAME#v}"
+      - run: dotnet nuget push "packages/*.nupkg" --source "https://nuget.pkg.github.com/TovarishN/index.json" --api-key "${{ secrets.GITHUB_TOKEN }}" --skip-duplicate
