@@ -79,6 +79,8 @@ dotnet run --project Nitrogen.Cli -- lsp
 
 The [VS Code extension](editors/vscode/README.md) starts `nitrogen lsp`. The server serves `.ngr` files and compiles grammars declared in a workspace `nitrogen.json`, so a custom DSL can use the same extension. Available editor features include diagnostics, semantic coloring, outline, go to definition, references, rename, hover, and completion; the results depend on the grammar and semantic rules supplied by the language.
 
+For a `nitrogen.json` language, the server also reads the language's files in the workspace folder that are not open (skipping `bin`, `obj`, `node_modules`, and hidden folders), so references into closed files resolve and rename edits them. Diagnostics are reported for open files. Clients that support dynamic registration are asked to report changes to those files.
+
 1. Build the language server from the repository root:
 
    ```sh
