@@ -68,6 +68,31 @@ public sealed class GrammarLoopTests : IDisposable
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
     [Fact]
+    public void A_grammar_with_checks_but_no_properties_reports_its_checks()
+    {
+        Write("nitrogen.json", Config);
+        Write("grammars/greet.ngr", """
+            syntax module Greet
+            {
+              token Word = ['a'..'z']+;
+              syntax Hello = "hello" Name:Word
+              {
+                check GR0001 Name.Text != "bob" : "bob is not welcome" at Name;
+              }
+            }
+            """);
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.ConfigureWorkspace(_root);
+
+        string sample = Uri(Path.Combine(_root, "a.greet"));
+        service.Open(sample, 1, "hello bob");
+        var diagnostic = Assert.Single(service.Diagnostics(sample));
+        Assert.Equal(("GR0001", "bob is not welcome"), (diagnostic.Code, diagnostic.Message));
+        service.Change(sample, 2, "hello ann");
+        Assert.Empty(service.Diagnostics(sample));
+    }
+
+    [Fact]
     public async Task The_workspace_root_and_watched_grammar_changes_over_the_protocol()
     {
         Write("nitrogen.json", Config);

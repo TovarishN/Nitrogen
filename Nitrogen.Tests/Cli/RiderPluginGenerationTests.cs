@@ -46,6 +46,22 @@ public sealed class RiderPluginGenerationTests
         Assert.Equal(Path.GetFullPath(Path.Combine(dir.Path, "grammars/Calc.ngr")), request.Model.GrammarPaths.Single());
     }
 
+    [Fact]
+    public void Shared_Kotlin_from_a_CRLF_checkout_moves_into_the_plugin_package()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [ { "name": "calc", "extensions": [".calc"], "grammars": ["Calc.ngr"], "start": "Calc.Program" } ] }
+            """);
+        var model = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", dir.Path + "/out" }, out _)!.Model;
+
+        // core.autocrlf or core.eol=crlf checks the renderer's raw-string templates out with CRLF.
+        string kotlin = RiderPluginRenderer.InPackage("package org.nitrogen.rider\r\n\r\nimport a.B\r\n", model);
+
+        Assert.Equal("package org.nitrogen.rider.lang_calc\n\nimport a.B\n", kotlin);
+    }
+
     [Theory]
     [InlineData("{", "invalid JSON")]
     [InlineData("{}", "no languages")]

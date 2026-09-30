@@ -141,6 +141,7 @@ internal sealed class SemanticsWriter
         b.Append($"    static readonly {Ns}SemanticsRule?[] s_semantics =\n    {{\n        null,\n");
         foreach (var kind in _info.Kinds) b.Append("        ").Append(Rule(kind)).Append(", // ").Append(kind.Name).Append('\n');
         b.Append("    };\n\n")
+            .Append("    public override bool HasSemantics => true;\n\n")
             .Append($"    public override {Ns}SemanticsRule? GetSemantics(int localKind) =>\n")
             .Append("        (uint)localKind < (uint)s_semantics.Length ? s_semantics[localKind] : null;\n\n");
     }
