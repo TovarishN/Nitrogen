@@ -276,9 +276,13 @@ object NitrogenBundles {
     /// <summary>The plugin's language ID, unique like its package.</summary>
     static string LanguageId(RiderPluginModel model) => "Nitrogen." + model.PluginId;
 
-    /// <summary>A template file shared verbatim with editors/rider, moved into the plugin's package.</summary>
-    static string InPackage(string kotlin, RiderPluginModel model)
+    /// <summary>
+    /// A template file shared verbatim with editors/rider, moved into the plugin's package. The templates
+    /// are raw strings, so a CRLF checkout (core.autocrlf, core.eol) gives them CRLF line endings.
+    /// </summary>
+    internal static string InPackage(string kotlin, RiderPluginModel model)
     {
+        kotlin = kotlin.Replace("\r\n", "\n");
         const string template = "package org.nitrogen.rider\n";
         if (!kotlin.StartsWith(template, StringComparison.Ordinal))
             throw new InvalidOperationException("shared Kotlin must start with the template package");

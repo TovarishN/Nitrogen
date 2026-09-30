@@ -70,7 +70,7 @@ internal sealed class EmitModel
 {
     static readonly HashSet<string> ReservedNames = new(StringComparer.Ordinal)
     {
-        "Instance", "Name", "Id", "KindBase", "Kind", "GetKindName", "Register", "GetRule", "GetBinding", "Builtins", "GetSemantics", "Properties", "SymbolProperties", "Fail",
+        "Instance", "Name", "Id", "KindBase", "Kind", "GetKindName", "Register", "GetRule", "GetBinding", "Builtins", "HasSemantics", "GetSemantics", "Properties", "SymbolProperties", "Fail",
         "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "ReferenceEquals",
     };
 
