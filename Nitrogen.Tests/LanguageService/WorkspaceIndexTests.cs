@@ -1,4 +1,7 @@
+using System.Text.Json;
+using Nitrogen.Cli;
 using Nitrogen.LanguageService;
+using Nitrogen.LanguageService.Lsp;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -140,5 +143,76 @@ public sealed class WorkspaceIndexTests : IDisposable
         service.FileChanged(grammar);
 
         Assert.Empty(Codes(service, Uri("b.links")));
+    }
+
+    async Task<List<JsonElement>> Session(string? fixedRoot, string workspace, string capabilities, params string[] after)
+    {
+        string[] bodies =
+        [
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new System.Uri(workspace).AbsoluteUri + "\",\"capabilities\":" + capabilities + "}}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}",
+            .. after,
+            "{\"jsonrpc\":\"2.0\",\"id\":99,\"method\":\"shutdown\"}",
+            "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
+        ];
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        var input = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
+        var output = new MemoryStream();
+        await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, fixedRoot).RunAsync(CancellationToken.None);
+        output.Position = 0;
+        var messages = new List<JsonElement>();
+        var reader = new JsonRpcConnection(output, Stream.Null);
+        while (await reader.ReadAsync(CancellationToken.None) is { } message)
+            using (message) messages.Add(message.RootElement.Clone());
+        return messages;
+    }
+
+    string Open(string relative, string text) =>
+        "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + Uri(relative) + "\",\"languageId\":\"links\",\"version\":1,\"text\":\"" + text + "\"}}}";
+
+    static int LastDiagnosticCount(List<JsonElement> messages, string uri) => messages
+        .Where(m => m.TryGetProperty("method", out var method) && method.GetString() == "textDocument/publishDiagnostics"
+            && m.GetProperty("params").GetProperty("uri").GetString() == uri)
+        .Select(m => m.GetProperty("params").GetProperty("diagnostics").GetArrayLength()).Last();
+
+    [Fact]
+    public async Task With_a_fixed_config_the_client_workspace_is_still_indexed()
+    {
+        Write("bundle/nitrogen.json", Config);
+        Write("bundle/links.ngr", Grammar);
+        Write("workspace/a.links", "def alpha;");
+        var messages = await Session(Path.Combine(_root, "bundle"), Path.Combine(_root, "workspace"), "{}", Open("workspace/b.links", "use alpha;"));
+        Assert.Equal(0, LastDiagnosticCount(messages, Uri("workspace/b.links")));
+    }
+
+    [Fact]
+    public async Task A_client_with_dynamic_registration_is_asked_to_watch_the_indexed_extensions()
+    {
+        Write("nitrogen.json", Config);
+        Write("links.ngr", Grammar);
+        var messages = await Session(null, _root, """{"workspace":{"didChangeWatchedFiles":{"dynamicRegistration":true}}}""");
+        var request = Assert.Single(messages, m => m.TryGetProperty("method", out var method) && method.GetString() == "client/registerCapability");
+        var registration = request.GetProperty("params").GetProperty("registrations")[0];
+        Assert.Equal("workspace/didChangeWatchedFiles", registration.GetProperty("method").GetString());
+        Assert.Equal(new[] { "**/*.links", "**/nitrogen.json" },
+            registration.GetProperty("registerOptions").GetProperty("watchers").EnumerateArray().Select(w => w.GetProperty("globPattern").GetString()));
+    }
+
+    [Fact]
+    public async Task A_client_without_dynamic_registration_is_not_asked()
+    {
+        Write("nitrogen.json", Config);
+        Write("links.ngr", Grammar);
+        var messages = await Session(null, _root, "{}");
+        Assert.DoesNotContain(messages, m => m.TryGetProperty("method", out var method) && method.GetString() == "client/registerCapability");
+    }
+
+    [Fact]
+    public async Task A_response_from_the_client_gets_no_reply()
+    {
+        Write("nitrogen.json", Config);
+        Write("links.ngr", Grammar);
+        var messages = await Session(null, _root, "{}", """{"jsonrpc":"2.0","id":"nitrogen-watch","result":null}""");
+        Assert.DoesNotContain(messages, m => m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String && id.GetString() == "nitrogen-watch");
     }
 }
