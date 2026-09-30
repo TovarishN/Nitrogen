@@ -271,16 +271,16 @@ object NitrogenBundles {
     /// The plugin's own Kotlin package. Rider registers services by class name, so plugins sharing
     /// class names cannot be installed together: the second gets the first's settings service.
     /// </summary>
-    static string KotlinPackage(RiderPluginModel model) => "org.nitrogen.rider.lang_" + model.PluginId.Replace('-', '_');
+    static string KotlinPackage(LanguagePluginModel model) => "org.nitrogen.rider.lang_" + model.PluginId.Replace('-', '_');
 
     /// <summary>The plugin's language ID, unique like its package.</summary>
-    static string LanguageId(RiderPluginModel model) => "Nitrogen." + model.PluginId;
+    static string LanguageId(LanguagePluginModel model) => "Nitrogen." + model.PluginId;
 
     /// <summary>
     /// A template file shared verbatim with editors/rider, moved into the plugin's package. The templates
     /// are raw strings, so a CRLF checkout (core.autocrlf, core.eol) gives them CRLF line endings.
     /// </summary>
-    internal static string InPackage(string kotlin, RiderPluginModel model)
+    internal static string InPackage(string kotlin, LanguagePluginModel model)
     {
         kotlin = kotlin.Replace("\r\n", "\n");
         const string template = "package org.nitrogen.rider\n";
@@ -289,7 +289,7 @@ object NitrogenBundles {
         return "package " + KotlinPackage(model) + "\n" + kotlin[template.Length..];
     }
 
-    static string PluginKt(RiderPluginModel model) => $$"""
+    static string PluginKt(LanguagePluginModel model) => $$"""
 package {{KotlinPackage(model)}}
 
 /**
@@ -303,7 +303,7 @@ object NitrogenPlugin {
 
 """;
 
-    static string PluginXml(RiderPluginModel model) => $$"""
+    static string PluginXml(LanguagePluginModel model) => $$"""
 <idea-plugin>
   <id>org.nitrogen.rider.{{model.PluginId}}</id>
   <name>{{Escape(model.DisplayName)}} for Rider</name>
@@ -320,7 +320,7 @@ object NitrogenPlugin {
 </idea-plugin>
 """;
 
-    static string FileTypeKt(RiderPluginModel model) => $$"""
+    static string FileTypeKt(LanguagePluginModel model) => $$"""
 package {{KotlinPackage(model)}}
 
 import com.intellij.openapi.fileTypes.LanguageFileType

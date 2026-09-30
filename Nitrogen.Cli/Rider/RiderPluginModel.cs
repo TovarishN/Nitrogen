@@ -1,14 +1,7 @@
 namespace Nitrogen.Cli;
 
-internal sealed record RiderPluginModel(
-    string PluginId,
-    string DisplayName,
-    IReadOnlyList<string> Extensions,
-    IReadOnlyList<string> GrammarPaths,
-    string StartRule);
-
 internal sealed record RiderPluginRequest(
-    RiderPluginModel Model,
+    LanguagePluginModel Model,
     string OutputDirectory,
     string NitrogenPath,
     IReadOnlyList<RiderBundleInput> Bundles);

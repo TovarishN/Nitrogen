@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 namespace Nitrogen.Cli;
 
 internal static class RiderPluginInput
@@ -54,16 +52,16 @@ internal static class RiderPluginInput
         if (grammar is not null && start is null) return FailRequest("no --start", out error);
         if (output is null) return FailRequest("no --output", out error);
 
-        RiderPluginModel? model;
+        LanguagePluginModel? model;
         if (config is not null)
         {
-            model = LoadConfig(config, language, out error);
+            model = LanguagePluginConfig.Load(config, language, out error);
         }
         else
         {
             string fullGrammar = Path.GetFullPath(grammar!);
             string displayName = Path.GetFileNameWithoutExtension(fullGrammar);
-            model = CreateModel(displayName, new[] { fullGrammar }, start!, new[] { ".ngr" }, out error);
+            model = LanguagePluginConfig.Create(displayName, new[] { fullGrammar }, start!, new[] { ".ngr" }, out error);
         }
 
         if (model is null) return null;
@@ -72,66 +70,7 @@ internal static class RiderPluginInput
         return new RiderPluginRequest(model, Path.GetFullPath(output), nitrogen, bundles);
     }
 
-    static RiderPluginModel? LoadConfig(string path, string? language, out string error)
-    {
-        error = "";
-        string fullPath = Path.GetFullPath(path);
-        if (!File.Exists(fullPath)) return FailModel($"no config file '{path}'", out error);
-        try
-        {
-            using JsonDocument document = JsonDocument.Parse(File.ReadAllText(fullPath));
-            if (!document.RootElement.TryGetProperty("languages", out JsonElement languages) || languages.ValueKind != JsonValueKind.Array || languages.GetArrayLength() == 0)
-                return FailModel("no languages", out error);
-            JsonElement? selected = null;
-            foreach (JsonElement entry in languages.EnumerateArray())
-            {
-                string? name = entry.TryGetProperty("name", out JsonElement nameValue) ? nameValue.GetString() : null;
-                if (language is null || string.Equals(name, language, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (selected is not null && language is null) return FailModel("multiple languages; specify --language", out error);
-                    selected = entry;
-                }
-            }
-            if (selected is null) return FailModel($"no language '{language}'", out error);
-            JsonElement entryValue = selected.Value;
-            string? nameText = GetString(entryValue, "name");
-            string? start = GetString(entryValue, "start");
-            if (string.IsNullOrWhiteSpace(nameText)) return FailModel("language name is required", out error);
-            if (string.IsNullOrWhiteSpace(start)) return FailModel("language start rule is required", out error);
-            if (!entryValue.TryGetProperty("extensions", out JsonElement extensionValues) || extensionValues.ValueKind != JsonValueKind.Array)
-                return FailModel("language extensions are required", out error);
-            var extensions = extensionValues.EnumerateArray().Select(x => x.GetString() ?? "").ToArray();
-            if (extensions.Any(x => string.IsNullOrWhiteSpace(x) || !x.StartsWith('.')))
-                return FailModel("extension must start with '.'", out error);
-            if (!entryValue.TryGetProperty("grammars", out JsonElement grammarValues) || grammarValues.ValueKind != JsonValueKind.Array || grammarValues.GetArrayLength() == 0)
-                return FailModel("language grammars are required", out error);
-            string baseDirectory = Path.GetDirectoryName(fullPath)!;
-            var grammars = grammarValues.EnumerateArray().Select(x => Path.GetFullPath(Path.Combine(baseDirectory, x.GetString() ?? ""))).ToArray();
-            return CreateModel(nameText, grammars, start, extensions, out error);
-        }
-        catch (JsonException exception)
-        {
-            return FailModel($"invalid JSON: {exception.Message}", out error);
-        }
-    }
-
-    static RiderPluginModel? CreateModel(string name, IReadOnlyList<string> grammars, string start, IEnumerable<string> extensions, out string error)
-    {
-        error = "";
-        string pluginId = new string(name.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
-        if (pluginId.Length == 0) return FailModel("language name is invalid", out error);
-        return new RiderPluginModel(pluginId, name.Trim(), extensions.Select(x => x.ToLowerInvariant()).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal).ToArray(), grammars.OrderBy(x => x, StringComparer.Ordinal).ToArray(), start);
-    }
-
-    static string? GetString(JsonElement element, string name) => element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
-
     static RiderPluginRequest? FailRequest(string message, out string error)
-    {
-        error = message;
-        return null;
-    }
-
-    static RiderPluginModel? FailModel(string message, out string error)
     {
         error = message;
         return null;
