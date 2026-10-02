@@ -59,8 +59,8 @@ References/Within: "in" Identifier
 KindGroup: "(" Kinds:(Identifier; "|")+ ")"
   1 Kinds:(Identifier; "|")+  static  insert {")"}  sync {Identifier} @1, {")"} @2
   2 ")"  static  insert {":", Identifier}  sync {")"} @2, {Identifier} @1
-Lowers: "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersCall)
-  1 Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersCall)  static  insert {";", "declares", "dynamic", "lowers", "references", "scope", "{", "|", "}"}  sync {"literal", "operation", "reference", "repeat", "sequence", "text", "value", DottedName, Identifier} @1
+Lowers: "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall)
+  1 Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall)  static  insert {";", "declares", "dynamic", "lowers", "references", "scope", "{", "|", "}"}  sync {"expand", "literal", "operation", "reference", "repeat", "sequence", "template", "text", "value", DottedName, Identifier} @1
 LowersReference/Initializer: "initializer" Identifier
   1 Identifier  static  insert {";", "declares", "dynamic", "lowers", "references", "scope", "{", "|", "}"}  sync {Identifier} @1
 LowersCall: Operation:(("operation" "?"? Identifier) / QualifiedName) "(" Arguments:(LowersArgument; ",")* Close:")"

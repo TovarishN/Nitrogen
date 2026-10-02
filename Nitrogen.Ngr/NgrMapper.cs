@@ -211,6 +211,15 @@ internal sealed class NgrMapper(SyntaxTree tree)
                         Target: hasDynamicType ? null : new NameDecl(type.ToString(), Span(type.Span)),
                         TypeProperty: hasDynamicType ? new NameDecl(dynamicType.ToString(), Span(dynamicType.Span)) : null));
                 }
+                else if (l.Form.Kind == NitrogenKinds.LowersTemplate || l.Form.Kind == NitrogenKinds.LowersExpand)
+                {
+                    var field = l.Form.Child(1);
+                    var list = l.Form.Child(3);
+                    clauses.Add(new BindingClause(l.Form.Kind == NitrogenKinds.LowersTemplate
+                            ? BindingClauseKind.LowersTemplate : BindingClauseKind.LowersExpand, default,
+                        field.ToString(), Span(field.Span), false, false, GrammarSpan.FromBounds(l.Span.Start, l.Form.Child(4).Span.End),
+                        Arguments: new[] { new LoweringArgument(list.ToString(), Span(list.Span)) }));
+                }
                 else if (l.Form.Kind == NitrogenKinds.LowersReference)
                 {
                     var property = l.Form.Child(2);

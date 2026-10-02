@@ -18,6 +18,7 @@ public sealed class DeclarativeTypes
     readonly SemanticCatalog _catalog;
     readonly Dictionary<int, SemanticType?> _types = new();
     readonly HashSet<int> _activeInitializers = new();
+    readonly HashSet<int> _typing = new();
     readonly List<SemanticDiagnostic> _diagnostics = new();
     readonly bool[] _checkedNodes;
     bool _allChecked;
@@ -34,7 +35,10 @@ public sealed class DeclarativeTypes
     public SemanticType? TypeOf(int node)
     {
         if (_types.TryGetValue(node, out var cached)) return cached;
-        var type = Compute(node);
+        if (!_typing.Add(node)) return SemanticTypes.Error; // a cyclic expansion: lowering reports it
+        SemanticType? type;
+        try { type = Compute(node); }
+        finally { _typing.Remove(node); }
         _types[node] = type;
         return type;
     }
@@ -66,6 +70,9 @@ public sealed class DeclarativeTypes
                 DeclarativeForm.Repeat => SemanticTypes.SequenceOf(SemanticTypes.SequenceOf(rule.LiteralType!)),
                 DeclarativeForm.Value => TryValue(node, rule.Rule, out _) ? ValueType(node, rule) : SemanticTypes.Error,
                 DeclarativeForm.Reference => ReferenceType(node, rule),
+                DeclarativeForm.Template => null,
+                DeclarativeForm.Expand => TemplateOf(node) is { } template
+                    ? template.Types.TypeOf(template.Body) : SemanticTypes.Error,
                 _ => SemanticTypes.Error,
             };
         if (_file.HasReference(node))
@@ -198,6 +205,10 @@ public sealed class DeclarativeTypes
                     Report("NT0001", argument, $"'{operation.Id}' needs {expected}, not {actual}");
             }
         }
+        else if (rule.Rule.Form == DeclarativeForm.Expand)
+        {
+            CheckExpansion(node, rule.Rule);
+        }
         else if (rule.Rule.Form == DeclarativeForm.Literal && !TryLiteral(node, rule.Rule, out _))
         {
             Report("NT0003", node, $"'{Text(node)}' is not a finite number");
@@ -244,7 +255,7 @@ public sealed class DeclarativeTypes
     {
         var tree = _file.Tree;
         for (int parent = tree.Parent(node); parent >= 0; parent = tree.Parent(parent))
-            if (_lowering.RuleFor(tree.Kind(parent)) is { Rule.Form: DeclarativeForm.Operation }) return null;
+            if (_lowering.RuleFor(tree.Kind(parent)) is { Rule.Form: DeclarativeForm.Operation or DeclarativeForm.Template }) return null;
         return Lower(context, node);
     }
 
@@ -252,6 +263,8 @@ public sealed class DeclarativeTypes
 
     HirNode? Lower(LoweringContext context, int node)
     {
+        if (_lowering.RuleFor(_file.Tree.Kind(node)) is { Rule.Form: DeclarativeForm.Expand } expand)
+            return LowerExpansion(context, node, expand.Rule);
         var type = TypeOf(node);
         if (type is null || type.Equals(SemanticTypes.Error)) return null;
         var tree = _file.Tree;
@@ -283,6 +296,7 @@ public sealed class DeclarativeTypes
             if (rule.Rule.Form == DeclarativeForm.Reference)
             {
                 var binding = _file.SymbolOf(node);
+                if (binding is not null && Substitute(context, binding, node, type) is { } argument) return argument;
                 if (binding is not null && rule.Rule.InitializerProperty?.Read(_file, node) is { } source)
                 {
                     if (source is not int initializer || initializer < 0 || initializer >= tree.NodeCount)
@@ -364,7 +378,8 @@ public sealed class DeclarativeTypes
         if (_file.HasReference(node))
         {
             var symbol = _file.SymbolOf(node)!;
-            return new HirSymbolRef(SemanticSymbol.From(symbol, ModuleOf(symbol, node), type), context.Origin(node));
+            return Substitute(context, symbol, node, type) ??
+                new HirSymbolRef(SemanticSymbol.From(symbol, ModuleOf(symbol, node), type), context.Origin(node));
         }
         for (int k = 0; k < tree.ChildCount(node); k++)
         {
@@ -373,6 +388,95 @@ public sealed class DeclarativeTypes
         }
         return null;
     }
+
+    /// <summary>The template an expansion names: its file's types, declaring node, body, and parameter items.</summary>
+    sealed record Template(DeclarativeTypes Types, int Node, int Body, IReadOnlyList<int> Parameters);
+
+    /// <summary>The template the expansion at <paramref name="node"/> names; null when unresolved or not a template.</summary>
+    Template? TemplateOf(int node)
+    {
+        if (_file.SymbolOf(node) is not { IsBuiltin: false, Path: { } path } symbol) return null;
+        var types = path == _file.Path ? this : _file.RelatedFile(path).DeclarativeTypes;
+        var tree = types._file.Tree;
+        if (types._lowering.RuleFor(tree.Kind(symbol.Node)) is not { Rule: { Form: DeclarativeForm.Template } rule }) return null;
+        return new Template(types, symbol.Node, tree.Child(symbol.Node, rule.Arguments[0]),
+            types.SequenceItems(tree.Child(symbol.Node, rule.Arguments[1]), rule.SequenceStride).ToArray());
+    }
+
+    /// <summary>The parameter a template's parameter item declares; null when it declares none.</summary>
+    Symbol? ParameterAt(int item) => _file.Binding.Declarations.FirstOrDefault(declaration => declaration.Node == item);
+
+    TextSpan NameSpan(int node) =>
+        _file.Binding.References.FirstOrDefault(reference => reference.Node == node)?.NameSpan ?? _file.Tree.Span(node);
+
+    void CheckExpansion(int node, DeclarativeRule rule)
+    {
+        if (_file.SymbolOf(node) is not { } symbol) return; // the binder reports an unresolved name
+        if (TemplateOf(node) is not { } template)
+        {
+            Report("NT0007", NameSpan(node), $"'{symbol.Name}' is not a template");
+            return;
+        }
+        var arguments = SequenceItems(_file.Tree.Child(node, rule.Arguments[0]), rule.SequenceStride).ToArray();
+        if (arguments.Length != template.Parameters.Count)
+        {
+            Report("NT0008", NameSpan(node), $"'{symbol.Name}' takes {template.Parameters.Count} arguments, not {arguments.Length}");
+            return;
+        }
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            if (template.Types.ParameterAt(template.Parameters[i]) is not { } parameter) continue;
+            var expected = TypeOfSymbol(parameter);
+            if (expected is null || expected.Equals(SemanticTypes.Error)) continue;
+            var actual = TypeOf(arguments[i]);
+            if (actual is null)
+                Report("NT0004", arguments[i], $"'{Text(arguments[i])}' has no declared type; '{parameter.Name}' needs {expected}");
+            else if (!actual.Equals(SemanticTypes.Error) && !actual.Equals(expected))
+                Report("NT0001", arguments[i], $"'{parameter.Name}' of '{symbol.Name}' needs {expected}, not {actual}");
+        }
+    }
+
+    /// <summary>
+    /// Lowers the template body with each parameter bound to its argument, lowered here. The result's origins
+    /// start with the expansion's. Blocks, reporting in the template's file, on errors within the template
+    /// and on a cycle (NH0007, at the name of the expansion that closes it).
+    /// </summary>
+    HirNode? LowerExpansion(LoweringContext context, int node, DeclarativeRule rule)
+    {
+        if (TemplateOf(node) is not { } template) return null;
+        var argumentNodes = SequenceItems(_file.Tree.Child(node, rule.Arguments[0]), rule.SequenceStride).ToArray();
+        if (argumentNodes.Length != template.Parameters.Count) return null;
+        var key = (template.Types._file.Path, template.Node);
+        if (!context.ActiveTemplates.Add(key))
+        {
+            context.Report("NH0007", new SourceOrigin(_file.Path, context.SnapshotId, node, NameSpan(node)),
+                "Cyclic template expansion prevents lowering.");
+            return null;
+        }
+        try
+        {
+            var arguments = new Dictionary<Symbol, HirNode>(ReferenceEqualityComparer.Instance);
+            var body = context.Expanding(template.Types._file, arguments);
+            if (!HirLowering.Admit(body, template.Node)) return null;
+            for (int i = 0; i < argumentNodes.Length; i++)
+            {
+                if (template.Types.ParameterAt(template.Parameters[i]) is not { } parameter) return null;
+                var argument = Lower(context, argumentNodes[i]);
+                if (argument is null || !argument.Type.Equals(TypeOfSymbol(parameter))) return null;
+                arguments[parameter] = argument;
+            }
+            var lowered = template.Types.Lower(body, template.Body);
+            return lowered is null ? null
+                : HirTraversal.WithOrigins(lowered, lowered.Origins.Prepend(context.Origin(node)).Distinct().ToArray());
+        }
+        finally { context.ActiveTemplates.Remove(key); }
+    }
+
+    /// <summary>The argument bound to a template parameter reference, keeping the reference's origin first.</summary>
+    HirNode? Substitute(LoweringContext context, Symbol symbol, int node, SemanticType type) =>
+        context.Arguments is { } arguments && arguments.TryGetValue(symbol, out var argument)
+            ? HirTraversal.Rewrite(new HirSymbolRef(SemanticSymbol.From(symbol, ModuleOf(symbol, node), type), context.Origin(node)), _ => argument)
+            : null;
 
     string ModuleOf(Symbol symbol, int referenceNode)
     {
@@ -470,6 +574,8 @@ public sealed class DeclarativeTypes
 
     string Text(int node) => Spelled(node) ?? "";
 
-    void Report(string code, int node, string message) =>
-        _diagnostics!.Add(new SemanticDiagnostic(code, _file.Tree.Span(node), message));
+    void Report(string code, int node, string message) => Report(code, _file.Tree.Span(node), message);
+
+    void Report(string code, TextSpan span, string message) =>
+        _diagnostics!.Add(new SemanticDiagnostic(code, span, message));
 }

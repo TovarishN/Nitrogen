@@ -281,6 +281,35 @@ public class GrammarValidatorTests
         Assert.Contains("repeated or separated list", d.Message);
     }
 
+    const string TemplateRules = "symbols { f p } token N = ['a'..'z']+; syntax P = Name:N declares p Name type Core.Scalar; ";
+
+    [Fact]
+    public void Template_parameters_and_expansion_arguments_must_be_lists()
+    {
+        Assert.Contains("repeated or separated list", Single(GrammarCodes.SequenceArgumentNeedsList,
+            "syntax module M { " + TemplateRules + "syntax D = Name:N Params:P Body:N declares f Name lowers template Body(Params); }").Message);
+        Assert.Contains("repeated or separated list", Single(GrammarCodes.SequenceArgumentNeedsList,
+            "syntax module M { " + TemplateRules + "syntax C = Name:N Args:N references f Name lowers expand Name(Args); }").Message);
+    }
+
+    [Fact]
+    public void A_template_needs_a_declares_clause_and_an_expansion_a_references_clause_on_its_field()
+    {
+        Assert.Contains("declares", Single(GrammarCodes.InvalidTemplateClause,
+            "syntax module M { " + TemplateRules + "syntax D = Name:N Params:P* Body:N lowers template Body(Params); }").Message);
+        Assert.Contains("references", Single(GrammarCodes.InvalidTemplateClause,
+            "syntax module M { " + TemplateRules + "syntax C = Name:N Other:N Args:N* references f Other lowers expand Name(Args); }").Message);
+    }
+
+    [Fact]
+    public void Template_and_expansion_fields_must_be_labels()
+    {
+        Single(GrammarCodes.UnknownBindingField,
+            "syntax module M { " + TemplateRules + "syntax D = Name:N Params:P* declares f Name lowers template Body(Params); }");
+        Single(GrammarCodes.UnknownBindingField,
+            "syntax module M { " + TemplateRules + "syntax C = Name:N references f Name lowers expand Name(Args); }");
+    }
+
     [Fact]
     public void Value_lowering_requires_an_out_float_property()
     {

@@ -11,6 +11,26 @@ public enum SemanticCheckScope { WholeFile, SubtreeAndAncestors }
 public sealed class LoweringContext(FileSemantics file, Guid snapshotId, SemanticCheckScope checkScope = SemanticCheckScope.WholeFile)
 {
     readonly List<LoweringDiagnostic> _reported = new();
+    readonly HashSet<(string Path, int Node)> _activeTemplates = new();
+
+    /// <summary>The context of a template body in <paramref name="file"/>: its parameters bound to the arguments; reports go to <paramref name="caller"/>.</summary>
+    LoweringContext(FileSemantics file, LoweringContext caller, IReadOnlyDictionary<Binding.Symbol, HirNode> arguments)
+        : this(file, caller.SnapshotId, caller.CheckScope)
+    {
+        _reported = caller._reported;
+        _activeTemplates = caller._activeTemplates;
+        Arguments = arguments;
+    }
+
+    /// <summary>The template parameters bound in this context to their expansion's arguments; null outside a template.</summary>
+    internal IReadOnlyDictionary<Binding.Symbol, HirNode>? Arguments { get; }
+
+    /// <summary>The templates being expanded, by file and declaring node, to stop cycles.</summary>
+    internal HashSet<(string Path, int Node)> ActiveTemplates => _activeTemplates;
+
+    internal LoweringContext Expanding(FileSemantics template, IReadOnlyDictionary<Binding.Symbol, HirNode> arguments) =>
+        new(template, this, arguments);
+
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
     public SemanticCheckScope CheckScope { get; } = checkScope;
@@ -37,11 +57,20 @@ public static class HirLowering
         var file = context.File;
         var tree = file.Tree;
         if (node < 0 || node >= tree.NodeCount) throw new ArgumentOutOfRangeException(nameof(node));
+        return Admit(context, node) ? file.DeclarativeTypes.LowerNested(context, node) : null;
+    }
+
+    /// <summary>Whether the subtree at <paramref name="node"/> of the context's file can lower; otherwise reports
+    /// what blocks it: recovered syntax, an unresolved name, or a binding or semantic error within it.</summary>
+    internal static bool Admit(LoweringContext context, int node)
+    {
+        var file = context.File;
+        var tree = file.Tree;
         var origin = context.Origin(node);
         if (HasRecovery(tree, node))
         {
             context.Report("NH0001", origin, "Recovered syntax cannot be lowered.");
-            return null;
+            return false;
         }
         var span = origin.Span;
         var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
@@ -50,7 +79,7 @@ public static class HirLowering
         {
             context.Report("NH0002", new SourceOrigin(file.Path, context.SnapshotId,
                 unresolved.Node, unresolved.NameSpan), "An unresolved symbol prevents lowering.");
-            return null;
+            return false;
         }
         var bindingError = file.Binding.Diagnostics.FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
         var semanticError = (context.CheckScope == SemanticCheckScope.SubtreeAndAncestors
@@ -62,9 +91,9 @@ public static class HirLowering
                 .FirstOrDefault(candidate => tree.Span(candidate) == site, node);
             context.Report("NH0003", new SourceOrigin(file.Path, context.SnapshotId, sourceNode, site),
                 "Invalid semantics prevents lowering.");
-            return null;
+            return false;
         }
-        return file.DeclarativeTypes.LowerNested(context, node);
+        return true;
     }
 
     public static LoweringResult Lower(FileSemantics file, SemanticCatalog catalog) =>

@@ -43,7 +43,7 @@ public sealed class WorkspaceLanguageSemanticsTests : IDisposable
     }
 
     [Fact]
-    public void A_call_in_another_file_lowers_through_the_source_supplied_expander()
+    public void A_call_in_another_file_lowers_through_the_declarative_template()
     {
         using var service = Service();
         service.Open(Uri("defs.geom"), 1, "def cube(w: Scalar, h: Scalar, d: Scalar) = box w h d;");
@@ -89,7 +89,7 @@ public sealed class WorkspaceLanguageSemanticsTests : IDisposable
         service.Open(Uri("again.geom"), 1, "make b(1, 2, 3);");
 
         // use.geom enters the cycle at a, closing it at b's call of a; again.geom closes it at a's call of b.
-        var cycles = service.Diagnostics(Uri("defs.geom")).Where(d => d.Code == "GD0004").ToList();
+        var cycles = service.Diagnostics(Uri("defs.geom")).Where(d => d.Code == "NH0007").ToList();
         Assert.Equal([new DocumentPosition(0, 46), new DocumentPosition(1, 46)], cycles.Select(d => d.Range.Start).OrderBy(p => p.Line));
         Assert.All(cycles, d => Assert.Equal(ServiceSeverity.Error, d.Severity));
         Assert.Empty(service.Diagnostics(Uri("use.geom")));
@@ -101,7 +101,7 @@ public sealed class WorkspaceLanguageSemanticsTests : IDisposable
         using var service = Service();
         service.Open(Uri("defs.geom"), 1, "def a(w: Scalar, h: Scalar, d: Scalar) = make a(w, h, d);");
         service.Open(Uri("use.geom"), 1, "make a(1, 2, 3);");
-        Assert.Contains(service.Diagnostics(Uri("defs.geom")), d => d.Code == "GD0004");
+        Assert.Contains(service.Diagnostics(Uri("defs.geom")), d => d.Code == "NH0007");
 
         Assert.Contains(Uri("use.geom"), service.Change(Uri("defs.geom"), 2, Cube.Replace("cube", "a")));
         Assert.Empty(service.Diagnostics(Uri("defs.geom")));

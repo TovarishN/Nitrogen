@@ -114,7 +114,10 @@ public sealed class DeclarativeLowering
 
                 rules[kind] = new ResolvedRule(rule, operation, literal, declared,
                     argumentSequenceTypes, argumentOptionalTypes);
-                if (operation is not null || rule.OperationProperty is not null && !rule.OptionalOperation)
+                if (rule.Form == DeclarativeForm.Expand)
+                    lowerers.Add(new LoweringRegistration(kind, "<expand>",
+                        (context, node) => context.File.DeclarativeTypes.LowerRoot(context, node), DynamicOperation: true));
+                else if (operation is not null || rule.OperationProperty is not null && !rule.OptionalOperation)
                     lowerers.Add(new LoweringRegistration(kind, operation?.Id ?? "<computed>",
                         (context, node) => context.File.DeclarativeTypes.LowerRoot(context, node),
                         DynamicOperation: rule.OperationProperty is not null));

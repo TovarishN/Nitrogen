@@ -36,7 +36,7 @@
     <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
     <!-- Geometry as a nitrogen.json language: its grammar, helper sources and config, served by the workspace. -->
-    <None Include="..\Nitrogen.Geometry\nitrogen.json;..\Nitrogen.Geometry\Geometry.ngr;..\Nitrogen.Geometry\BoxMeshModule.cs;..\Nitrogen.Geometry\GeometryDefinitionExpander.cs;..\Nitrogen.Geometry\GeometryValues.cs"
+    <None Include="..\Nitrogen.Geometry\nitrogen.json;..\Nitrogen.Geometry\Geometry.ngr;..\Nitrogen.Geometry\BoxMeshModule.cs;..\Nitrogen.Geometry\GeometryValues.cs"
           Link="GeometryLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
@@ -62,6 +62,7 @@
     <AdditionalFiles Include="Grammars\Inferred.ngr" Namespace="Nitrogen.Tests.Inferred" />
     <AdditionalFiles Include="Grammars\ScopedChecks.ngr" Namespace="Nitrogen.Tests.ScopedChecks" />
     <AdditionalFiles Include="Grammars\PropertyLowering.ngr" Namespace="Nitrogen.Tests.PropertyLowering" />
+    <AdditionalFiles Include="Grammars\Templates.ngr" Namespace="Nitrogen.Tests.Templates" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
     <CompilerVisibleProperty Include="RootNamespace" />
   </ItemGroup>

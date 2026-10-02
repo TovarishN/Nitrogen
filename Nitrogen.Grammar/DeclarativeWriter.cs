@@ -27,7 +27,8 @@ internal static class DeclarativeWriter
         var clauses = BindingWriter.Clauses(kind);
         var lowers = clauses.FirstOrDefault(c => c.Kind is BindingClauseKind.Lowers or BindingClauseKind.LowersLiteral
             or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence or BindingClauseKind.LowersValue
-            or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat);
+            or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
+            or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand);
         var declares = clauses.FirstOrDefault(c => c.Kind == BindingClauseKind.Declares && c.Target is not null);
         if (lowers is null && declares is null) return null;
 
@@ -66,6 +67,16 @@ internal static class DeclarativeWriter
                 if (lowers.Arguments.Any(a => a.InferSequence))
                     extraArguments += $", argumentInferredSequences: new[] {{ {string.Join(", ", lowers.Arguments.Select(a => a.InferSequence ? "true" : "false"))} }}";
             }
+        }
+        else if (lowers is { Kind: BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand })
+        {
+            // Template: the body and parameter list children; Expand: the argument list child.
+            form = lowers.Kind == BindingClauseKind.LowersTemplate ? "Template" : "Expand";
+            var list = lowers.Arguments[0].Name;
+            arguments = Ints(lowers.Kind == BindingClauseKind.LowersTemplate
+                ? new[] { BindingWriter.ChildIndex(elements, lowers.Field), BindingWriter.ChildIndex(elements, list) }
+                : new[] { BindingWriter.ChildIndex(elements, list) });
+            if (elements.OfType<LabeledExpr>().First(element => element.Label == list).Inner is SeparatedListExpr) sequenceStride = 2;
         }
         else if (lowers is not null)
         {

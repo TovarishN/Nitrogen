@@ -6,7 +6,7 @@
       "grammars": ["Geometry.ngr"],
       "start": "Geometry.Document",
       "namespace": "Nitrogen.Geometry.Syntax",
-      "sources": ["BoxMeshModule.cs", "GeometryDefinitionExpander.cs", "GeometryValues.cs"],
+      "sources": ["BoxMeshModule.cs", "GeometryValues.cs"],
       "tokens": { "shape": "function", "parameter": "parameter" }
     }
   ]

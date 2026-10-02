@@ -1,0 +1,25 @@
+// Declarative templates: a definition with typed parameters is lowered only through expansions,
+// which substitute their arguments for the parameters by position. Templates.Add takes two
+// Core.Scalar values and Templates.Turn one Units.Angle; 'alias' declares a function that is no template.
+syntax module Templates
+{
+  symbols { function parameter }
+
+  token Number = ['0'..'9']+;
+  token Name   = ['a'..'z']+ except "def" "call" "add" "turn" "alias";
+  token Type   = ['A'..'Z'] ['a'..'z' 'A'..'Z' '.']*;
+
+  syntax File       = Items:Item*;
+  syntax Item       = Definition / Alias / Statement;
+  syntax Definition = "def" Name:Name "(" Params:(Parameter; ",")* ")" "=" Body:Value ";"
+    declares function Name export scope lowers template Body(Params);
+  syntax Parameter  = Name:Name ":" Annotation:Type  declares parameter Name type Annotation;
+  syntax Alias      = "alias" Name:Name ";"  declares function Name export;
+  syntax Statement  = Body:Value ";";
+  syntax Value      = Add / Turn / Call / Num / Ref;
+  syntax Add        = "add" "(" Left:Value "," Right:Value ")"  lowers Templates.Add(Left, Right);
+  syntax Turn       = "turn" "(" Amount:Value ")"  lowers Templates.Turn(Amount);
+  syntax Call       = "call" Name:Name "(" Args:(Value; ",")* ")"  references function Name lowers expand Name(Args);
+  syntax Num        = Text:Number  lowers literal Core.Scalar Text;
+  syntax Ref        = Name:Name  references parameter Name;
+}
