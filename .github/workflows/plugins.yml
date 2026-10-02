@@ -5,6 +5,7 @@ name: Plugins
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
     paths:
       - "build.sh"
@@ -34,7 +35,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: "9.7.1"
-      - run: ./build.sh
+      - run: |
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            VERSION="${GITHUB_REF_NAME#v}" ./build.sh
+          else
+            ./build.sh
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: nitrogen-plugins

@@ -356,7 +356,7 @@ public sealed class RiderPluginGenerationTests
         Assert.False(Directory.Exists(Path.Combine(request.OutputDirectory, "bundle")));
         Assert.False(File.Exists(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenLanguageBundle.kt")));
         Assert.DoesNotContain("prepareSandbox", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
-        Assert.Contains("version = \"0.1.0\"", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
+        Assert.Contains($"version = \"{typeof(LanguagePluginConfig).Assembly.GetName().Version!.ToString(3)}\"", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
     }
 
     [Theory]

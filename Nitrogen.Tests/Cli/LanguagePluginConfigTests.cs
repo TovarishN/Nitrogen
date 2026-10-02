@@ -48,7 +48,7 @@ public sealed class LanguagePluginConfigTests : IDisposable
         Assert.Empty(model.Usings);
         Assert.Null(model.TokensJson);
         Assert.Null(model.Namespace);
-        Assert.Equal("0.1.0", model.Version);
+        Assert.Equal(typeof(LanguagePluginConfig).Assembly.GetName().Version!.ToString(3), model.Version);
     }
 
     [Theory]

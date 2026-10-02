@@ -6,6 +6,7 @@
 #
 # Usage: ./build.sh [--config nitrogen.json [--language NAME]]
 #   Always builds the Rider plugin for .ngr grammars; --config also builds one for that language.
+#   VERSION=MAJOR.MINOR.PATCH overrides the release version from Directory.Build.props.
 # Requires the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 25 (Rider 2026.2's Java version).
 set -euo pipefail
 
@@ -21,6 +22,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+version="${VERSION:-$(dotnet msbuild "$root/Nitrogen.Cli/Nitrogen.Cli.csproj" -getProperty:Version -nologo)}"
+if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+    echo "VERSION must be MAJOR.MINOR.PATCH" >&2
+    exit 2
+fi
+
 # The .NET runtime identifier and Rider bundle target of this machine.
 case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) rid=osx-arm64; target=macos-aarch64 ;;
@@ -35,8 +42,8 @@ step() { printf '\n==> %s\n' "$*"; }
 rm -rf "$artifacts"
 mkdir -p "$artifacts/rider"
 
-step "Build and test Nitrogen"
-dotnet build "$root/Nitrogen.slnx" -c Release -warnaserror
+step "Build and test Nitrogen $version"
+dotnet build "$root/Nitrogen.slnx" -c Release -warnaserror -p:Version="$version"
 dotnet test "$root/Nitrogen.Tests/Nitrogen.Tests.csproj" -c Release --no-build
 nitrogen=(dotnet "$root/Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll")
 
@@ -44,7 +51,7 @@ bundle=()
 if [[ -n "$rid" ]]; then
     step "Publish a single-file server for $target"
     dotnet publish "$root/Nitrogen.Cli/Nitrogen.Cli.csproj" -c Release -r "$rid" --self-contained \
-        -p:PublishSingleFile=true -o "$artifacts/server/$target"
+        -p:Version="$version" -p:PublishSingleFile=true -o "$artifacts/server/$target"
     server="$artifacts/server/$target/nitrogen"
     if [[ "$rid" == win-x64 ]]; then server="$server.exe"; fi
     bundle=(--bundle "$target=$server")
@@ -53,8 +60,23 @@ else
 fi
 
 step "Package the VS Code extension"
-(cd "$root/editors/vscode" && npm ci && npm run compile && npm run package)
-mv "$root"/editors/vscode/*.vsix "$artifacts/"
+vscode="$artifacts/vscode-src"
+mkdir -p "$vscode"
+(cd "$root/editors/vscode" && tar --exclude=node_modules --exclude=out --exclude='*.vsix' -cf - .) | (cd "$vscode" && tar -xf -)
+node - "$vscode" "$version" <<'JS'
+const fs = require('node:fs');
+const path = require('node:path');
+const [directory, version] = process.argv.slice(2);
+for (const name of ['package.json', 'package-lock.json']) {
+    const file = path.join(directory, name);
+    const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+    manifest.version = version;
+    if (manifest.packages) manifest.packages[''].version = version;
+    fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
+}
+JS
+(cd "$vscode" && npm ci && npm run compile && npm run package)
+mv "$vscode"/*.vsix "$artifacts/"
 
 step "Test the shared Rider plugin code"
 (cd "$root/editors/rider" && gradle test --console=plain)

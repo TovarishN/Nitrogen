@@ -23,11 +23,13 @@ internal sealed record LanguagePluginModel(
     /// <summary>The language's <c>tokens</c> object as written, or null.</summary>
     public string? TokensJson { get; init; }
 
-    public string Version { get; init; } = "0.1.0";
+    public string Version { get; init; } = LanguagePluginConfig.DefaultVersion;
 }
 
 internal static class LanguagePluginConfig
 {
+    public static string DefaultVersion { get; } = typeof(LanguagePluginConfig).Assembly.GetName().Version!.ToString(3);
+
     static readonly Regex s_version = new(@"^\d+\.\d+\.\d+$");
     static readonly Regex s_namespace = new(@"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$");
 
@@ -65,7 +67,7 @@ internal static class LanguagePluginConfig
                 return Fail("extension must start with '.'", out error);
             if (!entryValue.TryGetProperty("grammars", out JsonElement grammarValues) || grammarValues.ValueKind != JsonValueKind.Array || grammarValues.GetArrayLength() == 0)
                 return Fail("language grammars are required", out error);
-            string version = "0.1.0";
+            string version = DefaultVersion;
             if (entryValue.TryGetProperty("version", out JsonElement versionValue))
             {
                 if (versionValue.ValueKind != JsonValueKind.String || !s_version.IsMatch(versionValue.GetString()!))
