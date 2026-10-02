@@ -39,6 +39,9 @@ public abstract class SyntaxModule
     /// <summary>The module's built-in symbols (issue 237).</summary>
     public virtual IReadOnlyList<BuiltinSymbols> Builtins => [];
 
+    /// <summary>True when some node kind of this module has semantics: properties or checks (issue 239).</summary>
+    public virtual bool HasSemantics => false;
+
     /// <summary>What a node kind of this module computes, or null (issue 239).</summary>
     public virtual Nitrogen.Semantics.SemanticsRule? GetSemantics(int localKind) => null;
 

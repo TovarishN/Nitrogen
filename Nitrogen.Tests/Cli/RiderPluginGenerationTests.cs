@@ -46,6 +46,22 @@ public sealed class RiderPluginGenerationTests
         Assert.Equal(Path.GetFullPath(Path.Combine(dir.Path, "grammars/Calc.ngr")), request.Model.GrammarPaths.Single());
     }
 
+    [Fact]
+    public void Shared_Kotlin_from_a_CRLF_checkout_moves_into_the_plugin_package()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [ { "name": "calc", "extensions": [".calc"], "grammars": ["Calc.ngr"], "start": "Calc.Program" } ] }
+            """);
+        var model = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", dir.Path + "/out" }, out _)!.Model;
+
+        // core.autocrlf or core.eol=crlf checks the renderer's raw-string templates out with CRLF.
+        string kotlin = RiderPluginRenderer.InPackage("package org.nitrogen.rider\r\n\r\nimport a.B\r\n", model);
+
+        Assert.Equal("package org.nitrogen.rider.lang_calc\n\nimport a.B\n", kotlin);
+    }
+
     [Theory]
     [InlineData("{", "invalid JSON")]
     [InlineData("{}", "no languages")]
@@ -294,6 +310,69 @@ public sealed class RiderPluginGenerationTests
 
     static string RepositoryRoot([System.Runtime.CompilerServices.CallerFilePath] string path = "") =>
         Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
+
+    static RiderPluginRequest SelfContained(TempDirectory dir)
+    {
+        dir.Write("project/a.ngr", "syntax module Calc { }");
+        string config = dir.Write("project/nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program", "version": "2.0.1" }] }
+            """);
+        dir.Write("server/nitrogen.dll", "dll");
+        dir.Write("server/nitrogen.runtimeconfig.json", "{}");
+        var request = RiderPluginInput.ParseRequest(new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out"),
+            "--self-contained", "--server", Path.Combine(dir.Path, "server") }, out string error);
+        Assert.Equal("", error);
+        return request!;
+    }
+
+    [Fact]
+    public void Self_contained_plugin_ships_the_bundle_and_starts_it_with_dotnet()
+    {
+        using var dir = new TempDirectory();
+        var request = SelfContained(dir);
+        RiderPluginRenderer.Render(request, request.OutputDirectory, CancellationToken.None);
+        string Read(string path) => File.ReadAllText(Path.Combine(request.OutputDirectory, path));
+
+        Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "language", "nitrogen.json")));
+        Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "server", "nitrogen.dll")));
+        Assert.Contains("tasks.prepareSandbox", Read("build.gradle.kts"));
+        Assert.Contains("version = \"2.0.1\"", Read("build.gradle.kts"));
+        string lsp = Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt");
+        Assert.Contains("\"lsp\", \"--config\", config", lsp);
+        Assert.Contains("NitrogenLanguageBundle.dotnet()", lsp);
+        Assert.Contains("PluginId.getId(\"org.nitrogen.rider.calc\")", Read("src/main/kotlin/org/nitrogen/rider/NitrogenLanguageBundle.kt"));
+    }
+
+    [Fact]
+    public void Plugins_without_self_contained_are_unchanged_apart_from_the_version()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var request = RiderPluginInput.ParseRequest(new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }, out _)!;
+        RiderPluginRenderer.Render(request, request.OutputDirectory, CancellationToken.None);
+
+        Assert.False(Directory.Exists(Path.Combine(request.OutputDirectory, "bundle")));
+        Assert.False(File.Exists(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenLanguageBundle.kt")));
+        Assert.DoesNotContain("prepareSandbox", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
+        Assert.Contains("version = \"0.1.0\"", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
+    }
+
+    [Theory]
+    [InlineData("--self-contained --bundle macos-x64=nitrogen.json", "use either --self-contained or --bundle")]
+    [InlineData("--server server", "--server needs --self-contained")]
+    public void Self_contained_option_conflicts_are_reported(string options, string expected)
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var args = new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }
+            .Concat(options.Replace("nitrogen.json", config).Split(' ')).ToArray();
+        Assert.Null(RiderPluginInput.ParseRequest(args, out string error));
+        Assert.Equal(expected, error);
+    }
 
     static string Snapshot(string root) => string.Join("\n", Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
         .Where(path => !path.Contains(Path.DirectorySeparatorChar + ".", StringComparison.Ordinal))

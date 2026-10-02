@@ -14,10 +14,32 @@ internal static class NitrogenCli
             if (request is null)
             {
                 output.WriteLine($"error: {generationError}");
-                output.WriteLine("usage: nitrogen generate rider --config <nitrogen.json> --output <directory> [--language <name>]");
+                output.WriteLine("usage: nitrogen generate rider --config <nitrogen.json> --output <directory> [--language <name>] [--self-contained [--server <directory>] | --bundle <target>=<path>]");
                 return 2;
             }
             return await RiderPluginCommand.RunAsync(request, output, cancel);
+        }
+        if (args.Count >= 2 && args[0] == "generate" && args[1] == "vscode")
+        {
+            var request = VsCodeInput.ParseRequest(args, out string generationError);
+            if (request is null)
+            {
+                output.WriteLine($"error: {generationError}");
+                output.WriteLine(VsCodeInput.Usage);
+                return 2;
+            }
+            return await VsCodeCommand.RunAsync(request, output, cancel);
+        }
+        if (args.Count >= 1 && args[0] == "package")
+        {
+            var request = PackageInput.ParseRequest(args, out string packageError);
+            if (request is null)
+            {
+                output.WriteLine($"error: {packageError}");
+                output.WriteLine(PackageInput.Usage);
+                return 2;
+            }
+            return await PackageCommand.RunAsync(request, output, cancel);
         }
         var options = CliOptions.Parse(args, out string error);
         if (options is null)

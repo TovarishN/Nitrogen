@@ -42,7 +42,13 @@ public sealed record RenameOptions(bool PrepareProvider);
 
 public sealed record WorkspaceFolder(string Uri, string Name);
 
-public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders);
+public sealed record DidChangeWatchedFilesClientCapabilities(bool? DynamicRegistration);
+
+public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapabilities? DidChangeWatchedFiles);
+
+public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
+
+public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders, ClientCapabilities? Capabilities = null);
 
 public sealed record FileEvent(string Uri, int Type);
 

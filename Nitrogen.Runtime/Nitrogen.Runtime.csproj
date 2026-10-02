@@ -3,6 +3,9 @@
   <PropertyGroup>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Nitrogen</RootNamespace>
+    <IsPackable>true</IsPackable>
+    <PackageId>Nitrogen.Runtime</PackageId>
+    <Description>Nitrogen runtime: parsing with generated grammars, cross-file binding, grammar semantics and checks, and typed HIR.</Description>
   </PropertyGroup>
 
   <ItemGroup>

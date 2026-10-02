@@ -9,8 +9,13 @@
     <LangVersion>latest</LangVersion>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-    <IsPackable>false</IsPackable>
-    <NoWarn>$(NoWarn);RS1017;RS2008</NoWarn>
+    <IsPackable>true</IsPackable>
+    <PackageId>Nitrogen.Generator</PackageId>
+    <Description>Nitrogen source generator: compiles .ngr grammars listed as AdditionalFiles into parsers, typed syntax views, binding, and semantics. Use with Nitrogen.Runtime.</Description>
+    <!-- The assembly is an analyzer, not a library the consumer compiles against. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <NoWarn>$(NoWarn);RS1017;RS2008;NU5128</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,6 +24,11 @@
 
   <ItemGroup>
     <Compile Include="..\Nitrogen.Grammar\*.cs" Link="Grammar\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="build/Nitrogen.Generator.props" Pack="true" PackagePath="build;buildTransitive" />
   </ItemGroup>
 
 </Project>

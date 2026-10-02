@@ -189,6 +189,102 @@ Use `ProjectionHandler.Deferred(signature, get => ...)` for synchronous operatio
 
 Whole-tree preflight still checks all branches, including unselected ones, before any handler runs. Deferred evaluation skips unrequested computed results and their handlers; it does not bypass missing bindings, invalid constant/input values, or signature checks. The runtime supplies argument access, while the host implements its domain's condition and truth conventions. Returned types and finite numeric values use the same validation as eager handlers.
 
+The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
+
+## Use Nitrogen as packages
+
+Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.com/TovarishN/index.json`):
+
+```xml
+<PackageReference Include="Nitrogen.Runtime" Version="0.1.0" />
+<PackageReference Include="Nitrogen.Generator" Version="0.1.0" PrivateAssets="all" />
+<AdditionalFiles Include="MyLanguage.ngr" Namespace="My.Language.Syntax" />
+```
+
+and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.1.0`. Reading the feed needs a GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>` (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from freshly packed packages; a `v*` tag publishes them.
+
+## Use the CLI
+
+```sh
+dotnet run --project Nitrogen.Cli -- parse --grammar Nitrogen.Tests/Grammars/Calc.ngr --start Calc.Program path/to/sample.calc
+dotnet run --project Nitrogen.Cli -- lsp
+```
+
+`parse` and `watch` compile supplied grammars in-process. `lsp` serves `.ngr` files and languages declared by a workspace `nitrogen.json`.
+
+## VS Code and generated language support
+
+The [VS Code extension](editors/vscode/README.md) starts `nitrogen lsp`. The server serves `.ngr` files and compiles grammars declared in a workspace `nitrogen.json`, so a custom DSL can use the same extension. Available editor features include diagnostics, semantic coloring, outline, go to definition, references, rename, hover, and completion; the results depend on the grammar and semantic rules supplied by the language.
+
+For a `nitrogen.json` language, the server also reads the language's files in the workspace folder that are not open (skipping `bin`, `obj`, `node_modules`, and hidden folders), so references into closed files resolve and rename edits them. Diagnostics are reported for open files. Clients that support dynamic registration are asked to report changes to those files.
+
+1. Build the language server from the repository root:
+
+   ```sh
+   dotnet build Nitrogen.slnx -c Release
+   ```
+
+2. Build and package the extension:
+
+   ```sh
+   cd editors/vscode
+   npm ci
+   npm run compile
+   npm run package
+   ```
+
+3. Install `editors/vscode/nitrogen-0.1.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.1.0.vsix` from `editors/vscode` if the `code` command is available.
+4. In VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, the default setting works.
+5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
+
+   ```json
+   {
+     "languages": [
+       {
+         "name": "calc",
+         "extensions": [".calc"],
+         "grammars": ["Nitrogen.Tests/Grammars/Calc.ngr"],
+         "start": "Calc.Program"
+       }
+     ]
+   }
+   ```
+
+Open a `.calc` file such as `sample.calc` containing `1 + 2;`. The server recompiles the declared grammar when it changes and updates diagnostics for its files. Adjust the grammar path and start rule for another language.
+
+## Rider and generated plugin support
+
+The generic Rider plugin is in `editors/rider` and uses the same `nitrogen lsp`
+server as VS Code. Build it with `gradle buildPlugin`, then install the ZIP in
+Rider. The default executable is `nitrogen` on `PATH`.
+
+To generate a grammar-specific plugin from a workspace configuration:
+
+```sh
+dotnet run --project Nitrogen.Cli -- generate rider \
+  --config nitrogen.json --output generated/rider
+```
+
+Use `--language NAME` for a configuration containing multiple languages, or
+use `--grammar FILE --start Module.Rule` when no `nitrogen.json` exists. The
+plugin runs the executable set in Rider's Settings | Tools page, else a bundled
+server for the current platform, else `nitrogen` (or `--nitrogen PATH`). To bundle
+a server, publish it as a self-contained single file and pass it per platform,
+for example `--bundle macos-aarch64=publish/nitrogen` after
+`dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o publish`.
+Bundles are copied from local files and never downloaded.
+
+## Installable plugins for a language
+
+A language project packages its `nitrogen.json` language as editor plugins:
+
+```sh
+nitrogen package --config nitrogen.json --output dist            # both
+nitrogen package --config nitrogen.json --output dist --vscode   # dist/<id>-<version>.vsix
+nitrogen package --config nitrogen.json --output dist --rider    # dist/<id>-<version>-rider.zip
+```
+
+Each plugin carries the grammar, helper sources, and a portable Nitrogen server, and runs it with the user's .NET 10 runtime (`dotnet`), so it works in any folder and on any OS. The server is started as `nitrogen lsp --config <bundled nitrogen.json>`, which ignores any `nitrogen.json` in the opened folder. Install the `.vsix` with **Extensions: Install from VSIX...**, and the ZIP with Rider's **Settings → Plugins → ⚙ → Install Plugin from Disk**. Packaging needs npm for VS Code, and Gradle with JDK 25 for Rider; the bundled server is the `nitrogen` that runs `package`, or `--server <directory>` for another framework-dependent build. `nitrogen generate vscode` and `nitrogen generate rider --self-contained` write the projects without building them. The optional `"version"` field of a language entry sets the plugin version (default `0.1.0`).
 
 ## Project map
 

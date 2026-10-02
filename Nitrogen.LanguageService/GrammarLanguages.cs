@@ -68,7 +68,13 @@ public sealed partial class NitrogenLanguageService
     {
         path = Path.GetFullPath(path);
         if (_root is not null && path == Path.Combine(_root, "nitrogen.json")) return LoadConfiguration();
-        return _documents.ContainsKey(new Uri(path).AbsoluteUri) ? [] : GrammarHookPath(path);
+        string uri = new Uri(path).AbsoluteUri;
+        if (InWorkspace(path) && !_documents.ContainsKey(uri) && IndexedLanguage(uri, out _) is not null)
+        {
+            var language = File.Exists(path) ? LoadClosed(path) : RemoveClosed(uri);
+            return language is null ? [] : OpenDocuments(language);
+        }
+        return _documents.ContainsKey(uri) ? [] : GrammarHookPath(path);
     }
 
     IReadOnlyList<string> LoadConfiguration()
@@ -96,6 +102,7 @@ public sealed partial class NitrogenLanguageService
             _grammarLanguages.Add(language);
             affected.AddRange(Compile(language));
         }
+        affected.AddRange(Reindex()); // the languages may have changed
         return affected.Distinct().ToList();
     }
 
@@ -158,6 +165,15 @@ public sealed partial class NitrogenLanguageService
             _documents[uri] = document;
             _unserved.Remove(uri);
         }
+        if (old is not null)
+            foreach (var closed in _closed.Values.Where(d => d.Language == old).ToList())
+            {
+                Registry.TryFind(closed.Uri, out _, out var closedStart);
+                var moved = new Document(closed.Uri, 0, closed.Text, replacement, closedStart);
+                project.Set(closed.Uri, moved.Parsed.Tree);
+                _closed[closed.Uri] = moved;
+                closed.Dispose();
+            }
         foreach (var document in previous) document.Dispose(); // after their replacements are bound
         if (old is not null) _projects.Remove(old);
         return texts.Select(t => t.Uri).ToList();
@@ -175,6 +191,7 @@ public sealed partial class NitrogenLanguageService
             _unserved[document.Uri] = (document.Version, document.Text);
             document.Dispose();
         }
+        foreach (var closed in _closed.Values.Where(d => d.Language == entry).ToList()) RemoveClosed(closed.Uri);
         _projects.Remove(entry);
         return moved.Select(d => d.Uri).ToList();
     }

@@ -19,7 +19,7 @@ internal sealed record SemanticsInfo(bool HasSemantics, Property? Hover, Propert
         var symbolProperties = language.Modules.SelectMany(m => m.SymbolProperties).ToList();
         var hover = properties.FirstOrDefault(p => p.IsHover);
         return new SemanticsInfo(
-            properties.Count > 0 || symbolProperties.Count > 0,
+            language.Modules.Any(m => m.HasSemantics) || properties.Count > 0 || symbolProperties.Count > 0,
             hover,
             properties.FirstOrDefault(p => p.IsExpected),
             hover is null ? null : symbolProperties.FirstOrDefault(p => p.Name == hover.Name),
