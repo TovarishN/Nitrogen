@@ -1,4 +1,5 @@
 using Nitrogen.Binding;
+using System.Runtime.CompilerServices;
 
 namespace Nitrogen.Semantics;
 
@@ -22,7 +23,9 @@ public sealed class FileSemantics
     readonly List<SemanticDiagnostic> _evaluation = new();
     readonly HashSet<(int Node, string Property, string Code)> _reported = new();
     Dictionary<int, Reference>? _references;
-    List<SemanticDiagnostic>? _checks;
+    readonly List<SemanticDiagnostic> _checks = new();
+    readonly bool[] _checkedNodes;
+    bool _allChecked;
     Nitrogen.Semantic.DeclarativeTypes? _declarative;
 
     internal FileSemantics(ProjectSemantics project, FileBinding binding)
@@ -30,6 +33,7 @@ public sealed class FileSemantics
         _project = project;
         Binding = binding;
         Tree = binding.Tree;
+        _checkedNodes = new bool[Tree.NodeCount];
         _language = binding.Tree.Language!;
     }
 
@@ -46,25 +50,55 @@ public sealed class FileSemantics
     public Nitrogen.Semantic.DeclarativeTypes DeclarativeTypes =>
         _declarative ??= new Nitrogen.Semantic.DeclarativeTypes(this, _language.Declarative, _language.SemanticCatalog);
 
-    sealed class Slot<T>(int count)
+    sealed class Slot<T>
     {
-        public readonly T[] Values = new T[count];
-        public readonly byte[] States = new byte[count];
+        readonly int _count;
+        Dictionary<int, Entry>? _sparse;
+        T[]? _values;
+        byte[]? _states;
+        readonly record struct Entry(T Value, byte State);
+
+        public Slot(int count)
+        {
+            _count = count;
+            if (count <= 512) { _values = new T[count]; _states = new byte[count]; }
+            else _sparse = new Dictionary<int, Entry>();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void Read(int node, out byte state, out T value)
+        {
+            if ((uint)node >= (uint)_count) throw new IndexOutOfRangeException();
+            if (_states is not null) { state = _states[node]; value = _values![node]; }
+            else if (_sparse!.TryGetValue(node, out var entry)) { state = entry.State; value = entry.Value; }
+            else { state = 0; value = default!; }
+        }
+
+        public void Write(int node, byte state, T value)
+        {
+            if (_states is not null) { _states[node] = state; _values![node] = value; return; }
+            _sparse![node] = new Entry(value, state);
+            if (_sparse.Count < _count / 8) return;
+            _values = new T[_count];
+            _states = new byte[_count];
+            foreach (var (index, entry) in _sparse) { _values[index] = entry.Value; _states[index] = entry.State; }
+            _sparse = null;
+        }
     }
 
     public T Get<T>(int node, Property<T> property)
     {
         if (!_slots.TryGetValue(property, out var boxed)) _slots[property] = boxed = new Slot<T>(Tree.NodeCount);
         var slot = (Slot<T>)boxed;
-        byte state = slot.States[node];
-        if (state == Done) return slot.Values[node];
+        slot.Read(node, out byte state, out T cached);
+        if (state == Done) return cached;
         if (state == Computing)
         {
             Report(node, property.Name, SemanticCodes.Cycle, $"'{property.Name}' depends on itself");
             return property.Default();
         }
 
-        slot.States[node] = Computing;
+        slot.Write(node, Computing, default!);
         T value;
         try
         {
@@ -75,8 +109,7 @@ public sealed class FileSemantics
             Report(node, property.Name, SemanticCodes.Failed, $"'{property.Name}' failed: {error.GetType().Name}: {error.Message}");
             value = property.Default();
         }
-        slot.Values[node] = value;
-        slot.States[node] = Done;
+        slot.Write(node, Done, value);
         return value;
     }
 
@@ -171,28 +204,35 @@ public sealed class FileSemantics
     /// </summary>
     public IReadOnlyList<SemanticDiagnostic> Diagnostics()
     {
-        if (_checks is null)
-        {
-            _checks = new List<SemanticDiagnostic>();
-            var stack = new Stack<int>();
-            stack.Push(Tree.Root);
-            while (stack.Count > 0)
-            {
-                int node = stack.Pop();
-                int kind = Tree.Kind(node);
-                if (kind == SyntaxKinds.Ambiguous)
-                {
-                    if (Tree.ChildCount(node) > 0) stack.Push(Tree.Child(node, 0));
-                    continue;
-                }
-                if ((Tree.Flags(node) & NodeFlags.Missing) == 0 && RuleOf(kind) is { } rule) RunChecks(node, rule);
-                for (int k = Tree.ChildCount(node) - 1; k >= 0; k--) stack.Push(Tree.Child(node, k));
-            }
-        }
+        if (!_allChecked) { CheckNodes(Tree.Root, ancestors: false); _allChecked = true; }
         return _checks.Concat(_evaluation).Concat(DeclarativeTypes.Diagnostics())
             .OrderBy(d => d.Span.Start)
             .ThenBy(d => d.Code, StringComparer.Ordinal)
             .ToList();
+    }
+
+    /// <summary>Check a subtree and its ancestors, returning diagnostics inside its span.
+    /// Other checks remain pending for Diagnostics(). Property dependencies still evaluate lazily.
+    /// Use only when unrelated sibling checks cannot report errors at this subtree's source span.</summary>
+    public IReadOnlyList<SemanticDiagnostic> DiagnosticsForSubtree(int node)
+    {
+        if (node < 0 || node >= Tree.NodeCount) throw new ArgumentOutOfRangeException(nameof(node));
+        if (!_allChecked) CheckNodes(node, ancestors: true);
+        var declarative = DeclarativeTypes.DiagnosticsForSubtree(node);
+        var span = Tree.Span(node);
+        return _checks.Concat(_evaluation).Concat(declarative)
+            .Where(error => error.Span.Start >= span.Start && error.Span.End <= span.End)
+            .OrderBy(error => error.Span.Start).ThenBy(error => error.Code, StringComparer.Ordinal).ToList();
+    }
+
+    void CheckNodes(int root, bool ancestors)
+    {
+        foreach (int node in SemanticCheckTraversal.Nodes(Tree, root, ancestors))
+            if (!_checkedNodes[node])
+            {
+                _checkedNodes[node] = true;
+                if ((Tree.Flags(node) & NodeFlags.Missing) == 0 && RuleOf(Tree.Kind(node)) is { } rule) RunChecks(node, rule);
+            }
     }
 
     void RunChecks(int node, SemanticsRule rule)

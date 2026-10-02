@@ -12,6 +12,7 @@ public sealed class Project
     readonly SortedDictionary<string, FileBinding> _documents = new(StringComparer.Ordinal);
     readonly Dictionary<(string Kind, string Name), List<(Symbol Symbol, int ScopeKind)>> _builtins = new();
     readonly Dictionary<Reference, IReadOnlyList<Symbol>> _resolved = new();
+    readonly Dictionary<string, Dictionary<string, IReadOnlyList<DerivedDeclaration>>> _derived = new(StringComparer.Ordinal);
     Dictionary<(string Kind, string Name), List<Symbol>>? _exports;
 
     public Project(Language language)
@@ -44,6 +45,39 @@ public sealed class Project
             throw new ArgumentException("The tree was parsed with a different language.", nameof(tree));
         var binding = FileBinding.Bind(path, tree);
         _documents[path] = binding;
+        _derived.Remove(path);
+        Changed();
+        return binding;
+    }
+
+    /// <summary>Replace all file-scope declarations of one kind with names emitted by checked lowering.
+    /// Seals that kind's dynamic file scope, preserves lexical declarations, and invalidates resolution
+    /// and semantic caches. An empty list is a complete empty index. Set drops derived indexes.</summary>
+    public FileBinding SetDerivedDeclarations(string path, string kind, IReadOnlyList<DerivedDeclaration> declarations)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ArgumentNullException.ThrowIfNull(declarations);
+        var tree = _documents[path].Tree;
+        var accepted = declarations.ToArray();
+        foreach (var declaration in accepted)
+        {
+            ArgumentNullException.ThrowIfNull(declaration);
+            ArgumentException.ThrowIfNullOrWhiteSpace(declaration.Name);
+            if (declaration.Node < 0 || declaration.Node >= tree.NodeCount)
+                throw new ArgumentOutOfRangeException(nameof(declarations), "A derived declaration must refer to a source node in this document.");
+            var owner = tree.Span(declaration.Node);
+            if (declaration.NameSpan.Length <= 0 || declaration.NameSpan.Start < owner.Start || declaration.NameSpan.End > owner.End)
+                throw new ArgumentException("A derived name's source span must be contained in its declaring node.", nameof(declarations));
+            if ((tree.Flags(declaration.Node) & NodeFlags.Missing) != 0)
+                throw new ArgumentException("A missing source node cannot declare a derived name.", nameof(declarations));
+        }
+        var indexes = _derived.TryGetValue(path, out var current)
+            ? new Dictionary<string, IReadOnlyList<DerivedDeclaration>>(current, StringComparer.Ordinal)
+            : new Dictionary<string, IReadOnlyList<DerivedDeclaration>>(StringComparer.Ordinal);
+        indexes[kind] = accepted;
+        var binding = FileBinding.Bind(path, tree, indexes);
+        _derived[path] = indexes;
+        _documents[path] = binding;
         Changed();
         return binding;
     }
@@ -51,6 +85,7 @@ public sealed class Project
     public bool Remove(string path)
     {
         if (!_documents.Remove(path)) return false;
+        _derived.Remove(path);
         Changed();
         return true;
     }
@@ -68,7 +103,7 @@ public sealed class Project
         var binding = Owner(reference);
         if (_resolved.TryGetValue(reference, out var cached)) return cached;
         var result = reference.Qualifier is null
-            ? Lookup(binding, reference.Scope, reference.Kinds, reference.Name)
+            ? Lookup(binding, reference.Scope, reference.Kinds, reference.Name, reference.NameSpan.Start)
             : Qualified(binding, reference);
         _resolved[reference] = result;
         return result;
@@ -168,11 +203,13 @@ public sealed class Project
         var visible = new List<Symbol>();
         void Offer(Symbol symbol)
         {
+            if (symbol.Path == path && symbol.AvailableFrom is int start && start > position) return;
             if (Array.IndexOf(kinds, symbol.Kind) >= 0 && seen.Add((symbol.Kind, symbol.Name))) visible.Add(symbol);
         }
 
         for (int s = scope; s >= 0; s = binding.Scopes[s].Parent)
-            foreach (var symbol in binding.Scopes[s].Symbols) Offer(symbol);
+            foreach (var group in binding.Scopes[s].Groups)
+                foreach (var symbol in SelectAt(group, position)) Offer(symbol);
         foreach (var exported in Exports().Values)
             foreach (var symbol in exported) Offer(symbol);
         foreach (var entries in _builtins.Values)
@@ -189,14 +226,30 @@ public sealed class Project
             ? binding
             : throw new ArgumentException("The reference belongs to a document that is no longer in the project.", nameof(reference));
 
-    IReadOnlyList<Symbol> Lookup(FileBinding binding, int scope, IReadOnlyList<string> kinds, string name)
+    static IReadOnlyList<Symbol> SelectAt(IReadOnlyList<Symbol> symbols, int position)
+    {
+        if (symbols.All(symbol => symbol.AvailableFrom.HasValue))
+        {
+            var latest = symbols.Where(symbol => symbol.AvailableFrom <= position)
+                .MaxBy(symbol => symbol.AvailableFrom);
+            return latest is null ? Array.Empty<Symbol>() : new[] { latest };
+        }
+        return symbols.Where(symbol => symbol.AvailableFrom is not int start || start <= position).ToArray();
+    }
+
+    IReadOnlyList<Symbol> Lookup(FileBinding binding, int scope, IReadOnlyList<string> kinds, string name, int position)
     {
         for (int s = scope; s >= 0; s = binding.Scopes[s].Parent)
             foreach (string kind in kinds)
-                if (binding.Scopes[s].Find(kind, name) is { } local) return local.ToArray();
+                if (binding.Scopes[s].Find(kind, name) is { } local && SelectAt(local, position) is { Count: > 0 } found) return found;
         var exports = Exports();
         foreach (string kind in kinds)
-            if (exports.TryGetValue((kind, name), out var exported)) return exported.ToArray();
+            if (exports.TryGetValue((kind, name), out var exported))
+            {
+                var visible = exported.Where(symbol => symbol.Path != binding.Path ||
+                    symbol.AvailableFrom is not int start || start <= position).ToArray();
+                if (visible.Length > 0) return visible;
+            }
         foreach (string kind in kinds)
             if (_builtins.TryGetValue((kind, name), out var entries))
                 foreach (var (symbol, scopeKind) in entries)
@@ -216,7 +269,9 @@ public sealed class Project
             if (scope.Node == owner.Node)
             {
                 foreach (string kind in reference.Kinds)
-                    if (scope.Find(kind, reference.Name) is { } found) return found.ToArray();
+                    if (scope.Find(kind, reference.Name) is { } found &&
+                        SelectAt(found, owner.Path == reference.Path ? reference.NameSpan.Start : int.MaxValue) is { Count: > 0 } visible)
+                        return visible;
                 break;
             }
         return Array.Empty<Symbol>();
@@ -290,6 +345,9 @@ public sealed class Project
                 if (!exports.TryGetValue((symbol.Kind, symbol.Name), out var list)) exports[(symbol.Kind, symbol.Name)] = list = new List<Symbol>();
                 list.Add(symbol);
             }
+        foreach (var key in exports.Keys.ToArray())
+            exports[key] = exports[key].GroupBy(symbol => symbol.Path)
+                .SelectMany(group => SelectAt(group.ToArray(), int.MaxValue)).ToList();
         return _exports = exports;
     }
 }

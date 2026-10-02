@@ -1,0 +1,17 @@
+syntax module Counted
+{
+  symbols { value }
+  token Word = ['a'..'z']+ except "repeat" "as" "angle";
+  token Number = ['0'..'9']+ ("." ['0'..'9']+)?;
+  syntax File = "repeat" Value:Repeat;
+  syntax Repeat = Count:Expr "as" Iterator:Iterator "{" Items:(Expr; ",")* "}" scope
+                 lowers repeat Core.Scalar Count Iterator Items;
+  syntax Iterator = Name:Word declares value Name sequential type Core.Scalar;
+  extensible syntax Expr
+  {
+    out Resolved : Nitrogen.Semantic.SemanticType? = Nitrogen.Semantic.SemanticTypes.Scalar;
+    | Num = Value:Number lowers literal Core.Scalar Value
+    | Angle = "angle" Value:Number lowers literal Units.Angle Value
+    | Ref = Name:Word references value Name lowers reference type Resolved
+  }
+}

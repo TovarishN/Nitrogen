@@ -41,6 +41,8 @@
   <ItemGroup>
     <ProjectReference Include="..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <AdditionalFiles Include="Grammars\Calc.ngr" Namespace="Nitrogen.Tests.Calc" />
+    <AdditionalFiles Include="Grammars\InitializedRefs.ngr" Namespace="Nitrogen.Tests.InitializedRefs" />
+    <AdditionalFiles Include="Grammars\Counted.ngr" Namespace="Nitrogen.Tests.Counted" />
     <AdditionalFiles Include="Grammars\Power.ngr" Namespace="Nitrogen.Tests.Calc" />
     <AdditionalFiles Include="Grammars\Clash.ngr" Namespace="Nitrogen.Tests.Calc" />
     <AdditionalFiles Include="Grammars\Mini.ngr" Namespace="Nitrogen.Tests.Mini" />
@@ -53,6 +55,10 @@
     <AdditionalFiles Include="Grammars\Typed.ngr" Namespace="Nitrogen.Tests.Typed" />
     <AdditionalFiles Include="Grammars\TypedExtra.ngr" Namespace="Nitrogen.Tests.Typed.Extra" />
     <AdditionalFiles Include="Grammars\Lowered.ngr" Namespace="Nitrogen.Tests.Lowered" />
+    <AdditionalFiles Include="Grammars\Structured.ngr" Namespace="Nitrogen.Tests.Structured" />
+    <AdditionalFiles Include="Grammars\Inferred.ngr" Namespace="Nitrogen.Tests.Inferred" />
+    <AdditionalFiles Include="Grammars\ScopedChecks.ngr" Namespace="Nitrogen.Tests.ScopedChecks" />
+    <AdditionalFiles Include="Grammars\PropertyLowering.ngr" Namespace="Nitrogen.Tests.PropertyLowering" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
     <CompilerVisibleProperty Include="RootNamespace" />
   </ItemGroup>

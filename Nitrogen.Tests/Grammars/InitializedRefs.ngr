@@ -1,0 +1,21 @@
+syntax module InitializedRefs
+{
+  symbols { value }
+  symbol property Initializer for value : int? = null;
+  token Word = ['a'..'z']+ except "let" "emit" "input";
+  token Number = ['0'..'9']+;
+  syntax File = Declarations:Declaration* "emit" Value:Expr lowers Init.Emit(Value);
+  syntax Declaration = Let / Input;
+  syntax Let = "let" Name:Word "=" Value:Expr ";" declares value Name type Core.Scalar
+  { symbol.Initializer = Value.Node; }
+  syntax Input = "input" Name:Word ";" declares value Name type Core.Scalar;
+  extensible syntax Expr
+  {
+    out Resolved : Nitrogen.Semantic.SemanticType? = Nitrogen.Semantic.SemanticTypes.Scalar;
+    out Source : int? = null;
+    | Num = Value:Number lowers literal Core.Scalar Value { Source = null; }
+    | Ref = Name:Word references value Name lowers reference type Resolved initializer Source
+      { Source = Symbol?.Initializer; }
+    | Add = Left:Expr "+" Right:Expr precedence 1 left lowers Init.Add(Left, Right) { Source = null; }
+  }
+}

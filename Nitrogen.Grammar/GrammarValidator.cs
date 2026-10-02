@@ -42,7 +42,7 @@ public static class GrammarValidator
                         break;
                     case SyntaxRule syntax:
                         CheckExpr(syntax.Body, module, null, inToken: false);
-                        CheckClauses(syntax.Clauses, syntax.Body, module, EmitModel.IsAlias(syntax));
+                        CheckClauses(syntax.Clauses, syntax.Body, module, syntax, EmitModel.IsAlias(syntax));
                         CheckSemantics(syntax.Semantics, syntax.Body, SemanticsWriter.PropertiesOf(syntax), syntax.Clauses, module, null, syntax.Name,
                             syntax.Name + "Node", syntax.Span, isAlternative: false, EmitModel.IsAlias(syntax));
                         break;
@@ -68,6 +68,10 @@ public static class GrammarValidator
 
         void CheckAlternatives(EquatableArray<Alternative> alternatives, ModuleDecl module, string pointKey, string implicitModule, ExtensibleRule point)
         {
+            var partialTypeProperties = new HashSet<string>(alternatives.SelectMany(alternative => alternative.Clauses)
+                .SelectMany(clause => new[] { clause.TypeProperty, clause.OperationProperty })
+                .Where(property => property is not null)
+                .Select(property => property!.Name), StringComparer.Ordinal);
             foreach (var alternative in alternatives)
             {
                 if (alternative.Name.Length == 0)
@@ -75,7 +79,7 @@ public static class GrammarValidator
                         "an alternative that is not a single rule reference needs a name: '| Name = ...'", alternative.Span, module);
 
                 CheckExpr(alternative.Body, module, implicitModule, inToken: false);
-                CheckClauses(alternative.Clauses, alternative.Body, module, isAlias: false);
+                CheckClauses(alternative.Clauses, alternative.Body, module, point, isAlias: false);
 
                 bool postfix = _analysis.IsPostfix(alternative, module, implicitModule, pointKey);
                 if (alternative.Precedence is int precedence && (precedence < 0 || precedence > 255))
@@ -88,7 +92,8 @@ public static class GrammarValidator
                     Report(GrammarCodes.NullablePrefix, $"alternative '{alternative.Name}' can match empty input", alternative.Span, module);
 
                 CheckSemantics(alternative.Semantics, alternative.Body, point.Properties, alternative.Clauses, module, implicitModule,
-                    alternative.Name, alternative.Name + point.Name, alternative.Span, isAlternative: true, isAlias: false);
+                    alternative.Name, alternative.Name + point.Name, alternative.Span, isAlternative: true, isAlias: false,
+                    partialTypeProperties: partialTypeProperties);
             }
         }
 
@@ -152,7 +157,8 @@ public static class GrammarValidator
 
         /// <summary>A rule's or alternative's semantics block (issue 239); <paramref name="own"/> are the properties its node has.</summary>
         void CheckSemantics(SemanticsBlock? block, Expr body, IReadOnlyList<PropertyDecl> own, EquatableArray<BindingClause> clauses,
-            ModuleDecl module, string? implicitModule, string ruleName, string viewName, GrammarSpan ruleSpan, bool isAlternative, bool isAlias)
+            ModuleDecl module, string? implicitModule, string ruleName, string viewName, GrammarSpan ruleSpan, bool isAlternative, bool isAlias,
+            HashSet<string>? partialTypeProperties = null)
         {
             if (isAlias)
             {
@@ -218,7 +224,8 @@ public static class GrammarValidator
             }
 
             foreach (var property in own)
-                if (property.Direction == PropertyDirection.Out && !defined.Contains(property.Name.Name))
+                if (property.Direction == PropertyDirection.Out && !defined.Contains(property.Name.Name) &&
+                    partialTypeProperties?.Contains(property.Name.Name) != true)
                     Warn(GrammarCodes.UndefinedProperty,
                         $"{ruleName} does not define out property '{property.Name.Name}'; its default applies", ruleSpan, module);
         }
@@ -308,7 +315,7 @@ public static class GrammarValidator
             _analysis.PrimaryRules(module).OfType<SyntaxRule>()
                 .Any(r => r.Name == rule && r.Clauses.Any(c => c.Kind == BindingClauseKind.Scope));
 
-        void CheckClauses(EquatableArray<BindingClause> clauses, Expr body, ModuleDecl module, bool isAlias)
+        void CheckClauses(EquatableArray<BindingClause> clauses, Expr body, ModuleDecl module, RuleDecl owner, bool isAlias)
         {
             if (clauses.Count == 0) return;
             if (isAlias)
@@ -325,7 +332,9 @@ public static class GrammarValidator
             var seen = new HashSet<BindingClauseKind>();
             foreach (var clause in clauses)
             {
-                var key = clause.Kind == BindingClauseKind.LowersLiteral ? BindingClauseKind.Lowers : clause.Kind;
+                var key = clause.Kind is BindingClauseKind.LowersLiteral or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence
+                    or BindingClauseKind.LowersValue or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
+                    ? BindingClauseKind.Lowers : clause.Kind;
                 if (!seen.Add(key))
                     Report(GrammarCodes.DuplicateClause, $"a rule takes at most one '{Keyword(clause.Kind)}' clause", clause.Span, module);
                 foreach (var kind in clause.Kinds)
@@ -334,13 +343,82 @@ public static class GrammarValidator
                 if (clause.Qualifier is { } qualifier && !kinds.Contains(qualifier.Name))
                     Report(GrammarCodes.UnknownSymbolKind, $"unknown symbol kind '{qualifier.Name}'", qualifier.Span, module);
                 if (clause.Kind is BindingClauseKind.Declares or BindingClauseKind.References or BindingClauseKind.LowersLiteral
+                    or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence
                     && clause.Field != "this" && !labels.Contains(clause.Field))
                     Report(GrammarCodes.UnknownBindingField,
                         $"'{clause.Field}' is not a label of this rule's elements; name a labeled element or 'this'", clause.FieldSpan, module);
+                if (clause.Kind is BindingClauseKind.LowersValue or BindingClauseKind.LowersReference)
+                {
+                    var properties = SemanticsWriter.PropertiesOf(owner);
+                    if (clause.Kind == BindingClauseKind.LowersValue)
+                    {
+                        var property = properties.FirstOrDefault(candidate => candidate.Name.Name == clause.Field);
+                        if (property is null || property.Direction != PropertyDirection.Out ||
+                            property.Type.Text.Replace(" ", "") is not ("float" or "float?"))
+                            Report(GrammarCodes.InvalidValueProperty,
+                                $"'{clause.Field}' must be an out float or float? property of '{owner.Name}'",
+                                clause.FieldSpan, module);
+                    }
+                    if (clause.TypeProperty is { } typeName)
+                    {
+                        var typeProperty = properties.FirstOrDefault(candidate => candidate.Name.Name == typeName.Name);
+                        if (typeProperty is null || typeProperty.Direction != PropertyDirection.Out ||
+                            typeProperty.Type.Text.Replace(" ", "") is not ("SemanticType" or "SemanticType?" or
+                                "Nitrogen.Semantic.SemanticType" or "Nitrogen.Semantic.SemanticType?" or
+                                "global::Nitrogen.Semantic.SemanticType" or "global::Nitrogen.Semantic.SemanticType?"))
+                            Report(GrammarCodes.InvalidValueProperty,
+                                $"'{typeName.Name}' must be an out SemanticType or SemanticType? property of '{owner.Name}'",
+                                typeName.Span, module);
+                    }
+                    if (clause.Kind == BindingClauseKind.LowersReference &&
+                        !clauses.Any(candidate => candidate.Kind == BindingClauseKind.References))
+                        Report(GrammarCodes.InvalidValueProperty,
+                            "reference lowering needs a references clause on the same rule", clause.Span, module);
+                    if (clause.InitializerProperty is { } initializerName)
+                    {
+                        var initializerProperty = properties.FirstOrDefault(candidate => candidate.Name.Name == initializerName.Name);
+                        if (initializerProperty is null || initializerProperty.Direction != PropertyDirection.Out ||
+                            initializerProperty.Type.Text.Replace(" ", "") is not "int?")
+                            Report(GrammarCodes.InvalidValueProperty,
+                                $"'{initializerName.Name}' must be an out int? initializer node property of '{owner.Name}'",
+                                initializerName.Span, module);
+                    }
+                }
+                if (clause.OperationProperty is { } operationName)
+                {
+                    var operationProperty = SemanticsWriter.PropertiesOf(owner)
+                        .FirstOrDefault(candidate => candidate.Name.Name == operationName.Name);
+                    if (operationProperty is null || operationProperty.Direction != PropertyDirection.Out ||
+                        operationProperty.Type.Text.Replace(" ", "") is not ("OperationSignature" or "OperationSignature?" or
+                            "Nitrogen.Semantic.OperationSignature" or "Nitrogen.Semantic.OperationSignature?" or
+                            "global::Nitrogen.Semantic.OperationSignature" or "global::Nitrogen.Semantic.OperationSignature?"))
+                        Report(GrammarCodes.InvalidValueProperty,
+                            $"'{operationName.Name}' must be an out OperationSignature or OperationSignature? property of '{owner.Name}'",
+                            operationName.Span, module);
+                }
                 foreach (var argument in clause.Arguments)
+                {
                     if (!labels.Contains(argument.Name))
                         Report(GrammarCodes.UnknownBindingField,
                             $"'{argument.Name}' is not a label of this rule's elements; name a labeled element", argument.Span, module);
+                    else if (argument.SequenceElementType is not null || argument.InferSequence)
+                    {
+                        var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>()
+                            .First(element => element.Label == argument.Name);
+                        if (field.Inner is not RepeatExpr { Kind: RepeatKind.ZeroOrMore or RepeatKind.OneOrMore }
+                            and not SeparatedListExpr)
+                            Report(GrammarCodes.SequenceArgumentNeedsList,
+                                $"'{argument.Name}' must label a repeated or separated list", argument.Span, module);
+                    }
+                    else if (argument.OptionalElementType is not null)
+                    {
+                        var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>()
+                            .First(element => element.Label == argument.Name);
+                        if (field.Inner is not RepeatExpr { Kind: RepeatKind.Optional })
+                            Report(GrammarCodes.OptionalArgumentNeedsOptionalField,
+                                $"'{argument.Name}' must label an optional element", argument.Span, module);
+                    }
+                }
                 if (clause.Kind == BindingClauseKind.Declares && clause.Target is { } type
                     && type.Name.IndexOf('.') < 0 && !labels.Contains(type.Name))
                     Report(GrammarCodes.UnknownBindingField,
@@ -353,7 +431,9 @@ public static class GrammarValidator
             BindingClauseKind.Declares => "declares",
             BindingClauseKind.References => "references",
             BindingClauseKind.Scope => "scope",
-            BindingClauseKind.Lowers or BindingClauseKind.LowersLiteral => "lowers",
+            BindingClauseKind.Lowers or BindingClauseKind.LowersLiteral or BindingClauseKind.LowersText
+                or BindingClauseKind.LowersSequence or BindingClauseKind.LowersValue
+                or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat => "lowers",
             _ => "dynamic",
         };
 

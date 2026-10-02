@@ -18,18 +18,22 @@ public sealed unsafe class ScopesModule : SyntaxModule
     public const int LNumber = 4;
     public const int LFile = 5;
     public const int LUnit = 6;
-    public const int LLet = 7;
-    public const int LUse = 8;
-    public const int LBlock = 9;
-    public const int LGen = 10;
-    public const int LGenName = 11;
-    public const int LNum = 12;
-    public const int LRef = 13;
-    public const int LCall = 14;
-    public const int LMember = 15;
-    public const int LAdd = 16;
+    public const int LSequential = 7;
+    public const int LSequentialExport = 8;
+    public const int LGlobal = 9;
+    public const int LGlobalGen = 10;
+    public const int LLet = 11;
+    public const int LUse = 12;
+    public const int LBlock = 13;
+    public const int LGen = 14;
+    public const int LGenName = 15;
+    public const int LNum = 16;
+    public const int LRef = 17;
+    public const int LCall = 18;
+    public const int LMember = 19;
+    public const int LAdd = 20;
 
-    static readonly string[] s_names = { "", "IdStart", "IdPart", "Identifier", "Number", "File", "Unit", "Let", "Use", "Block", "Gen", "GenName", "Num", "Ref", "Call", "Member", "Add" };
+    static readonly string[] s_names = { "", "IdStart", "IdPart", "Identifier", "Number", "File", "Unit", "Sequential", "SequentialExport", "Global", "GlobalGen", "Let", "Use", "Block", "Gen", "GenName", "Num", "Ref", "Call", "Member", "Add" };
 
     public readonly ExtensionPointDecl Expr;
 
@@ -59,6 +63,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     public static Rule Item => new("Item", &ParseItem);
 
+    public static Rule Sequential => new("Sequential", &ParseSequential);
+
+    public static Rule SequentialExport => new("SequentialExport", &ParseSequentialExport);
+
+    public static Rule Global => new("Global", &ParseGlobal);
+
+    public static Rule GlobalGen => new("GlobalGen", &ParseGlobalGen);
+
     public static Rule Let => new("Let", &ParseLet);
 
     public static Rule Use => new("Use", &ParseUse);
@@ -74,6 +86,10 @@ public sealed unsafe class ScopesModule : SyntaxModule
         "File" => File,
         "Unit" => Unit,
         "Item" => Item,
+        "Sequential" => Sequential,
+        "SequentialExport" => SequentialExport,
+        "Global" => Global,
+        "GlobalGen" => GlobalGen,
         "Let" => Let,
         "Use" => Use,
         "Block" => Block,
@@ -91,6 +107,10 @@ public sealed unsafe class ScopesModule : SyntaxModule
         null, // Number
         null, // File
         new(new("unit", 1, true), null, true, false), // Unit
+        new(new("value", 1, false, false, true), null, false, false), // Sequential
+        new(new("value", 1, true, true, true), null, false, false), // SequentialExport
+        new(new("value", 1, false, true), null, false, false), // Global
+        new(new("value", 1, false, true), null, false, false), // GlobalGen
         new(new("value", 1, false), null, false, false), // Let
         new(null, new(new[] { "unit" }, 1, false), false, false), // Use
         new(null, null, true, false), // Block
@@ -135,7 +155,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     static bool IsReservedIdentifier(ReadOnlySpan<char> word) => word switch
     {
-        "unit" or "let" or "use" or "block" or "gen" => true,
+        "unit" or "let" or "use" or "block" or "gen" or "global" or "globalgen" or "seq" or "seqexport" => true,
         _ => false,
     };
 
@@ -239,17 +259,21 @@ public sealed unsafe class ScopesModule : SyntaxModule
         ParseLet(ref s)
         || ParseUse(ref s)
         || ParseBlock(ref s)
-        || ParseGen(ref s);
+        || ParseGen(ref s)
+        || ParseGlobal(ref s)
+        || ParseGlobalGen(ref s)
+        || ParseSequential(ref s)
+        || ParseSequentialExport(ref s);
 
-    internal static bool ParseLet(ref ParserState s)
+    internal static bool ParseSequential(ref ParserState s)
     {
         s.SkipTrivia();
-        if (s.Current != 'l') return s.ExpectLiteral("let");
+        if (s.Current != 's') return s.ExpectLiteral("seq");
         var start = s.Mark();
-        s.Open(ScopesKinds.Let);
+        s.Open(ScopesKinds.Sequential);
     e0:
         s.SkipTrivia();
-        if (!s.MatchKeyword("let")) return Fail(ref s, start);
+        if (!s.MatchKeyword("seq")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
         if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
@@ -339,21 +363,119 @@ public sealed unsafe class ScopesModule : SyntaxModule
         return true;
     }
 
-    internal static bool ParseUse(ref ParserState s)
+    internal static bool ParseSequentialExport(ref ParserState s)
     {
         s.SkipTrivia();
-        if (s.Current != 'u') return s.ExpectLiteral("use");
+        if (s.Current != 's') return s.ExpectLiteral("seqexport");
         var start = s.Mark();
-        s.Open(ScopesKinds.Use);
+        s.Open(ScopesKinds.SequentialExport);
     e0:
         s.SkipTrivia();
-        if (!s.MatchKeyword("use")) return Fail(ref s, start);
+        if (!s.MatchKeyword("seqexport")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
         if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair7))
+            {
+                case 1:
+                    goto e1;
+                case 2:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    goto e2;
+                case 3:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto e3;
+                case 4:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    goto e4;
+                default:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e2:
+        s.SkipTrivia();
+        if (!s.MatchLiteral("="))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair8))
+            {
+                case 2:
+                    goto e2;
+                case 3:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto e3;
+                case 4:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    goto e4;
+                default:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e3:
+        s.SkipTrivia();
+        if (!s.ParseExtensible(Instance.Expr, 0, 3))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair9))
+            {
+                case 3:
+                    goto e3;
+                case 4:
+                    s.PushMissing(SyntaxKinds.Error);
+                    goto e4;
+                default:
+                    s.PushMissing(SyntaxKinds.Error);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e4:
+        s.SkipTrivia();
+        if (!s.MatchLiteral(";"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair10))
+            {
+                case 4:
+                    goto e4;
+                default:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    done:
+        s.Close();
+        return true;
+    }
+
+    internal static bool ParseGlobal(ref ParserState s)
+    {
+        s.SkipTrivia();
+        if (s.Current != 'g') return s.ExpectLiteral("global");
+        var start = s.Mark();
+        s.Open(ScopesKinds.Global);
+    e0:
+        s.SkipTrivia();
+        if (!s.MatchKeyword("global")) return Fail(ref s, start);
+    e1:
+        s.SkipTrivia();
+        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair11))
             {
                 case 1:
                     goto e1;
@@ -371,7 +493,197 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral(";"))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair8))
+            switch (s.Recover(s_repair12))
+            {
+                case 2:
+                    goto e2;
+                default:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    done:
+        s.Close();
+        return true;
+    }
+
+    internal static bool ParseGlobalGen(ref ParserState s)
+    {
+        s.SkipTrivia();
+        if (s.Current != 'g') return s.ExpectLiteral("globalgen");
+        var start = s.Mark();
+        s.Open(ScopesKinds.GlobalGen);
+    e0:
+        s.SkipTrivia();
+        if (!s.MatchKeyword("globalgen")) return Fail(ref s, start);
+    e1:
+        s.SkipTrivia();
+        if (!ParseGenName(ref s))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair13))
+            {
+                case 1:
+                    goto e1;
+                case 2:
+                    s.PushMissing(ScopesKinds.GenName);
+                    goto e2;
+                default:
+                    s.PushMissing(ScopesKinds.GenName);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e2:
+        s.SkipTrivia();
+        if (!s.MatchLiteral(";"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair14))
+            {
+                case 2:
+                    goto e2;
+                default:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    done:
+        s.Close();
+        return true;
+    }
+
+    internal static bool ParseLet(ref ParserState s)
+    {
+        s.SkipTrivia();
+        if (s.Current != 'l') return s.ExpectLiteral("let");
+        var start = s.Mark();
+        s.Open(ScopesKinds.Let);
+    e0:
+        s.SkipTrivia();
+        if (!s.MatchKeyword("let")) return Fail(ref s, start);
+    e1:
+        s.SkipTrivia();
+        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair15))
+            {
+                case 1:
+                    goto e1;
+                case 2:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    goto e2;
+                case 3:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto e3;
+                case 4:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    goto e4;
+                default:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e2:
+        s.SkipTrivia();
+        if (!s.MatchLiteral("="))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair16))
+            {
+                case 2:
+                    goto e2;
+                case 3:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto e3;
+                case 4:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    goto e4;
+                default:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    s.PushMissing(SyntaxKinds.Error);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e3:
+        s.SkipTrivia();
+        if (!s.ParseExtensible(Instance.Expr, 0, 3))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair17))
+            {
+                case 3:
+                    goto e3;
+                case 4:
+                    s.PushMissing(SyntaxKinds.Error);
+                    goto e4;
+                default:
+                    s.PushMissing(SyntaxKinds.Error);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e4:
+        s.SkipTrivia();
+        if (!s.MatchLiteral(";"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair18))
+            {
+                case 4:
+                    goto e4;
+                default:
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    done:
+        s.Close();
+        return true;
+    }
+
+    internal static bool ParseUse(ref ParserState s)
+    {
+        s.SkipTrivia();
+        if (s.Current != 'u') return s.ExpectLiteral("use");
+        var start = s.Mark();
+        s.Open(ScopesKinds.Use);
+    e0:
+        s.SkipTrivia();
+        if (!s.MatchKeyword("use")) return Fail(ref s, start);
+    e1:
+        s.SkipTrivia();
+        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair19))
+            {
+                case 1:
+                    goto e1;
+                case 2:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    goto e2;
+                default:
+                    s.PushMissing(ScopesKinds.Identifier);
+                    s.PushMissing(SyntaxKinds.Literal);
+                    goto done;
+            }
+        }
+    e2:
+        s.SkipTrivia();
+        if (!s.MatchLiteral(";"))
+        {
+            if (!s.Recovering) return Fail(ref s, start);
+            switch (s.Recover(s_repair20))
             {
                 case 2:
                     goto e2;
@@ -399,7 +711,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral("{"))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair9))
+            switch (s.Recover(s_repair21))
             {
                 case 1:
                     goto e1;
@@ -425,7 +737,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral("}"))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair10))
+            switch (s.Recover(s_repair22))
             {
                 case 3:
                     goto e3;
@@ -453,7 +765,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!ParseGenName(ref s))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair11))
+            switch (s.Recover(s_repair23))
             {
                 case 1:
                     goto e1;
@@ -471,7 +783,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral(";"))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair12))
+            switch (s.Recover(s_repair24))
             {
                 case 2:
                     goto e2;
@@ -497,7 +809,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral("$"))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair13))
+            switch (s.Recover(s_repair25))
             {
                 case 1:
                     goto e1;
@@ -515,7 +827,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchToken(ScopesKinds.Number, MatchNumber(s.Text, s.Position), "Number"))
         {
             if (!s.Recovering) return Fail(ref s, start);
-            switch (s.Recover(s_repair14))
+            switch (s.Recover(s_repair26))
             {
                 case 2:
                     goto e2;
@@ -553,7 +865,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral("("))
         {
             if (!s.Recovering || !s.AlternativeCommitted(ScopesKinds.Call, false)) return false;
-            switch (s.Recover(s_repair15))
+            switch (s.Recover(s_repair27))
             {
                 case 1:
                     goto e1;
@@ -579,7 +891,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral(")"))
         {
             if (!s.Recovering || !s.AlternativeCommitted(ScopesKinds.Call, false)) return false;
-            switch (s.Recover(s_repair16))
+            switch (s.Recover(s_repair28))
             {
                 case 3:
                     goto e3;
@@ -602,7 +914,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
         {
             if (!s.Recovering || !s.AlternativeCommitted(ScopesKinds.Member, true)) return false;
-            switch (s.Recover(s_repair17))
+            switch (s.Recover(s_repair29))
             {
                 case 2:
                     goto e2;
@@ -625,7 +937,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.ParseExtensible(Instance.Expr, 6))
         {
             if (!s.Recovering || !s.AlternativeCommitted(ScopesKinds.Add, true)) return false;
-            switch (s.Recover(s_repair18))
+            switch (s.Recover(s_repair30))
             {
                 case 2:
                     goto e2;
@@ -699,16 +1011,16 @@ public sealed unsafe class ScopesModule : SyntaxModule
         {
             new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier }, false)),
             new SyncPoint(2, new LookaheadSet(new string[] { "{" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
             new SyncPoint(4, new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair1 = new(2, "'{'",
-        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { "{" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
             new SyncPoint(4, new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -717,7 +1029,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         new SyncPoint[]
         {
             new SyncPoint(4, new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static bool P2(ref ParserState s)
@@ -767,13 +1079,47 @@ public sealed unsafe class ScopesModule : SyntaxModule
         });
 
     static readonly RepairSite s_repair6 = new(4, "';'",
-        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair7 = new(1, "Identifier",
+        new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair8 = new(2, "'='",
+        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(2, new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair9 = new(3, "Expr",
+        new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair10 = new(4, "';'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair11 = new(1, "Identifier",
         new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
@@ -781,28 +1127,92 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static readonly RepairSite s_repair8 = new(2, "';'",
-        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+    static readonly RepairSite s_repair12 = new(2, "';'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static readonly RepairSite s_repair9 = new(1, "'{'",
-        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+    static readonly RepairSite s_repair13 = new(1, "GenName",
+        new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair14 = new(2, "';'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair15 = new(1, "Identifier",
+        new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair16 = new(2, "'='",
+        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(2, new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair17 = new(3, "Expr",
+        new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair18 = new(4, "';'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair19 = new(1, "Identifier",
+        new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair20 = new(2, "';'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+        new SyncPoint[]
+        {
+            new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+        });
+
+    static readonly RepairSite s_repair21 = new(1, "'{'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "{" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
             new SyncPoint(3, new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static readonly RepairSite s_repair10 = new(3, "'}'",
-        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+    static readonly RepairSite s_repair22 = new(3, "'}'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(3, new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static bool P3(ref ParserState s)
@@ -816,7 +1226,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
             if (!ParseItem(ref s) || s.Position == before)
             {
                 s.Reset(m);
-                if (s.Recovering && s.RecoverInList(s_repair10)) continue;
+                if (s.Recovering && s.RecoverInList(s_repair22)) continue;
                 break;
             }
         }
@@ -824,7 +1234,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         return true;
     }
 
-    static readonly RepairSite s_repair11 = new(1, "GenName",
+    static readonly RepairSite s_repair23 = new(1, "GenName",
         new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
@@ -832,14 +1242,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static readonly RepairSite s_repair12 = new(2, "';'",
-        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "let", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
+    static readonly RepairSite s_repair24 = new(2, "';'",
+        new LookaheadSet(new string[] { "}" }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static readonly RepairSite s_repair13 = new(1, "'$'",
+    static readonly RepairSite s_repair25 = new(1, "'$'",
         new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchNumber }, false),
         new SyncPoint[]
         {
@@ -847,14 +1257,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchNumber }, false)),
         });
 
-    static readonly RepairSite s_repair14 = new(2, "Number",
+    static readonly RepairSite s_repair26 = new(2, "Number",
         new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchNumber }, false)),
         });
 
-    static readonly RepairSite s_repair15 = new(1, "'('",
+    static readonly RepairSite s_repair27 = new(1, "'('",
         new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false),
         new SyncPoint[]
         {
@@ -889,7 +1299,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         return true;
     }
 
-    static readonly RepairSite s_repair16 = new(3, "')'",
+    static readonly RepairSite s_repair28 = new(3, "')'",
         new LookaheadSet(new string[] { ")", "+", ",", ".", ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
@@ -897,14 +1307,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
         });
 
-    static readonly RepairSite s_repair17 = new(2, "Identifier",
+    static readonly RepairSite s_repair29 = new(2, "Identifier",
         new LookaheadSet(new string[] { ")", "+", ",", ".", ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier }, false)),
         });
 
-    static readonly RepairSite s_repair18 = new(2, "Expr",
+    static readonly RepairSite s_repair30 = new(2, "Expr",
         new LookaheadSet(new string[] { ")", "+", ",", ".", ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
@@ -920,6 +1330,10 @@ public static class ScopesKinds
     public static readonly int Number = ScopesModule.Kind(ScopesModule.LNumber);
     public static readonly int File = ScopesModule.Kind(ScopesModule.LFile);
     public static readonly int Unit = ScopesModule.Kind(ScopesModule.LUnit);
+    public static readonly int Sequential = ScopesModule.Kind(ScopesModule.LSequential);
+    public static readonly int SequentialExport = ScopesModule.Kind(ScopesModule.LSequentialExport);
+    public static readonly int Global = ScopesModule.Kind(ScopesModule.LGlobal);
+    public static readonly int GlobalGen = ScopesModule.Kind(ScopesModule.LGlobalGen);
     public static readonly int Let = ScopesModule.Kind(ScopesModule.LLet);
     public static readonly int Use = ScopesModule.Kind(ScopesModule.LUse);
     public static readonly int Block = ScopesModule.Kind(ScopesModule.LBlock);
@@ -1009,6 +1423,110 @@ public readonly struct UnitNode : ISyntaxView<UnitNode>
     public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Unit;
 
     public static UnitNode Create(SyntaxTree tree, int index) => new(tree, index);
+}
+
+public readonly struct SequentialNode : ISyntaxView<SequentialNode>
+{
+    public SequentialNode(SyntaxTree tree, int index)
+    {
+        Tree = tree;
+        Index = index;
+    }
+
+    public SyntaxTree Tree { get; }
+
+    public int Index { get; }
+
+    public TextSpan Span => Tree.Span(Index);
+
+    public bool IsMissing => (Tree.Flags(Index) & NodeFlags.Missing) != 0;
+
+    public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
+
+    public Token Name => new(Tree, Tree.Child(Index, 1));
+
+    public ExprNode Value => new(Tree, Tree.Child(Index, 3));
+
+    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Sequential;
+
+    public static SequentialNode Create(SyntaxTree tree, int index) => new(tree, index);
+}
+
+public readonly struct SequentialExportNode : ISyntaxView<SequentialExportNode>
+{
+    public SequentialExportNode(SyntaxTree tree, int index)
+    {
+        Tree = tree;
+        Index = index;
+    }
+
+    public SyntaxTree Tree { get; }
+
+    public int Index { get; }
+
+    public TextSpan Span => Tree.Span(Index);
+
+    public bool IsMissing => (Tree.Flags(Index) & NodeFlags.Missing) != 0;
+
+    public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
+
+    public Token Name => new(Tree, Tree.Child(Index, 1));
+
+    public ExprNode Value => new(Tree, Tree.Child(Index, 3));
+
+    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.SequentialExport;
+
+    public static SequentialExportNode Create(SyntaxTree tree, int index) => new(tree, index);
+}
+
+public readonly struct GlobalNode : ISyntaxView<GlobalNode>
+{
+    public GlobalNode(SyntaxTree tree, int index)
+    {
+        Tree = tree;
+        Index = index;
+    }
+
+    public SyntaxTree Tree { get; }
+
+    public int Index { get; }
+
+    public TextSpan Span => Tree.Span(Index);
+
+    public bool IsMissing => (Tree.Flags(Index) & NodeFlags.Missing) != 0;
+
+    public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
+
+    public Token Name => new(Tree, Tree.Child(Index, 1));
+
+    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Global;
+
+    public static GlobalNode Create(SyntaxTree tree, int index) => new(tree, index);
+}
+
+public readonly struct GlobalGenNode : ISyntaxView<GlobalGenNode>
+{
+    public GlobalGenNode(SyntaxTree tree, int index)
+    {
+        Tree = tree;
+        Index = index;
+    }
+
+    public SyntaxTree Tree { get; }
+
+    public int Index { get; }
+
+    public TextSpan Span => Tree.Span(Index);
+
+    public bool IsMissing => (Tree.Flags(Index) & NodeFlags.Missing) != 0;
+
+    public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
+
+    public GenNameNode Name => new(Tree, Tree.Child(Index, 1));
+
+    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.GlobalGen;
+
+    public static GlobalGenNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
 
 public readonly struct LetNode : ISyntaxView<LetNode>
@@ -1282,6 +1800,10 @@ public abstract class ScopesVisitor<TResult>
             {
                 case ScopesModule.LFile: return VisitFile(new FileNode(tree, node));
                 case ScopesModule.LUnit: return VisitUnit(new UnitNode(tree, node));
+                case ScopesModule.LSequential: return VisitSequential(new SequentialNode(tree, node));
+                case ScopesModule.LSequentialExport: return VisitSequentialExport(new SequentialExportNode(tree, node));
+                case ScopesModule.LGlobal: return VisitGlobal(new GlobalNode(tree, node));
+                case ScopesModule.LGlobalGen: return VisitGlobalGen(new GlobalGenNode(tree, node));
                 case ScopesModule.LLet: return VisitLet(new LetNode(tree, node));
                 case ScopesModule.LUse: return VisitUse(new UseNode(tree, node));
                 case ScopesModule.LBlock: return VisitBlock(new BlockNode(tree, node));
@@ -1302,6 +1824,14 @@ public abstract class ScopesVisitor<TResult>
     public virtual TResult VisitFile(FileNode node) => DefaultVisit(node.Tree, node.Index);
 
     public virtual TResult VisitUnit(UnitNode node) => DefaultVisit(node.Tree, node.Index);
+
+    public virtual TResult VisitSequential(SequentialNode node) => DefaultVisit(node.Tree, node.Index);
+
+    public virtual TResult VisitSequentialExport(SequentialExportNode node) => DefaultVisit(node.Tree, node.Index);
+
+    public virtual TResult VisitGlobal(GlobalNode node) => DefaultVisit(node.Tree, node.Index);
+
+    public virtual TResult VisitGlobalGen(GlobalGenNode node) => DefaultVisit(node.Tree, node.Index);
 
     public virtual TResult VisitLet(LetNode node) => DefaultVisit(node.Tree, node.Index);
 

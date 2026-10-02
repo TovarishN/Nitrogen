@@ -1,0 +1,23 @@
+syntax module Inferred
+{
+  token Digits = ['0'..'9']+;
+  syntax File = "items" Args:(Item; ",")* lowers operation Selected(sequence inferred Args)
+  {
+    out Selected : Nitrogen.Semantic.OperationSignature? = null;
+    Selected = Args.Count > 0 && Args[0].Resolved.Equals(Nitrogen.Semantic.SemanticTypes.Scalar)
+        ? Nitrogen.Tests.Semantic.InferredSignatures.Scalars : Nitrogen.Tests.Semantic.InferredSignatures.Angles;
+  }
+  syntax Fixed = "fixed" Args:Item* lowers Test.Angles(sequence inferred Args);
+  syntax Bad = "bad" Args:Item* lowers operation Selected(sequence inferred Args)
+  {
+    out Selected : Nitrogen.Semantic.OperationSignature? = null;
+    Selected = Nitrogen.Tests.Semantic.InferredSignatures.NotSequence;
+  }
+  syntax Item = Value:Digits lowers value type Resolved Constant
+  {
+    out Resolved : Nitrogen.Semantic.SemanticType = Nitrogen.Semantic.SemanticTypes.Scalar;
+    out Constant : float? = null;
+    Resolved = Value.Text == "2" ? Nitrogen.Semantic.SemanticTypes.Angle : Nitrogen.Semantic.SemanticTypes.Scalar;
+    Constant = float.Parse(Value.Text, System.Globalization.CultureInfo.InvariantCulture);
+  }
+}

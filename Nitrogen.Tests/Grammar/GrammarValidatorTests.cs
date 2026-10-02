@@ -271,6 +271,57 @@ public class GrammarValidatorTests
         Assert.Empty(Validate("syntax module M { token T = \"t\"; syntax R = \"-\" A:T lowers literal Core.Scalar this; }"));
     }
 
+    [Theory]
+    [InlineData("M.Part")]
+    [InlineData("inferred")]
+    public void Inline_sequence_argument_requires_a_list_field(string type)
+    {
+        var d = Single(GrammarCodes.SequenceArgumentNeedsList,
+            "syntax module M { token T = \"t\"; syntax R = A:T lowers M.Op(sequence " + type + " A); }");
+        Assert.Contains("repeated or separated list", d.Message);
+    }
+
+    [Fact]
+    public void Value_lowering_requires_an_out_float_property()
+    {
+        var d = Single(GrammarCodes.InvalidValueProperty,
+            "syntax module M { token T = ['0'..'9']+; syntax R = Value:T lowers value Core.Scalar Missing; }");
+        Assert.Contains("out float", d.Message);
+    }
+
+    [Fact]
+    public void Computed_operation_requires_an_out_signature_property()
+    {
+        var diagnostic = Single(GrammarCodes.InvalidValueProperty,
+            "syntax module M { token T = ['0'..'9']+; syntax R = Value:T lowers operation Selected(Value) { out Selected : float? = null; Selected = null; } }");
+        Assert.Contains("OperationSignature", diagnostic.Message);
+    }
+
+    [Fact]
+    public void Reference_lowering_requires_a_binding_clause()
+    {
+        var diagnostic = Single(GrammarCodes.InvalidValueProperty,
+            "syntax module M { token T = ['a'..'z']+; syntax R = Name:T lowers reference type Resolved { out Resolved : Nitrogen.Semantic.SemanticType? = null; Resolved = null; } }");
+        Assert.Contains("references clause", diagnostic.Message);
+    }
+
+    [Fact]
+    public void Optional_lowering_argument_requires_an_optional_field()
+    {
+        var d = Single(GrammarCodes.OptionalArgumentNeedsOptionalField,
+            "syntax module M { token T = ['0'..'9']+; syntax R = Value:T lowers M.Build(optional Core.Scalar Value); }");
+        Assert.Contains("optional element", d.Message);
+    }
+
+    [Theory]
+    [InlineData("text")]
+    [InlineData("sequence")]
+    public void Structured_lowers_field_must_be_a_label_or_this(string form)
+    {
+        Single(GrammarCodes.UnknownBindingField,
+            $"syntax module M {{ token T = \"t\"; syntax R = \"r\" A:T lowers {form} M.Value Z; }}");
+    }
+
     [Fact]
     public void A_rule_takes_one_lowers_clause()
     {

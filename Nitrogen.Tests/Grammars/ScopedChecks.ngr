@@ -1,0 +1,22 @@
+syntax module ScopedChecks
+{
+  token Digits = ['0'..'9']+;
+  syntax File = Item*;
+  syntax Item = Body / Other;
+  syntax Body = "body" Value:Target
+  {
+    check SC0002 Nitrogen.Tests.Semantic.ScopedCheckProbe.Body(Value.Text) : "ancestor failure" at Value;
+  }
+  syntax Target = Value:Digits lowers value Core.Scalar Constant
+  {
+    out Constant : float? = null;
+    Constant = float.Parse(Value.Text, System.Globalization.CultureInfo.InvariantCulture);
+    check SC0001 Nitrogen.Tests.Semantic.ScopedCheckProbe.Target(Value.Text) : "target failure" at Value;
+  }
+  syntax Other = "other" Value:Digits lowers value Core.Scalar Constant
+  {
+    out Constant : float? = null;
+    Constant = Value.Text == "0" ? float.NaN : float.Parse(Value.Text, System.Globalization.CultureInfo.InvariantCulture);
+    check SC0003 Nitrogen.Tests.Semantic.ScopedCheckProbe.Other(Value.Text) : "sibling failure" at Value;
+  }
+}

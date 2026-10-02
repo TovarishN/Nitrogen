@@ -15,7 +15,8 @@ public sealed class SemanticCatalogTests
 
         Assert.Equal(SemanticTypes.Angle, language.SemanticCatalog.Types["Units.Angle"]);
         Assert.Equal(SemanticTypes.Scalar, language.SemanticCatalog.Types["Core.Scalar"]);
-        Assert.Equal(4, language.SemanticCatalog.Types.Count);
+        Assert.Equal(SemanticTypes.Text, language.SemanticCatalog.Types["Core.Text"]);
+        Assert.Equal(5, language.SemanticCatalog.Types.Count);
     }
 
     [Fact]

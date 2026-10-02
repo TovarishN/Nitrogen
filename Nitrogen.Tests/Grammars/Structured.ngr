@@ -1,0 +1,13 @@
+syntax module Structured
+{
+  token Name = ['a'..'z' '_']+;
+
+  syntax File = "rig" Parts:Parts lowers Test.MakeRig(Parts);
+  syntax Parts = Items:Part* lowers sequence Test.Part Items;
+  syntax Part = "part" Name:PartName ";" lowers Test.MakePart(Name);
+  syntax PartName = Value:Name lowers text Core.Text Value;
+  syntax Csv = "csv" Parts:CsvParts lowers Test.MakeRig(Parts);
+  syntax CsvParts = Items:(Part; ",")+ lowers sequence Test.Part Items;
+  syntax Inline = "inline" Items:(Part; ",")* lowers Test.MakeRig(sequence Test.Part Items);
+  syntax PlainPart = "plain" Value:Name lowers Test.MakePart(text Value);
+}

@@ -57,8 +57,8 @@ internal static class ModuleWriter
             b.Append($"        {CSharpText.Literal(rule.Name)} => {CSharpText.Identifier(rule.Name)},\n");
         b.Append("        _ => null,\n    };\n\n");
         BindingWriter.Write(b, info);
-        DeclarativeWriter.Write(b, info);
         if (hasSemantics) semantics.WriteMembers(b);
+        DeclarativeWriter.Write(b, model, info);
 
 
         b.Append("    static bool Fail(ref ParserState s, scoped in ParseMark mark)\n    {\n        s.Reset(mark);\n        return false;\n    }\n\n");

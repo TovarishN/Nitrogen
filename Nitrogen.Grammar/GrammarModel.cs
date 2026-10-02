@@ -102,6 +102,10 @@ public sealed record PredicateExpr(PredicateKind Kind, Expr Inner, GrammarSpan S
 /// <summary>A name as written, with its span: a symbol kind or a built-in name (issue 237).</summary>
 public sealed record NameDecl(string Name, GrammarSpan Span);
 
+/// <summary>An operation input from a field, optionally projecting a repeated field as a sequence.</summary>
+public sealed record LoweringArgument(string Name, GrammarSpan Span, NameDecl? SequenceElementType = null,
+    bool AsText = false, NameDecl? OptionalElementType = null, bool InferSequence = false);
+
 /// <summary><c>symbols { kind … }</c>: the symbol kinds a module declares (issue 237).</summary>
 public sealed record SymbolsDecl(EquatableArray<NameDecl> Kinds, GrammarSpan Span);
 
@@ -119,6 +123,11 @@ public enum BindingClauseKind
     Dynamic,
     Lowers,
     LowersLiteral,
+    LowersText,
+    LowersSequence,
+    LowersValue,
+    LowersReference,
+    LowersRepeat,
 }
 
 /// <summary>A binding clause after a syntax rule or an alternative (issue 237), or a declarative lowering clause (issue 251).</summary>
@@ -126,6 +135,8 @@ public enum BindingClauseKind
 /// <param name="Field">A top-level label of the rule's elements, or <c>this</c>; empty for Scope, Dynamic and Lowers.</param>
 /// <param name="Optional"><c>references?</c>: counts only when it resolves, and then hides the references inside it.</param>
 /// <param name="Export"><c>declares … export</c>: visible project-wide.</param>
+/// <param name="FileScope"><c>declares … in file</c>: entered in the current file's root scope, independently of enclosing scopes.</param>
+/// <param name="Sequential"><c>declares … sequential</c>: visible after the declaring node, replacing earlier sequential declarations in its scope.</param>
 /// <param name="Qualifier"><c>references … in K</c> (issue 239): resolve in the scope of the symbol the nearest enclosing reference of kind K names.</param>
 /// <param name="Target">Declares: the <c>type</c> field label or qualified type name; Lowers: the operation ID; LowersLiteral: the literal's type (issue 251).</param>
 /// <param name="Arguments">Lowers: the argument field labels, in parameter order (issue 251).</param>
@@ -139,7 +150,12 @@ public sealed record BindingClause(
     GrammarSpan Span,
     NameDecl? Qualifier = null,
     NameDecl? Target = null,
-    EquatableArray<NameDecl> Arguments = default);
+    EquatableArray<LoweringArgument> Arguments = default,
+    NameDecl? TypeProperty = null,
+    NameDecl? OperationProperty = null,
+    NameDecl? InitializerProperty = null,
+    bool FileScope = false,
+    bool Sequential = false);
 
 /// <summary>C# text from a semantics block (issue 239), trimmed at the end; the grammar compiler never parses it.</summary>
 public sealed record CodeText(string Text, GrammarSpan Span);

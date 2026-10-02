@@ -9,13 +9,14 @@ public sealed class SemanticType : IEquatable<SemanticType>
     {
         Module = module;
         Name = name;
+        Id = module + "." + name;
         _arguments = arguments;
         Arguments = Array.AsReadOnly(_arguments);
     }
 
     public string Module { get; }
     public string Name { get; }
-    public string Id => Module + "." + Name;
+    public string Id { get; }
     public IReadOnlyList<SemanticType> Arguments { get; }
 
     public static SemanticType Named(string module, string name, params SemanticType[] arguments)
@@ -51,5 +52,12 @@ public static class SemanticTypes
     public static readonly SemanticType Scalar = SemanticType.Named("Core", "Scalar");
     public static readonly SemanticType Bool = SemanticType.Named("Core", "Bool");
     public static readonly SemanticType Error = SemanticType.Named("Core", "Error");
+    public static readonly SemanticType Text = SemanticType.Named("Core", "Text");
     public static readonly SemanticType Angle = SemanticType.Named("Units", "Angle");
+
+    public static SemanticType SequenceOf(SemanticType element) =>
+        SemanticType.Named("Core", "Sequence", element ?? throw new ArgumentNullException(nameof(element)));
+
+    public static SemanticType OptionalOf(SemanticType element) =>
+        SemanticType.Named("Core", "Optional", element ?? throw new ArgumentNullException(nameof(element)));
 }

@@ -166,6 +166,8 @@ internal sealed class NgrMapper(SyntaxTree tree)
             {
                 var d = Cast<DeclaresNode>(node);
                 int end = d.Export.HasValue ? d.Export.Value.Span.End : d.Field.Span.End;
+                if (!d.Export.HasValue && d.Sequential.HasValue) end = d.Sequential.Value.Span.End;
+                if (!d.Export.HasValue && d.FileScope.HasValue) end = d.FileScope.Value.Span.End;
                 NameDecl? type = null;
                 if (d.Type.HasValue)
                 {
@@ -174,26 +176,89 @@ internal sealed class NgrMapper(SyntaxTree tree)
                     end = name.Span.End;
                 }
                 clauses.Add(new BindingClause(BindingClauseKind.Declares, new[] { Name(d.SymbolKind) }, d.Field.ToString(),
-                    Span(d.Field.Span), false, d.Export.HasValue, GrammarSpan.FromBounds(d.Span.Start, end), Target: type));
+                    Span(d.Field.Span), false, d.Export.HasValue, GrammarSpan.FromBounds(d.Span.Start, end), Target: type,
+                    FileScope: d.FileScope.HasValue, Sequential: d.Sequential.HasValue));
             }
             else if (kind == NitrogenKinds.Lowers)
             {
                 var l = Cast<LowersNode>(node);
-                if (l.Form.Kind == NitrogenKinds.LowersLiteral)
+                if (l.Form.Kind == NitrogenKinds.LowersRepeat)
                 {
-                    var literal = Cast<LowersLiteralNode>(l.Form);
-                    clauses.Add(new BindingClause(BindingClauseKind.LowersLiteral, default, literal.Field.ToString(),
-                        Span(literal.Field.Span), false, false, GrammarSpan.FromBounds(l.Span.Start, literal.Field.Span.End),
-                        Target: new NameDecl(literal.Type.ToString(), Span(literal.Type.Span))));
+                    var repeat = Cast<LowersRepeatNode>(l.Form);
+                    var type = new NameDecl(repeat.Type.ToString(), Span(repeat.Type.Span));
+                    clauses.Add(new BindingClause(BindingClauseKind.LowersRepeat, default, "", default, false, false,
+                        GrammarSpan.FromBounds(l.Span.Start, repeat.Children.Span.End), Target: type, Arguments: new[]
+                        {
+                            new LoweringArgument(repeat.Count.ToString(), Span(repeat.Count.Span)),
+                            new LoweringArgument(repeat.Iterator.ToString(), Span(repeat.Iterator.Span)),
+                            new LoweringArgument(repeat.Children.ToString(), Span(repeat.Children.Span), SequenceElementType: type),
+                        }));
+                }
+                else if (l.Form.Kind == NitrogenKinds.LowersLiteral || l.Form.Kind == NitrogenKinds.LowersText ||
+                    l.Form.Kind == NitrogenKinds.LowersSequence || l.Form.Kind == NitrogenKinds.LowersValue)
+                {
+                    var form = l.Form.Kind == NitrogenKinds.LowersText ? BindingClauseKind.LowersText
+                        : l.Form.Kind == NitrogenKinds.LowersSequence ? BindingClauseKind.LowersSequence
+                        : l.Form.Kind == NitrogenKinds.LowersValue ? BindingClauseKind.LowersValue
+                        : BindingClauseKind.LowersLiteral;
+                    var type = l.Form.Child(1);
+                    var field = l.Form.Child(2);
+                    bool hasDynamicType = form == BindingClauseKind.LowersValue &&
+                        type.ChildCount == 2 && type.Child(0).ToString() == "type";
+                    var dynamicType = hasDynamicType ? type.Child(1) : type;
+                    clauses.Add(new BindingClause(form, default, field.ToString(),
+                        Span(field.Span), false, false, GrammarSpan.FromBounds(l.Span.Start, field.Span.End),
+                        Target: hasDynamicType ? null : new NameDecl(type.ToString(), Span(type.Span)),
+                        TypeProperty: hasDynamicType ? new NameDecl(dynamicType.ToString(), Span(dynamicType.Span)) : null));
+                }
+                else if (l.Form.Kind == NitrogenKinds.LowersReference)
+                {
+                    var property = l.Form.Child(2);
+                    var source = Cast<LowersReferenceNode>(l.Form).Initializer;
+                    SyntaxNode? initializer = source.HasValue ? source.Value.Child(1) : null;
+                    clauses.Add(new BindingClause(BindingClauseKind.LowersReference, default, "", default,
+                        false, false, GrammarSpan.FromBounds(l.Span.Start, initializer?.Span.End ?? property.Span.End),
+                        TypeProperty: new NameDecl(property.ToString(), Span(property.Span)),
+                        InitializerProperty: initializer is { } value ? new NameDecl(value.ToString(), Span(value.Span)) : null));
                 }
                 else
                 {
                     var call = Cast<LowersCallNode>(l.Form);
-                    var arguments = new List<NameDecl>();
-                    foreach (var argument in call.Arguments) arguments.Add(Name(argument));
-                    clauses.Add(new BindingClause(BindingClauseKind.Lowers, default, "", default, false, false,
+                    var operationNode = call.Operation;
+                    bool computed = operationNode.ChildCount >= 2 && operationNode.Child(0).ToString() == "operation";
+                    bool optionalOperation = computed && operationNode.Child(1).ToString() == "?";
+                    var operationName = computed ? operationNode.Child(operationNode.ChildCount - 1) : operationNode;
+                    var arguments = new List<LoweringArgument>();
+                    foreach (var argument in call.Arguments)
+                    {
+                        if (argument.Kind == NitrogenKinds.LowersSequenceArgument)
+                        {
+                            var type = argument.Child(1);
+                            var field = argument.Child(2);
+                            arguments.Add(type.ToString() == "inferred"
+                                ? new LoweringArgument(field.ToString(), Span(field.Span), InferSequence: true)
+                                : new LoweringArgument(field.ToString(), Span(field.Span),
+                                    new NameDecl(type.ToString(), Span(type.Span))));
+                        }
+                        else if (argument.Kind == NitrogenKinds.LowersOptionalArgument)
+                        {
+                            var type = argument.Child(1);
+                            var field = argument.Child(2);
+                            arguments.Add(new LoweringArgument(field.ToString(), Span(field.Span),
+                                OptionalElementType: new NameDecl(type.ToString(), Span(type.Span))));
+                        }
+                        else if (argument.Kind == NitrogenKinds.LowersTextArgument)
+                        {
+                            var field = argument.Child(1);
+                            arguments.Add(new LoweringArgument(field.ToString(), Span(field.Span), AsText: true));
+                        }
+                        else arguments.Add(new LoweringArgument(argument.ToString(), Span(argument.Span)));
+                    }
+                    clauses.Add(new BindingClause(BindingClauseKind.Lowers, default, "", default, optionalOperation, false,
                         GrammarSpan.FromBounds(l.Span.Start, call.Close.Span.End),
-                        Target: new NameDecl(call.Operation.ToString(), Span(call.Operation.Span)), Arguments: arguments.ToArray()));
+                        Target: computed ? null : new NameDecl(operationName.ToString(), Span(operationName.Span)),
+                        Arguments: arguments.ToArray(),
+                        OperationProperty: computed ? new NameDecl(operationName.ToString(), Span(operationName.Span)) : null));
                 }
             }
             else if (kind == NitrogenKinds.References)

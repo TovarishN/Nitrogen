@@ -72,12 +72,20 @@ public static class GrammarDumper
     public static string Dump(BindingClause clause) => clause.Kind switch
     {
         BindingClauseKind.Declares =>
-            $"(declares {clause.Kinds[0].Name} {clause.Field}{(clause.Export ? " export" : "")}{(clause.Target is { } type ? " type " + type.Name : "")})",
+            $"(declares {clause.Kinds[0].Name} {clause.Field}{(clause.Sequential ? " sequential" : "")}{(clause.FileScope ? " in file" : "")}{(clause.Export ? " export" : "")}{(clause.Target is { } type ? " type " + type.Name : "")})",
         BindingClauseKind.References =>
             $"(references{(clause.Optional ? "?" : "")} {string.Join("|", clause.Kinds.Select(k => k.Name))} {clause.Field}{(clause.Qualifier is { } q ? " in " + q.Name : "")})",
         BindingClauseKind.Scope => "(scope)",
-        BindingClauseKind.Lowers => $"(lowers {clause.Target!.Name}({string.Join(", ", clause.Arguments.Select(a => a.Name))}))",
+        BindingClauseKind.LowersRepeat => $"(lowers repeat {clause.Target!.Name} {string.Join(" ", clause.Arguments.Select(argument => argument.Name))})",
+        BindingClauseKind.Lowers => $"(lowers {(clause.OperationProperty is { } operation ? "operation" + (clause.Optional ? "? " : " ") + operation.Name : clause.Target!.Name)}({string.Join(", ", clause.Arguments.Select(a => a.InferSequence ? $"sequence inferred {a.Name}" : a.SequenceElementType is { } type ? $"sequence {type.Name} {a.Name}" : a.OptionalElementType is { } optional ? $"optional {optional.Name} {a.Name}" : a.AsText ? $"text {a.Name}" : a.Name))}))",
         BindingClauseKind.LowersLiteral => $"(lowers literal {clause.Target!.Name} {clause.Field})",
+        BindingClauseKind.LowersText => $"(lowers text {clause.Target!.Name} {clause.Field})",
+        BindingClauseKind.LowersSequence => $"(lowers sequence {clause.Target!.Name} {clause.Field})",
+        BindingClauseKind.LowersValue => clause.TypeProperty is { } typeProperty
+            ? $"(lowers value type {typeProperty.Name} {clause.Field})"
+            : $"(lowers value {clause.Target!.Name} {clause.Field})",
+        BindingClauseKind.LowersReference => $"(lowers reference type {clause.TypeProperty!.Name}" +
+            (clause.InitializerProperty is { } initializer ? $" initializer {initializer.Name}" : "") + ")",
         _ => "(dynamic)",
     };
 

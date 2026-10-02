@@ -32,7 +32,7 @@ public sealed class SemanticCatalog
     {
         ArgumentNullException.ThrowIfNull(modules);
         var all = modules.Append(new SemanticModule("Core", [],
-            [SemanticTypes.Scalar, SemanticTypes.Bool, SemanticTypes.Error], [])).ToArray();
+            [SemanticTypes.Scalar, SemanticTypes.Bool, SemanticTypes.Text, SemanticTypes.Error], [])).ToArray();
         var groups = all.GroupBy(module => module.Name, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
         var errors = new List<CompositionDiagnostic>();
