@@ -76,4 +76,57 @@ public sealed class WorkspaceLanguageSemanticsTests : IDisposable
         var error = Assert.Single(service.Diagnostics(Uri("Geometry.ngr")), d => d.Code == "NC0001");
         Assert.Equal(ServiceSeverity.Error, error.Severity);
     }
+
+    const string Cube = "def cube(w: Scalar, h: Scalar, d: Scalar) = box w h d;";
+
+    [Fact]
+    public void Each_call_that_closes_a_definition_cycle_shows_its_lowering_error()
+    {
+        using var service = Service();
+        service.Open(Uri("defs.geom"), 1,
+            "def a(w: Scalar, h: Scalar, d: Scalar) = make b(w, h, d);\ndef b(w: Scalar, h: Scalar, d: Scalar) = make a(w, h, d);");
+        service.Open(Uri("use.geom"), 1, "make a(1, 2, 3);");
+        service.Open(Uri("again.geom"), 1, "make b(1, 2, 3);");
+
+        // use.geom enters the cycle at a, closing it at b's call of a; again.geom closes it at a's call of b.
+        var cycles = service.Diagnostics(Uri("defs.geom")).Where(d => d.Code == "GD0004").ToList();
+        Assert.Equal([new DocumentPosition(0, 46), new DocumentPosition(1, 46)], cycles.Select(d => d.Range.Start).OrderBy(p => p.Line));
+        Assert.All(cycles, d => Assert.Equal(ServiceSeverity.Error, d.Severity));
+        Assert.Empty(service.Diagnostics(Uri("use.geom")));
+    }
+
+    [Fact]
+    public void A_lowering_error_clears_when_its_cause_is_fixed()
+    {
+        using var service = Service();
+        service.Open(Uri("defs.geom"), 1, "def a(w: Scalar, h: Scalar, d: Scalar) = make a(w, h, d);");
+        service.Open(Uri("use.geom"), 1, "make a(1, 2, 3);");
+        Assert.Contains(service.Diagnostics(Uri("defs.geom")), d => d.Code == "GD0004");
+
+        Assert.Contains(Uri("use.geom"), service.Change(Uri("defs.geom"), 2, Cube.Replace("cube", "a")));
+        Assert.Empty(service.Diagnostics(Uri("defs.geom")));
+        Assert.Empty(service.Diagnostics(Uri("use.geom")));
+    }
+
+    [Fact]
+    public void An_undefined_shape_is_reported_once()
+    {
+        using var service = Service();
+        service.Open(Uri("use.geom"), 1, "make nope(1, 2, 3);");
+        var diagnostic = Assert.Single(service.Diagnostics(Uri("use.geom")));
+        Assert.Equal(new DocumentRange(new DocumentPosition(0, 5), new DocumentPosition(0, 9)), diagnostic.Range);
+    }
+
+    [Theory]
+    [InlineData("box 0 2 3;")]          // GE0001: a semantic error
+    [InlineData("box 1 2;")]            // a parse error
+    [InlineData("box 1 2 3; box -1 2 3;")]
+    public void A_lowering_block_by_an_error_already_shown_is_not_repeated(string text)
+    {
+        using var service = Service();
+        service.Open(Uri("a.geom"), 1, text);
+        var diagnostics = service.Diagnostics(Uri("a.geom"));
+        Assert.NotEmpty(diagnostics);
+        Assert.DoesNotContain(diagnostics, d => d.Code.StartsWith("NH", StringComparison.Ordinal));
+    }
 }

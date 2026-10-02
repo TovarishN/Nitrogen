@@ -26,6 +26,37 @@ public sealed partial class NitrogenLanguageService
         return result;
     }
 
+    /// <summary>Lowering codes that only say an error elsewhere blocked lowering: recovered syntax, an unresolved name, invalid semantics.</summary>
+    static readonly HashSet<string> s_blockedLowering = new(StringComparer.Ordinal) { "NH0001", "NH0002", "NH0003" };
+
+    /// <summary>
+    /// The lowering diagnostics located in <paramref name="document"/>, from lowering every open document of
+    /// its language: a definition's error is found while lowering the file that calls it. One that repeats
+    /// a diagnostic in <paramref name="shown"/> is left out: a blocked lowering with one within its span,
+    /// and any with one at exactly its range (a lowerer's own report of an unresolved name).
+    /// </summary>
+    IEnumerable<ServiceDiagnostic> LoweringDiagnostics(Document document, IReadOnlyList<ServiceDiagnostic> shown)
+    {
+        var lowered = _documents.Values.Where(other => other.Language == document.Language)
+            .OrderBy(other => other.Uri, StringComparer.Ordinal)
+            .SelectMany(other => InspectDocument(other.Uri)!.Diagnostics)
+            .Where(diagnostic => diagnostic.Origin.Path == document.Uri)
+            .DistinctBy(diagnostic => (diagnostic.Code, diagnostic.Origin.Span, diagnostic.Message));
+        foreach (var diagnostic in lowered)
+        {
+            var range = document.Lines.RangeOf(diagnostic.Origin.Span);
+            bool blocked = s_blockedLowering.Contains(diagnostic.Code);
+            if (shown.Any(other => other.Range == range || blocked && Within(range, other.Range))) continue;
+            yield return new ServiceDiagnostic(range, ServiceSeverity.Error, diagnostic.Code, diagnostic.Message);
+        }
+    }
+
+    static bool Within(DocumentRange outer, DocumentRange inner) =>
+        Compare(outer.Start, inner.Start) <= 0 && Compare(inner.End, outer.End) <= 0;
+
+    static int Compare(DocumentPosition a, DocumentPosition b) =>
+        a.Line != b.Line ? a.Line.CompareTo(b.Line) : a.Character.CompareTo(b.Character);
+
     /// <summary>The narrowest typed HIR origin at a UTF-16 document position.</summary>
     public SemanticInspection? Inspect(string uri, DocumentPosition position)
     {

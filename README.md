@@ -288,8 +288,10 @@ Each plugin carries the grammar, helper sources, and a portable Nitrogen server,
 
 A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or
 `SemanticModule` field or property in them is added to the language, so its declarative `lowers` and
-`declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and
-`InspectDocument` lowers documents. Composition errors such as `NC0001` or `NM0008` are reported on the
+`declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and lowering errors
+(such as Geometry's cyclic-definition `GD0004`, or `NH0004` from a lowerer that throws) appear in the file
+they point into, even when found while lowering another open file. A lowering only blocked by an error
+already shown is not repeated. Composition errors such as `NC0001` or `NM0008` are reported on the
 first grammar file. Sources compile with the .NET SDK's implicit usings. The optional `"namespace"` field
 sets the C# namespace the grammars are generated into (default `Nitrogen.Workspace.Grammar`), so sources
 written against a project's generated syntax compile unchanged. [Nitrogen.Geometry/nitrogen.json](Nitrogen.Geometry/nitrogen.json)

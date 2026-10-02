@@ -237,4 +237,38 @@ public sealed class GrammarLoopTests : IDisposable
         Assert.Contains(sample, service.FileChanged(helper));
         Assert.Empty(service.Diagnostics(sample));
     }
+
+    [Fact]
+    public void A_lowerer_that_throws_is_an_error_on_its_syntax()
+    {
+        Write("nitrogen.json", """{ "languages": [ { "name": "boom", "extensions": [".boom"], "grammars": ["boom.ngr"], "start": "Boom.Doc", "sources": ["Boom.cs"], "namespace": "Boom.Syntax" } ] }""");
+        Write("boom.ngr", """
+            syntax module Boom
+            {
+              syntax Doc = Items:Item*;
+              syntax Item = "boom" ";";
+            }
+            """);
+        Write("Boom.cs", """
+            using Nitrogen.Semantic;
+            using Boom.Syntax;
+
+            public static class BoomSemantics
+            {
+                static readonly OperationSignature Explode = new("Boom.Explode", SemanticTypes.Scalar);
+                public static readonly SemanticModule Module = new("Boom", [], [], [Explode],
+                    [new LoweringRegistration(BoomKinds.Item, Explode.Id, (_, _) => throw new System.InvalidOperationException("kaboom"))]);
+            }
+            """);
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.ConfigureWorkspace(_root);
+        string sample = Uri(Path.Combine(_root, "a.boom"));
+        service.Open(sample, 1, "boom; boom;");
+
+        var errors = service.Diagnostics(sample);
+        Assert.Equal(2, errors.Count);
+        Assert.All(errors, d => Assert.Equal(("NH0004", ServiceSeverity.Error), (d.Code, d.Severity)));
+        Assert.Contains("kaboom", errors[0].Message);
+        Assert.Equal(new DocumentRange(new DocumentPosition(0, 6), new DocumentPosition(0, 11)), errors[1].Range);
+    }
 }
