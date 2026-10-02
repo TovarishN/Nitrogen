@@ -290,8 +290,9 @@ A language's helper sources can also carry its semantics. Every public static `M
 `SemanticModule` field or property in them is added to the language, so its declarative `lowers` and
 `declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and lowering errors
 (such as Geometry's cyclic-definition `GD0004`, or `NH0004` from a lowerer that throws) appear in the file
-they point into, even when found while lowering another open file. A lowering only blocked by an error
-already shown is not repeated. Composition errors such as `NC0001` or `NM0008` are reported on the
+they point into, even when found while lowering another open file. A lowering that is only blocked
+(`NH0001`–`NH0003`: by recovered syntax, an unresolved name, or invalid semantics) is not shown: its cause
+is reported on its own, or is no error at all, such as a name an open (`dynamic`) scope accepts. Composition errors such as `NC0001` or `NM0008` are reported on the
 first grammar file. Sources compile with the .NET SDK's implicit usings. The optional `"namespace"` field
 sets the C# namespace the grammars are generated into (default `Nitrogen.Workspace.Grammar`), so sources
 written against a project's generated syntax compile unchanged. [Nitrogen.Geometry/nitrogen.json](Nitrogen.Geometry/nitrogen.json)

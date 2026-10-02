@@ -271,4 +271,40 @@ public sealed class GrammarLoopTests : IDisposable
         Assert.Contains("kaboom", errors[0].Message);
         Assert.Equal(new DocumentRange(new DocumentPosition(0, 6), new DocumentPosition(0, 11)), errors[1].Range);
     }
+
+    [Fact]
+    public void A_lowering_blocked_by_a_name_an_open_scope_accepts_is_no_editor_error()
+    {
+        Write("nitrogen.json", """{ "languages": [ { "name": "open", "extensions": [".open"], "grammars": ["open.ngr"], "start": "Open.Doc", "sources": ["Open.cs"] } ] }""");
+        Write("open.ngr", """
+            syntax module Open
+            {
+              symbols { value }
+              token N = ['a'..'z']+;
+              token D = ['0'..'9']+;
+              syntax Doc = Items:Item*;
+              syntax Item = Gen / Use;
+              syntax Gen = "gen" Name:GenName ";" declares value Name type Core.Scalar;
+              syntax GenName = Head:N "$" Seq:D dynamic;
+              syntax Use = "use" Value:Ref ";" lowers Open.Use(Value);
+              syntax Ref = Name:N references value Name;
+            }
+            """);
+        Write("Open.cs", """
+            using Nitrogen.Semantic;
+
+            public static class OpenSemantics
+            {
+                static readonly OperationSignature Use = new("Open.Use", SemanticTypes.Scalar, SemanticTypes.Scalar);
+                public static readonly SemanticModule Module = new("Open", [], [], [Use]);
+            }
+            """);
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.ConfigureWorkspace(_root);
+        string sample = Uri(Path.Combine(_root, "a.open"));
+        service.Open(sample, 1, "gen x$1; use y;");
+
+        Assert.Equal("NH0002", Assert.Single(service.InspectDocument(sample)!.Diagnostics).Code); // lowering is blocked ...
+        Assert.Empty(service.Diagnostics(sample));                                                 // ... but nothing is wrong
+    }
 }
