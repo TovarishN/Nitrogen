@@ -63,7 +63,7 @@ This builds and tests Nitrogen, then writes the plugins to `artifacts/`: the VS 
 current machine. It needs the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 25 (Rider 2026.2's Java version). The
 [Plugins workflow](.github/workflows/plugins.yml) runs the same script on Linux and publishes the
 plugins as build artifacts. Both plugins use the release version in `Directory.Build.props`;
-`VERSION=0.2.0 ./build.sh` overrides it, and version tags supply their version automatically.
+`VERSION=1.2.3 ./build.sh` overrides it, and version tags supply their version automatically.
 Generated language plugins default to the CLI release version; an explicit language `"version"`
 in `nitrogen.json` takes precedence.
 
@@ -97,7 +97,7 @@ The [VS Code extension](editors/vscode/README.md) starts `nitrogen lsp`. The ser
    npm run package
    ```
 
-3. Install `editors/vscode/nitrogen-0.2.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.2.0.vsix` from `editors/vscode` if the `code` command is available.
+3. Install `editors/vscode/nitrogen-0.3.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.3.0.vsix` from `editors/vscode` if the `code` command is available.
 4. In VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, the default setting works.
 5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
 
@@ -257,7 +257,7 @@ For a `nitrogen.json` language, the server also reads the language's files in th
    npm run package
    ```
 
-3. Install `editors/vscode/nitrogen-0.2.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.2.0.vsix` from `editors/vscode` if the `code` command is available.
+3. Install `editors/vscode/nitrogen-0.3.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.3.0.vsix` from `editors/vscode` if the `code` command is available.
 4. In VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, the default setting works.
 5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
 
