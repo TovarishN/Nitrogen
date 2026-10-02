@@ -1,0 +1,13 @@
+{
+  "languages": [
+    {
+      "name": "Geometry",
+      "extensions": [".geom"],
+      "grammars": ["Geometry.ngr"],
+      "start": "Geometry.Document",
+      "namespace": "Nitrogen.Geometry.Syntax",
+      "sources": ["BoxMeshModule.cs", "GeometryDefinitionExpander.cs", "GeometryValues.cs"],
+      "tokens": { "shape": "function", "parameter": "parameter" }
+    }
+  ]
+}

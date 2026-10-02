@@ -87,6 +87,7 @@ internal static class LanguageBundle
             Strings(writer, "grammars", grammars.Select(f => "grammars/" + Path.GetFileName(f)));
             Strings(writer, "sources", sources.Select(f => "sources/" + Path.GetFileName(f)));
             Strings(writer, "usings", model.Usings);
+            if (model.Namespace is not null) writer.WriteString("namespace", model.Namespace);
             if (model.TokensJson is not null)
             {
                 writer.WritePropertyName("tokens");

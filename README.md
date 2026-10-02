@@ -286,6 +286,19 @@ nitrogen package --config nitrogen.json --output dist --rider    # dist/<id>-<ve
 
 Each plugin carries the grammar, helper sources, and a portable Nitrogen server, and runs it with the user's .NET 10 runtime (`dotnet`), so it works in any folder and on any OS. The server is started as `nitrogen lsp --config <bundled nitrogen.json>`, which ignores any `nitrogen.json` in the opened folder. Install the `.vsix` with **Extensions: Install from VSIX...**, and the ZIP with Rider's **Settings → Plugins → ⚙ → Install Plugin from Disk**. Packaging needs npm for VS Code, and Gradle with JDK 25 for Rider; the bundled server is the `nitrogen` that runs `package`, or `--server <directory>` for another framework-dependent build. `nitrogen generate vscode` and `nitrogen generate rider --self-contained` write the projects without building them. The optional `"version"` field of a language entry sets the plugin version (default `0.1.0`).
 
+A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or
+`SemanticModule` field or property in them is added to the language, so its declarative `lowers` and
+`declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and
+`InspectDocument` lowers documents. Composition errors such as `NC0001` or `NM0008` are reported on the
+first grammar file. Sources compile with the .NET SDK's implicit usings. The optional `"namespace"` field
+sets the C# namespace the grammars are generated into (default `Nitrogen.Workspace.Grammar`), so sources
+written against a project's generated syntax compile unchanged. [Nitrogen.Geometry/nitrogen.json](Nitrogen.Geometry/nitrogen.json)
+packages Geometry this way:
+
+```sh
+nitrogen package --config Nitrogen.Geometry/nitrogen.json --output dist --vscode
+```
+
 ## Project map
 
 | Project | Role |

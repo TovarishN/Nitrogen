@@ -35,6 +35,9 @@
   <ItemGroup>
     <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Geometry as a nitrogen.json language: its grammar, helper sources and config, served by the workspace. -->
+    <None Include="..\Nitrogen.Geometry\nitrogen.json;..\Nitrogen.Geometry\Geometry.ngr;..\Nitrogen.Geometry\BoxMeshModule.cs;..\Nitrogen.Geometry\GeometryDefinitionExpander.cs;..\Nitrogen.Geometry\GeometryValues.cs"
+          Link="GeometryLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The runtime tests run against modules generated from these grammars. -->

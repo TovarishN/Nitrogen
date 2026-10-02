@@ -16,7 +16,7 @@ public sealed partial class NitrogenLanguageService
     string? _root;
 
     sealed class GrammarLanguage(string name, string[] extensions, string start, string root, string[] patterns, string[] sources, string[] usings,
-        Presentation presentation)
+        string? generatedNamespace, Presentation presentation)
     {
         public string Name { get; } = name;
 
@@ -26,7 +26,7 @@ public sealed partial class NitrogenLanguageService
 
         public Presentation Presentation { get; } = presentation;
 
-        public GrammarWorkspace Workspace { get; } = new();
+        public GrammarWorkspace Workspace { get; } = new() { GeneratedNamespace = generatedNamespace ?? GrammarWorkspace.Namespace };
 
         public WorkspaceSnapshot? Snapshot { get; set; }
 
@@ -98,7 +98,8 @@ public sealed partial class NitrogenLanguageService
             var language = new GrammarLanguage(entry.GetProperty("name").GetString()!, Strings(entry, "extensions"),
                 entry.GetProperty("start").GetString()!, _root!, Strings(entry, "grammars"),
                 entry.TryGetProperty("sources", out _) ? Strings(entry, "sources") : [],
-                entry.TryGetProperty("usings", out _) ? Strings(entry, "usings") : [], new Presentation(styles));
+                entry.TryGetProperty("usings", out _) ? Strings(entry, "usings") : [],
+                entry.TryGetProperty("namespace", out var ns) ? ns.GetString() : null, new Presentation(styles));
             _grammarLanguages.Add(language);
             affected.AddRange(Compile(language));
         }
@@ -124,7 +125,8 @@ public sealed partial class NitrogenLanguageService
         language.Workspace.Usings.Clear();
         foreach (string u in language.Usings) language.Workspace.Usings.Add(u);
         var snapshot = language.Workspace.Compile();
-        var diagnostics = snapshot.Diagnostics.ToList();
+        // A diagnostic of the whole language (semantic composition, a throwing helper) has no file: show it on the first grammar.
+        var diagnostics = snapshot.Diagnostics.Select(d => d.Path.Length == 0 && files.Count > 0 ? d with { Path = files[0], Line = 1, Column = 1 } : d).ToList();
         Rule? start = snapshot.Succeeded ? snapshot.FindRule(language.Start) : null;
         if (snapshot.Succeeded && start is null)
             diagnostics.Add(new WorkspaceDiagnostic(files.FirstOrDefault() ?? "", 1, 1, "NGR0000", $"no rule '{language.Start}' to start {language.Name} files", true));
