@@ -37,8 +37,78 @@ public sealed class ProjectTests : IDisposable
     }
 
     [Fact]
+    public void File_declarations_are_visible_to_sibling_scopes_but_not_other_files()
+    {
+        var binding = Set("a", "unit a { block { global shared; } let x = 1; } unit b { let x = 2; let y = shared; }");
+        var symbol = Assert.Single(Project.Resolve(Assert.Single(binding.References)));
+        Assert.Equal("shared", symbol.Name);
+        Assert.False(symbol.IsExported);
+        Assert.Empty(Diagnostics("a"));
+        Set("b", "unit c { let y = shared; }");
+        Assert.Equal(new[] { "NB0001 shared" }, Diagnostics("b"));
+    }
+
+    [Fact]
+    public void File_declarations_in_sibling_scopes_still_report_duplicates()
+    {
+        Set("a", "unit a { global shared; } unit b { global shared; }");
+        Assert.Equal(new[] { "NB0002 shared" }, Diagnostics("a"));
+    }
+
+    [Fact]
     public void A_declaration_is_visible_throughout_its_scope() =>
         Assert.Empty(DiagnosticsOf("unit a { let y = x; let x = 1; }"));
+
+    [Fact]
+    public void Sequential_references_and_completion_use_the_last_completed_declaration()
+    {
+        const string text = "unit a { seq x = 1; seq y = x; seq x = x; seq z = x; }";
+        var binding = Set("a", text);
+        int first = text.IndexOf("x = 1", StringComparison.Ordinal);
+        int second = text.IndexOf("x = x", StringComparison.Ordinal);
+        Assert.Equal(new[] { first, first, second }, binding.References.Select(reference =>
+            Assert.Single(Project.Resolve(reference)).NameSpan.Start));
+        Assert.Equal(first, Assert.Single(Project.CandidatesFor(binding.References[1]), symbol => symbol.Name == "x").NameSpan.Start);
+        Assert.Equal(second, Assert.Single(Project.VisibleAt("a", text.IndexOf("seq z", StringComparison.Ordinal), "value"),
+            symbol => symbol.Name == "x").NameSpan.Start);
+        Assert.Empty(Diagnostics("a"));
+    }
+
+    [Fact]
+    public void Sequential_self_and_forward_references_are_not_visible()
+    {
+        Set("a", "unit a { seq x = x; seq y = later; seq later = 1; }");
+        Assert.Equal(new[] { "NB0004 x", "NB0004 later" }, Diagnostics("a"));
+    }
+
+    [Fact]
+    public void Sequential_initializer_can_see_an_enclosing_value()
+    {
+        const string text = "unit a { seq x = 1; block { seq x = x; seq y = x; } }";
+        var binding = Set("a", text);
+        Assert.Equal(new[] { text.IndexOf("x = 1", StringComparison.Ordinal), text.IndexOf("x = x", StringComparison.Ordinal) },
+            binding.References.Select(reference => Assert.Single(Project.Resolve(reference)).NameSpan.Start));
+        Assert.Empty(Diagnostics("a"));
+    }
+
+    [Fact]
+    public void Sequential_exports_expose_the_final_value_per_document()
+    {
+        const string text = "unit a { seqexport x = 1; seqexport x = x; }";
+        var local = Set("a", text);
+        Assert.Equal(text.IndexOf("x = 1", StringComparison.Ordinal), Assert.Single(Project.Resolve(Assert.Single(local.References))).NameSpan.Start);
+        var remote = Set("b", "unit b { let y = x; }");
+        Assert.Equal(text.IndexOf("x = x", StringComparison.Ordinal), Assert.Single(Project.Resolve(Assert.Single(remote.References))).NameSpan.Start);
+        Assert.Empty(Diagnostics("a"));
+        Assert.Empty(Diagnostics("b"));
+    }
+
+    [Fact]
+    public void Mixing_sequential_and_ordinary_declarations_still_reports_a_duplicate()
+    {
+        Set("a", "unit a { let x = 1; seq x = 2; }");
+        Assert.Equal(new[] { "NB0002 x" }, Diagnostics("a"));
+    }
 
     [Fact]
     public void Unresolved_and_not_visible()

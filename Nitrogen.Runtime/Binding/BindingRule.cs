@@ -17,13 +17,19 @@ public sealed class BindingRule(BindingDeclaration? declares, BindingReference? 
     public bool Dynamic { get; } = dynamic;
 }
 
-public sealed class BindingDeclaration(string kind, int child, bool export)
+public sealed class BindingDeclaration(string kind, int child, bool export, bool fileScope = false, bool sequential = false)
 {
     public string Kind { get; } = kind;
 
     public int Child { get; } = child;
 
     public bool Export { get; } = export;
+
+    /// <summary>The declaration belongs to this file's root scope, including dynamic names.</summary>
+    public bool FileScope { get; } = fileScope;
+
+    /// <summary>The declaration becomes visible after its entire node; later declarations replace it.</summary>
+    public bool Sequential { get; } = sequential;
 }
 
 /// <param name="kinds">Tried in order at each level of the lookup.</param>

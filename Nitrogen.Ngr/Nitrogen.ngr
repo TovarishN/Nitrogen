@@ -47,7 +47,7 @@ syntax module Nitrogen
 
   // Binding clauses (issue 237).
   syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;
-  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Export:"export"? Type:("type" QualifiedName)?;
+  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:("type" QualifiedName)?;
   syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:("in" Identifier)?;
   syntax KindList       = KindGroup / Identifier;
   syntax KindGroup      = "(" Kinds:(Identifier; "|")+ ")";
@@ -55,9 +55,18 @@ syntax module Nitrogen
   syntax DynamicClause  = "dynamic";
 
   // Declarative typing and lowering (issue 251).
-  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersCall);
+  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersCall);
+  syntax LowersRepeat   = "repeat" Type:QualifiedName Count:Identifier Iterator:Identifier Children:Identifier;
   syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier;
-  syntax LowersCall     = Operation:QualifiedName "(" Arguments:(Identifier; ",")* Close:")";
+  syntax LowersText     = "text" Type:QualifiedName Field:Identifier;
+  syntax LowersSequence = "sequence" Type:QualifiedName Field:Identifier;
+  syntax LowersValue    = "value" Type:(("type" Identifier) / QualifiedName) Field:Identifier;
+  syntax LowersReference = "reference" "type" Property:Identifier Initializer:("initializer" Identifier)?;
+  syntax LowersCall     = Operation:(("operation" "?"? Identifier) / QualifiedName) "(" Arguments:(LowersArgument; ",")* Close:")";
+  syntax LowersArgument = LowersSequenceArgument / LowersOptionalArgument / LowersTextArgument / Identifier;
+  syntax LowersSequenceArgument = "sequence" Type:QualifiedName Field:Identifier;
+  syntax LowersOptionalArgument = "optional" Type:QualifiedName Field:Identifier;
+  syntax LowersTextArgument = "text" Field:Identifier;
 
   // Semantics (issue 239).
   syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name;

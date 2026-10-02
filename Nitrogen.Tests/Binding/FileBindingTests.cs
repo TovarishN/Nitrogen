@@ -85,4 +85,17 @@ public class FileBindingTests
         Assert.Equal(new[] { "unit" }, use.Kinds);
         Assert.InRange(use.Position, text.IndexOf("use", StringComparison.Ordinal) + 3, text.IndexOf(';'));
     }
+
+    [Fact]
+    public void File_declarations_and_dynamic_names_belong_to_the_root_scope()
+    {
+        using var parsed = Scopes.Parse("unit a { block { global shared; globalgen p$1; } let local = 1; }", ScopesModule.File);
+        Assert.True(parsed.Success);
+        var binding = FileBinding.Bind("a.scopes", parsed.Tree);
+        Assert.Equal(0, Assert.Single(binding.Declarations, symbol => symbol.Name == "shared").Scope);
+        Assert.Equal(1, Assert.Single(binding.Declarations, symbol => symbol.Name == "local").Scope);
+        Assert.True(binding.Scopes[0].IsOpen("value"));
+        Assert.False(binding.Scopes[2].IsOpen("value"));
+        Assert.Empty(binding.Diagnostics);
+    }
 }

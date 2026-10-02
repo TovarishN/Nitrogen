@@ -406,6 +406,36 @@ public static class GrammarParser
         static NameDecl Name(GrammarToken token) => new(token.Value, token.Span);
 
         /// <summary>Binding clauses (issue 237) after a rule body or an alternative; none is fine.</summary>
+        LoweringArgument ParseLoweringArgument()
+        {
+            if (AtKeyword("optional") && Next.Kind is TokenKind.Identifier or TokenKind.QualifiedName &&
+                TokenAt(_position + 2).Kind == TokenKind.Identifier)
+            {
+                Advance();
+                var type = Name(Advance());
+                var field = Name(Advance());
+                return new LoweringArgument(field.Name, field.Span, OptionalElementType: type);
+            }
+            if (AtKeyword("text") && Next.Kind == TokenKind.Identifier)
+            {
+                Advance();
+                var field = Name(Advance());
+                return new LoweringArgument(field.Name, field.Span, AsText: true);
+            }
+            if (AtKeyword("sequence") && Next.Kind is TokenKind.Identifier or TokenKind.QualifiedName &&
+                TokenAt(_position + 2).Kind == TokenKind.Identifier)
+            {
+                Advance();
+                var type = Name(Advance());
+                var field = Name(Advance());
+                return type.Name == "inferred"
+                    ? new LoweringArgument(field.Name, field.Span, InferSequence: true)
+                    : new LoweringArgument(field.Name, field.Span, type);
+            }
+            var direct = Name(Expect(TokenKind.Identifier, "a field label"));
+            return new LoweringArgument(direct.Name, direct.Span);
+        }
+
         List<BindingClause> ParseClauses()
         {
             var clauses = new List<BindingClause>();
@@ -417,6 +447,19 @@ public static class GrammarParser
                     var kind = Name(Expect(TokenKind.Identifier, "a symbol kind"));
                     var field = Expect(TokenKind.Identifier, "a field label or 'this'");
                     int end = field.End;
+                    bool sequential = false;
+                    if (AtKeyword("sequential"))
+                    {
+                        end = Advance().End;
+                        sequential = true;
+                    }
+                    bool fileScope = false;
+                    if (AtKeyword("in"))
+                    {
+                        Advance();
+                        end = ExpectKeyword("file").End;
+                        fileScope = true;
+                    }
                     bool export = false;
                     if (AtKeyword("export"))
                     {
@@ -433,7 +476,8 @@ public static class GrammarParser
                         end = name.End;
                     }
                     clauses.Add(new BindingClause(BindingClauseKind.Declares, new[] { kind }, field.Value, field.Span,
-                        false, export, GrammarSpan.FromBounds(keyword.Start, end), Target: type));
+                        false, export, GrammarSpan.FromBounds(keyword.Start, end), Target: type, FileScope: fileScope,
+                        Sequential: sequential));
                 }
                 else if (AtKeyword("references"))
                 {
@@ -461,32 +505,89 @@ public static class GrammarParser
                 else if (AtKeyword("lowers"))
                 {
                     var keyword = Advance();
-                    if (AtKeyword("literal") && Next.Kind is TokenKind.Identifier or TokenKind.QualifiedName)
+                    if (AtKeyword("repeat"))
                     {
                         Advance();
+                        var element = Advance();
+                        if (element.Kind is not (TokenKind.Identifier or TokenKind.QualifiedName)) throw Error("expected a repeat element type");
+                        var count = Expect(TokenKind.Identifier, "a count field");
+                        var iterator = Expect(TokenKind.Identifier, "an iterator declaration field");
+                        var children = Expect(TokenKind.Identifier, "a template list field");
+                        clauses.Add(new BindingClause(BindingClauseKind.LowersRepeat, default, "", default, false, false,
+                            GrammarSpan.FromBounds(keyword.Start, children.End), Target: Name(element), Arguments: new[]
+                            {
+                                new LoweringArgument(count.Value, count.Span),
+                                new LoweringArgument(iterator.Value, iterator.Span),
+                                new LoweringArgument(children.Value, children.Span, SequenceElementType: Name(element)),
+                            }));
+                    }
+                    else if (AtKeyword("value") && Next.Value == "type")
+                    {
+                        Advance();
+                        Advance();
+                        var typeProperty = Expect(TokenKind.Identifier, "a semantic type property");
+                        var valueProperty = Expect(TokenKind.Identifier, "a float value property");
+                        clauses.Add(new BindingClause(BindingClauseKind.LowersValue, default,
+                            valueProperty.Value, valueProperty.Span, false, false,
+                            GrammarSpan.FromBounds(keyword.Start, valueProperty.End),
+                            TypeProperty: Name(typeProperty)));
+                    }
+                    else if (AtKeyword("reference") && Next.Value == "type")
+                    {
+                        Advance();
+                        Advance();
+                        var typeProperty = Expect(TokenKind.Identifier, "a semantic type property");
+                        NameDecl? initializer = null;
+                        if (AtKeyword("initializer"))
+                        {
+                            Advance();
+                            initializer = Name(Expect(TokenKind.Identifier, "an initializer node property"));
+                        }
+                        clauses.Add(new BindingClause(BindingClauseKind.LowersReference, default,
+                            "", default, false, false, GrammarSpan.FromBounds(keyword.Start, initializer?.Span.End ?? typeProperty.End),
+                            TypeProperty: Name(typeProperty), InitializerProperty: initializer));
+                    }
+                    else
+                    if ((AtKeyword("literal") || AtKeyword("text") || AtKeyword("sequence") || AtKeyword("value")) &&
+                        Next.Kind is TokenKind.Identifier or TokenKind.QualifiedName)
+                    {
+                        var form = Advance().Value;
                         var type = Name(Advance());
                         var field = Expect(TokenKind.Identifier, "a field label or 'this'");
-                        clauses.Add(new BindingClause(BindingClauseKind.LowersLiteral, default, field.Value, field.Span,
+                        var kind = form switch
+                        {
+                            "text" => BindingClauseKind.LowersText,
+                            "sequence" => BindingClauseKind.LowersSequence,
+                            "value" => BindingClauseKind.LowersValue,
+                            _ => BindingClauseKind.LowersLiteral,
+                        };
+                        clauses.Add(new BindingClause(kind, default, field.Value, field.Span,
                             false, false, GrammarSpan.FromBounds(keyword.Start, field.End), Target: type));
                     }
                     else
                     {
                         if (!At(TokenKind.Identifier) && !At(TokenKind.QualifiedName)) throw Error("expected an operation name or 'literal'");
-                        var operation = Name(Advance());
+                        bool computed = AtKeyword("operation");
+                        if (computed) Advance();
+                        bool optionalOperation = computed && At(TokenKind.Question);
+                        if (optionalOperation) Advance();
+                        var operation = computed ? Name(Expect(TokenKind.Identifier, "an operation property")) : Name(Advance());
                         Expect(TokenKind.LParen, "'('");
-                        var arguments = new List<NameDecl>();
+                        var arguments = new List<LoweringArgument>();
                         if (!At(TokenKind.RParen))
                         {
-                            arguments.Add(Name(Expect(TokenKind.Identifier, "a field label")));
+                            arguments.Add(ParseLoweringArgument());
                             while (At(TokenKind.Comma))
                             {
                                 Advance();
-                                arguments.Add(Name(Expect(TokenKind.Identifier, "a field label")));
+                                arguments.Add(ParseLoweringArgument());
                             }
                         }
                         var close = Expect(TokenKind.RParen, "',' or ')'");
-                        clauses.Add(new BindingClause(BindingClauseKind.Lowers, default, "", default, false, false,
-                            GrammarSpan.FromBounds(keyword.Start, close.End), Target: operation, Arguments: arguments.ToArray()));
+                        clauses.Add(new BindingClause(BindingClauseKind.Lowers, default, "", default, optionalOperation, false,
+                            GrammarSpan.FromBounds(keyword.Start, close.End),
+                            Target: computed ? null : operation, Arguments: arguments.ToArray(),
+                            OperationProperty: computed ? operation : null));
                     }
                 }
                 else if (AtKeyword("scope") || AtKeyword("dynamic"))

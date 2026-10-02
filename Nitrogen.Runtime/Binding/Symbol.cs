@@ -3,7 +3,7 @@ namespace Nitrogen.Binding;
 /// <summary>A declared or built-in name (issue 237). A built-in has no path, span or node.</summary>
 public sealed class Symbol
 {
-    internal Symbol(string kind, string name, string? path, TextSpan nameSpan, int node, int scope, bool exported)
+    internal Symbol(string kind, string name, string? path, TextSpan nameSpan, int node, int scope, bool exported, int? availableFrom = null)
     {
         Kind = kind;
         Name = name;
@@ -12,6 +12,7 @@ public sealed class Symbol
         Node = node;
         Scope = scope;
         IsExported = exported;
+        AvailableFrom = availableFrom;
     }
 
     public string Kind { get; }
@@ -27,6 +28,9 @@ public sealed class Symbol
     public int Node { get; }
 
     public bool IsExported { get; }
+
+    /// <summary>Sequential declarations become visible at this source offset; null means whole-scope visibility.</summary>
+    public int? AvailableFrom { get; }
 
     public bool IsBuiltin => Path is null;
 

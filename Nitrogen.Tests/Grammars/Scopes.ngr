@@ -9,12 +9,16 @@ syntax module Scopes
 
   token IdStart    = ['a'..'z' 'A'..'Z' '_'];
   token IdPart     = ['a'..'z' 'A'..'Z' '0'..'9' '_'];
-  token Identifier = IdStart IdPart* except "unit" "let" "use" "block" "gen";
+  token Identifier = IdStart IdPart* except "unit" "let" "use" "block" "gen" "global" "globalgen" "seq" "seqexport";
   token Number     = ['0'..'9']+;
 
   syntax File    = Units:Unit*;
   syntax Unit    = "unit" Name:Identifier "{" Items:Item* "}"  declares unit Name export scope;
-  syntax Item    = Let / Use / Block / Gen;
+  syntax Item    = Let / Use / Block / Gen / Global / GlobalGen / Sequential / SequentialExport;
+  syntax Sequential = "seq" Name:Identifier "=" Value:Expr ";" declares value Name sequential;
+  syntax SequentialExport = "seqexport" Name:Identifier "=" Value:Expr ";" declares value Name sequential in file export;
+  syntax Global = "global" Name:Identifier ";" declares value Name in file;
+  syntax GlobalGen = "globalgen" Name:GenName ";" declares value Name in file;
   syntax Let     = "let" Name:Identifier "=" Value:Expr ";"     declares value Name;
   syntax Use     = "use" Target:Identifier ";"                  references unit Target;
   syntax Block   = "block" "{" Items:Item* "}"                  scope;

@@ -53,7 +53,8 @@ internal static class BindingWriter
             switch (clause.Kind)
             {
                 case BindingClauseKind.Declares:
-                    declares = $"new({CSharpText.Literal(clause.Kinds[0].Name)}, {ChildIndex(elements, clause.Field)}, {Bool(clause.Export)})";
+                    declares = $"new({CSharpText.Literal(clause.Kinds[0].Name)}, {ChildIndex(elements, clause.Field)}, {Bool(clause.Export)}"
+                        + (clause.Sequential ? $", {Bool(clause.FileScope)}, true" : clause.FileScope ? ", true" : "") + ")";
                     break;
                 case BindingClauseKind.References:
                     references = $"new(new[] {{ {string.Join(", ", clause.Kinds.Select(k => CSharpText.Literal(k.Name)))} }}, "

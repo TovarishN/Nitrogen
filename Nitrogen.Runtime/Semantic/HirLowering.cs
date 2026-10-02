@@ -3,13 +3,17 @@ using Nitrogen.Semantics;
 namespace Nitrogen.Semantic;
 
 public sealed record LoweringRegistration(int SyntaxKind, string OperationId,
-    Func<LoweringContext, int, HirNode?> Lower, bool HandlesUnresolvedReferences = false);
+    Func<LoweringContext, int, HirNode?> Lower, bool HandlesUnresolvedReferences = false,
+    bool DynamicOperation = false);
 
-public sealed class LoweringContext(FileSemantics file, Guid snapshotId)
+public enum SemanticCheckScope { WholeFile, SubtreeAndAncestors }
+
+public sealed class LoweringContext(FileSemantics file, Guid snapshotId, SemanticCheckScope checkScope = SemanticCheckScope.WholeFile)
 {
     readonly List<LoweringDiagnostic> _reported = new();
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
+    public SemanticCheckScope CheckScope { get; } = checkScope;
     public SourceOrigin Origin(int node) => new(File.Path, SnapshotId, node, File.Tree.Span(node));
     public void Report(string code, SourceOrigin origin, string message)
     {
@@ -25,8 +29,77 @@ public sealed record LoweringResult(IReadOnlyList<HirNode> Roots, IReadOnlyList<
 
 public static class HirLowering
 {
+    /// <summary>Lower one checked declarative value inside a host operation. Reports subtree errors
+    /// on the supplied context so the enclosing lowering result retains source-linked diagnostics.</summary>
+    public static HirNode? LowerNested(LoweringContext context, int node)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        var file = context.File;
+        var tree = file.Tree;
+        if (node < 0 || node >= tree.NodeCount) throw new ArgumentOutOfRangeException(nameof(node));
+        var origin = context.Origin(node);
+        if (HasRecovery(tree, node))
+        {
+            context.Report("NH0001", origin, "Recovered syntax cannot be lowered.");
+            return null;
+        }
+        var span = origin.Span;
+        var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
+            !reference.IsOptional && file.SymbolOf(reference.Node) is null);
+        if (unresolved is not null)
+        {
+            context.Report("NH0002", new SourceOrigin(file.Path, context.SnapshotId,
+                unresolved.Node, unresolved.NameSpan), "An unresolved symbol prevents lowering.");
+            return null;
+        }
+        var bindingError = file.Binding.Diagnostics.FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
+        var semanticError = (context.CheckScope == SemanticCheckScope.SubtreeAndAncestors
+            ? file.DiagnosticsForSubtree(node) : file.Diagnostics()).FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
+        if (bindingError is not null || semanticError is not null)
+        {
+            var site = bindingError?.Span ?? semanticError!.Span;
+            int sourceNode = Enumerable.Range(0, tree.NodeCount)
+                .FirstOrDefault(candidate => tree.Span(candidate) == site, node);
+            context.Report("NH0003", new SourceOrigin(file.Path, context.SnapshotId, sourceNode, site),
+                "Invalid semantics prevents lowering.");
+            return null;
+        }
+        return file.DeclarativeTypes.LowerNested(context, node);
+    }
+
     public static LoweringResult Lower(FileSemantics file, SemanticCatalog catalog) =>
         Lower(file, catalog, Guid.NewGuid());
+
+    /// <summary>Lower selected declarative syntax kinds in source order, without adding registered
+    /// roots from other language regions. Unsupported selected nodes receive a diagnostic.</summary>
+    public static LoweringResult LowerSelected(FileSemantics file, IReadOnlySet<int> syntaxKinds, Guid snapshotId,
+        SemanticCheckScope checkScope = SemanticCheckScope.WholeFile)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(syntaxKinds);
+        if (snapshotId == Guid.Empty) throw new ArgumentException("A snapshot ID is required.", nameof(snapshotId));
+        var kinds = syntaxKinds.ToHashSet();
+        var context = new LoweringContext(file, snapshotId, checkScope);
+        var roots = new List<HirNode>();
+        foreach (int node in PreOrder(file.Tree))
+        {
+            if (!kinds.Contains(file.Tree.Kind(node))) continue;
+            int previous = context.Reported.Count;
+            try
+            {
+                var root = LowerNested(context, node);
+                if (root is not null) roots.Add(root);
+                else if (context.Reported.Count == previous)
+                    context.Report("NH0005", context.Origin(node), "Selected syntax has no supported declarative lowering.");
+            }
+            catch (Exception error)
+            {
+                context.Report("NH0004", context.Origin(node),
+                    $"Selected lowering failed: {error.GetType().Name}: {error.Message}");
+            }
+        }
+        return new LoweringResult(roots.AsReadOnly(), Array.AsReadOnly(context.Reported.ToArray()));
+    }
 
     public static LoweringResult Lower(FileSemantics file, SemanticCatalog catalog, Guid snapshotId)
     {
@@ -73,8 +146,10 @@ public static class HirLowering
                 {
                     var root = registration.Lower(context, node);
                     if (root is null) continue;
-                    if (root.Type.Equals(SemanticTypes.Error) ||
-                        !catalog.Operations.TryGetValue(registration.OperationId, out var signature) ||
+                    var dynamicOperation = root as HirOperation;
+                    var operationId = registration.DynamicOperation ? dynamicOperation?.Signature.Id : registration.OperationId;
+                    if (root.Type.Equals(SemanticTypes.Error) || operationId is null ||
+                        !catalog.Operations.TryGetValue(operationId, out var signature) ||
                         !root.Type.Equals(signature.Result) ||
                         root is HirOperation operation && !operation.Signature.Equals(signature))
                     {

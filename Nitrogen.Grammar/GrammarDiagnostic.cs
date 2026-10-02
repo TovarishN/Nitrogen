@@ -46,6 +46,9 @@ public static class GrammarCodes
     public const string DuplicatePropertyFlag = "NGR0128";
     public const string SemanticsOnAlias = "NGR0129";
     public const string PropertyOnAlternative = "NGR0130";
+    public const string SequenceArgumentNeedsList = "NGR0131";
+    public const string InvalidValueProperty = "NGR0132";
+    public const string OptionalArgumentNeedsOptionalField = "NGR0133";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

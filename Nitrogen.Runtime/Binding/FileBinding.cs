@@ -42,6 +42,9 @@ public sealed class FileBinding
 
     /// <summary>Walks <paramref name="tree"/> once, following its modules' binding tables.</summary>
     public static FileBinding Bind(string path, SyntaxTree tree) => new Binder(path, tree).Run();
+
+    internal static FileBinding Bind(string path, SyntaxTree tree,
+        IReadOnlyDictionary<string, IReadOnlyList<DerivedDeclaration>> derived) => new Binder(path, tree).Run(derived);
 }
 
 internal sealed class BindingScope(int parent, int node, int nodeKind, TextSpan span)
@@ -76,6 +79,13 @@ internal sealed class BindingScope(int parent, int node, int nodeKind, TextSpan 
     public void Open(string kind) => (_open ??= new HashSet<string>(StringComparer.Ordinal)).Add(kind);
 
     public bool IsOpen(string kind) => _open is not null && _open.Contains(kind);
+
+    public void Remove(string kind)
+    {
+        _symbols.RemoveAll(symbol => symbol.Kind == kind);
+        foreach (var key in _byName.Keys.Where(key => key.Kind == kind).ToArray()) _byName.Remove(key);
+        _open?.Remove(kind);
+    }
 }
 
 internal sealed class Binder
@@ -96,7 +106,7 @@ internal sealed class Binder
         _language = tree.Language ?? throw new ArgumentException("The tree has no language; parse it with a Language to bind it.", nameof(tree));
     }
 
-    public FileBinding Run()
+    public FileBinding Run(IReadOnlyDictionary<string, IReadOnlyList<DerivedDeclaration>>? derived = null)
     {
         _scopes.Add(new BindingScope(-1, _tree.Root, _tree.Kind(_tree.Root), _tree.Span(_tree.Root)));
         var stack = new Stack<(int Node, int Scope, int Guard, int Enclosing)>();
@@ -133,7 +143,21 @@ internal sealed class Binder
             }
             for (int k = _tree.ChildCount(node) - 1; k >= 0; k--) stack.Push((_tree.Child(node, k), childScope, childGuard, childEnclosing));
         }
-        return new FileBinding(_path, _tree, _scopes.ToArray(), _declarations.ToArray(), _references.ToArray(), _holes.ToArray(), Duplicates());
+        if (derived is not null)
+            foreach (var (kind, declarations) in derived)
+            {
+                _scopes[0].Remove(kind);
+                _declarations.RemoveAll(symbol => symbol.Scope == 0 && symbol.Kind == kind);
+                foreach (var declaration in declarations)
+                {
+                    var symbol = new Symbol(kind, declaration.Name, _path, declaration.NameSpan,
+                        declaration.Node, 0, declaration.Export);
+                    _declarations.Add(symbol);
+                    _scopes[0].Add(symbol);
+                }
+            }
+        return new FileBinding(_path, _tree, _scopes.ToArray(), _declarations.OrderBy(symbol => symbol.NameSpan.Start).ToArray(),
+            _references.ToArray(), _holes.ToArray(), Duplicates());
     }
 
     BindingRule? RuleOf(int kind)
@@ -144,6 +168,7 @@ internal sealed class Binder
 
     void Declare(int node, BindingDeclaration declares, int scope)
     {
+        if (declares.FileScope) scope = 0;
         string? name = NameOf(node, declares.Child, out var span, out bool dynamic, out _);
         if (name is null) return;
         if (dynamic)
@@ -151,7 +176,8 @@ internal sealed class Binder
             _scopes[scope].Open(declares.Kind);
             return;
         }
-        var symbol = new Symbol(declares.Kind, name, _path, span, node, scope, declares.Export);
+        var symbol = new Symbol(declares.Kind, name, _path, span, node, scope, declares.Export,
+            declares.Sequential ? _tree.Span(node).End : null);
         _declarations.Add(symbol);
         _scopes[scope].Add(symbol);
     }
@@ -209,9 +235,12 @@ internal sealed class Binder
         var diagnostics = new List<BindingDiagnostic>();
         foreach (var scope in _scopes)
             foreach (var group in scope.Groups)
+            {
+                if (group.All(symbol => symbol.AvailableFrom.HasValue)) continue;
                 for (int i = 1; i < group.Count; i++)
                     diagnostics.Add(new BindingDiagnostic(BindingCodes.Duplicate, group[i].NameSpan,
                         $"duplicate {group[i].Kind} '{group[i].Name}'"));
+            }
         return diagnostics.OrderBy(d => d.Span.Start).ToArray();
     }
 }

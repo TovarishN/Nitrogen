@@ -1,0 +1,54 @@
+syntax module PropertyLowering
+{
+  token Digits = ['0'..'9']+;
+  token Word = ['a'..'z']+;
+  symbols { input }
+  builtin input { gain }
+  syntax File = "size" Amount:Amount lowers Test.Size(Amount);
+  syntax OptionalFile = "optional" Amount:Amount? lowers Test.OptionalSize(optional Core.Scalar Amount);
+  syntax TypedFile = "typed" Amount:TypedAmount;
+  syntax TypedAngleFile = "angle" Amount:TypedAmount lowers Test.Turn(Amount);
+  syntax DynamicFile = "dynamic" Left:TypedAmount "+" Right:TypedAmount
+      lowers operation Selected(Left, Right)
+  {
+    out Selected : Nitrogen.Semantic.OperationSignature? = null;
+    Selected = Left.Resolved == Nitrogen.Semantic.SemanticTypes.Scalar &&
+        Right.Resolved == Nitrogen.Semantic.SemanticTypes.Scalar
+        ? Nitrogen.Tests.Semantic.DynamicSignatures.AddScalars
+        : Left.Resolved == Nitrogen.Semantic.SemanticTypes.Angle &&
+          Right.Resolved == Nitrogen.Semantic.SemanticTypes.Angle
+          ? Nitrogen.Tests.Semantic.DynamicSignatures.AddAngles : null;
+  }
+  syntax OptionalDynamicFile = "optional-dynamic" Left:TypedAmount "+" Right:TypedAmount
+      lowers operation? Selected(Left, Right)
+  {
+    out Selected : Nitrogen.Semantic.OperationSignature? = null;
+    Selected = Left.Resolved == Nitrogen.Semantic.SemanticTypes.Scalar &&
+        Right.Resolved == Nitrogen.Semantic.SemanticTypes.Scalar
+        ? Nitrogen.Tests.Semantic.DynamicSignatures.AddScalars : null;
+  }
+  syntax OptionalDynamicRoot = "root" Inner:OptionalDynamicFile lowers Test.Size(Inner);
+  syntax ReferenceFile = Definition:Input "use" Value:Reference lowers Test.Size(Value);
+  syntax BuiltinReferenceFile = "builtin" Value:Reference lowers Test.Size(Value);
+  syntax Input = "input" Name:Word declares input Name type Core.Scalar;
+  syntax Reference = Name:Word references input Name lowers reference type Resolved
+  {
+    out Resolved : Nitrogen.Semantic.SemanticType? = null;
+    Resolved = Name.Text == "missing" ? Nitrogen.Semantic.SemanticType.Named("Units", "Missing")
+        : Nitrogen.Semantic.SemanticTypes.Scalar;
+  }
+  syntax TypedAmount = Value:Digits lowers value type Resolved Constant
+  {
+    out Resolved : Nitrogen.Semantic.SemanticType = Nitrogen.Semantic.SemanticTypes.Scalar;
+    out Constant : float? = null;
+    Resolved = Value.Text == "2" ? Nitrogen.Semantic.SemanticTypes.Angle
+        : Value.Text == "3" ? Nitrogen.Semantic.SemanticType.Named("Units", "Missing")
+        : Nitrogen.Semantic.SemanticTypes.Scalar;
+    Constant = float.Parse(Value.Text, System.Globalization.CultureInfo.InvariantCulture);
+  }
+  syntax Amount = Value:Digits lowers value Core.Scalar Constant
+  {
+    out Constant : float? = null;
+    Constant = Value.Text == "0" ? null : float.Parse(Value.Text, System.Globalization.CultureInfo.InvariantCulture) * 2f;
+  }
+}
