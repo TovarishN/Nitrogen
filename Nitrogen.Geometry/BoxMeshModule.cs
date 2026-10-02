@@ -9,7 +9,6 @@ public static class BoxMeshModule
     public static readonly OperationSignature BoxSignature = new("Geometry.BoxMesh", MeshType,
         SemanticTypes.Scalar, SemanticTypes.Scalar, SemanticTypes.Scalar);
     public static readonly ModuleDescriptor Descriptor = new("Geometry", GeometryModule.Instance,
-        new SemanticModule("Geometry", [], [MeshType], [BoxSignature],
-            [GeometryDefinitionExpander.Registration]),
+        new SemanticModule("Geometry", [], [MeshType], [BoxSignature]),
         ["Document"], [BoxSignature]);
 }

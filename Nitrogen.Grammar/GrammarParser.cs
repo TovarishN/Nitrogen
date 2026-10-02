@@ -521,6 +521,17 @@ public static class GrammarParser
                                 new LoweringArgument(children.Value, children.Span, SequenceElementType: Name(element)),
                             }));
                     }
+                    else if ((AtKeyword("template") || AtKeyword("expand")) && Next.Kind == TokenKind.Identifier)
+                    {
+                        // lowers template Body(Params) / lowers expand Name(Args)
+                        var kind = Advance().Value == "template" ? BindingClauseKind.LowersTemplate : BindingClauseKind.LowersExpand;
+                        var field = Expect(TokenKind.Identifier, "a field label");
+                        Expect(TokenKind.LParen, "'('");
+                        var list = Expect(TokenKind.Identifier, "a list field label");
+                        var close = Expect(TokenKind.RParen, "')'");
+                        clauses.Add(new BindingClause(kind, default, field.Value, field.Span, false, false,
+                            GrammarSpan.FromBounds(keyword.Start, close.End), Arguments: new[] { new LoweringArgument(list.Value, list.Span) }));
+                    }
                     else if (AtKeyword("value") && Next.Value == "type")
                     {
                         Advance();

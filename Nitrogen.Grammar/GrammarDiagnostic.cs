@@ -49,6 +49,7 @@ public static class GrammarCodes
     public const string SequenceArgumentNeedsList = "NGR0131";
     public const string InvalidValueProperty = "NGR0132";
     public const string OptionalArgumentNeedsOptionalField = "NGR0133";
+    public const string InvalidTemplateClause = "NGR0134";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

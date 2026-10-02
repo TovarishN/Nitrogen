@@ -55,7 +55,9 @@ syntax module Nitrogen
   syntax DynamicClause  = "dynamic";
 
   // Declarative typing and lowering (issue 251).
-  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersCall);
+  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall);
+  syntax LowersTemplate = "template" Field:Identifier "(" Parameters:Identifier Close:")";
+  syntax LowersExpand   = "expand" Field:Identifier "(" Arguments:Identifier Close:")";
   syntax LowersRepeat   = "repeat" Type:QualifiedName Count:Identifier Iterator:Identifier Children:Identifier;
   syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier;
   syntax LowersText     = "text" Type:QualifiedName Field:Identifier;

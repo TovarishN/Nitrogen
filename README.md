@@ -191,6 +191,27 @@ Whole-tree preflight still checks all branches, including unselected ones, befor
 
 The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
 
+## Templates
+
+A declaring rule with `lowers template Body(Params)` is a template, and a referencing rule with
+`lowers expand Name(Args)` expands the template its `Name` resolves to, in any file of the project:
+
+```text
+syntax Definition = "def" Name:Identifier "(" Params:(Parameter; ",")* ")" "=" Body:Shape
+                    declares shape Name export scope lowers template Body(Params);
+syntax Parameter  = Name:Identifier ":" Type:Identifier declares parameter Name type Type;
+syntax Make       = "make" Name:Identifier "(" Args:(Dimension; ",")* ")" ";"
+                    references shape Name lowers expand Name(Args);
+```
+
+A template body is never a lowering root. An expansion has its body's type; it lowers the body with
+each parameter (by position) replaced by the argument lowered at the call, keeping the parameter
+reference's origin, and its result's origins start with the call's. The call is checked for a template
+callee (`NT0007`), the argument count (`NT0008`, at the name) and each argument's type against its
+parameter's declared type (`NT0001`). An expansion is blocked by errors within the template, reported
+there (`NH0001`–`NH0003`), and a cycle reports `NH0007` at the name of the call that closes it.
+Geometry's `def`/`make` use these clauses; see the [design](docs/superpowers/specs/2026-10-02-declarative-templates-design.md).
+
 ## Use Nitrogen as packages
 
 Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.com/TovarishN/index.json`):
@@ -285,6 +306,22 @@ nitrogen package --config nitrogen.json --output dist --rider    # dist/<id>-<ve
 ```
 
 Each plugin carries the grammar, helper sources, and a portable Nitrogen server, and runs it with the user's .NET 10 runtime (`dotnet`), so it works in any folder and on any OS. The server is started as `nitrogen lsp --config <bundled nitrogen.json>`, which ignores any `nitrogen.json` in the opened folder. Install the `.vsix` with **Extensions: Install from VSIX...**, and the ZIP with Rider's **Settings → Plugins → ⚙ → Install Plugin from Disk**. Packaging needs npm for VS Code, and Gradle with JDK 25 for Rider; the bundled server is the `nitrogen` that runs `package`, or `--server <directory>` for another framework-dependent build. `nitrogen generate vscode` and `nitrogen generate rider --self-contained` write the projects without building them. The optional `"version"` field of a language entry sets the plugin version (default `0.1.0`).
+
+A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or
+`SemanticModule` field or property in them is added to the language, so its declarative `lowers` and
+`declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and lowering errors
+(such as a cyclic template expansion, `NH0007`, or `NH0004` from a lowerer that throws) appear in the file
+they point into, even when found while lowering another open file. A lowering that is only blocked
+(`NH0001`–`NH0003`: by recovered syntax, an unresolved name, or invalid semantics) is not shown: its cause
+is reported on its own, or is no error at all, such as a name an open (`dynamic`) scope accepts. Composition errors such as `NC0001` or `NM0008` are reported on the
+first grammar file. Sources compile with the .NET SDK's implicit usings. The optional `"namespace"` field
+sets the C# namespace the grammars are generated into (default `Nitrogen.Workspace.Grammar`), so sources
+written against a project's generated syntax compile unchanged. [Nitrogen.Geometry/nitrogen.json](Nitrogen.Geometry/nitrogen.json)
+packages Geometry this way:
+
+```sh
+nitrogen package --config Nitrogen.Geometry/nitrogen.json --output dist --vscode
+```
 
 ## Project map
 

@@ -149,6 +149,19 @@ public static class HirTraversal
                 foreach (var descendant in PreOrder(child)) yield return descendant;
     }
 
+    /// <summary>The node with <paramref name="origins"/> in place of its own.</summary>
+    internal static HirNode WithOrigins(HirNode node, IReadOnlyList<SourceOrigin> origins) => node switch
+    {
+        HirConstant constant => new HirConstant(constant.Value, constant.Type, origins),
+        HirText text => new HirText(text.Value, origins),
+        HirSequence sequence => new HirSequence(sequence.ElementType, sequence.Items, origins),
+        HirOptional optional => new HirOptional(optional.ElementType, optional.Value, origins),
+        HirRepeat repeat => new HirRepeat(repeat.Count, repeat.Iterator, repeat.Template, origins),
+        HirSymbolRef reference => new HirSymbolRef(reference.Symbol, origins),
+        HirOperation operation => new HirOperation(operation.Signature, operation.Arguments, origins),
+        _ => throw new ArgumentException($"Unknown HIR node '{node.GetType().Name}'.", nameof(node)),
+    };
+
     public static HirNode Rewrite(HirNode root, Func<HirNode, HirNode> transform)
     {
         ArgumentNullException.ThrowIfNull(root);

@@ -1,4 +1,5 @@
 using System.Numerics;
+using Nitrogen.Binding;
 using Nitrogen.Geometry;
 using Nitrogen.Geometry.Syntax;
 using Nitrogen.Semantic;
@@ -54,6 +55,36 @@ public sealed class GeometryExecutorTests
         Assert.Equal("GX0003", Assert.Single(result.Diagnostics).Code);
         Assert.Equal(root.Arguments[0].Origins[0], result.Diagnostics[0].Origin);
         Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public void Every_nonfinite_dimension_is_reported_before_the_host_runs()
+    {
+        var calls = 0;
+        Func<IReadOnlyList<ExecutionValue>, GeometryMesh> host = _ => { calls++; return Triangle(); };
+        var depth = new SourceOrigin("sample.geom", Origin.SnapshotId, 3, new TextSpan(8, 1));
+        var root = new HirOperation(BoxMeshModule.BoxSignature,
+            [new HirConstant(float.PositiveInfinity, SemanticTypes.Scalar, Origin),
+                new HirConstant(2f, SemanticTypes.Scalar, Origin),
+                new HirConstant(float.NaN, SemanticTypes.Scalar, depth)], [Origin]);
+        var result = GeometryExecutor.Execute(root, Compose(host));
+        Assert.Null(result.Mesh);
+        Assert.Equal([("GX0003", Origin), ("GX0003", depth)], result.Diagnostics.Select(d => (d.Code, d.Origin)));
+        Assert.Equal(0, calls);
+    }
+
+    [Fact]
+    public void A_dimension_without_a_value_is_reported_at_its_reference()
+    {
+        Func<IReadOnlyList<ExecutionValue>, GeometryMesh> host = _ => Triangle();
+        var composition = Compose(host);
+        using var parsed = composition.Language.Parse("def c(w: Scalar, h: Scalar, d: Scalar) = box w h d;",
+            composition.StartRules[("Geometry", "Document")]);
+        var width = FileBinding.Bind("sample.geom", parsed.Tree).Declarations.First(symbol => symbol.Kind == "parameter");
+        var reference = new HirSymbolRef(SemanticSymbol.From(width, "Geometry", SemanticTypes.Scalar), Origin);
+        var root = new HirOperation(BoxMeshModule.BoxSignature, [reference, Root().Arguments[1], Root().Arguments[2]], [Origin]);
+        var diagnostic = Assert.Single(GeometryExecutor.Execute(root, composition).Diagnostics);
+        Assert.Equal(("GX0003", Origin), (diagnostic.Code, diagnostic.Origin));
     }
 
     [Fact]

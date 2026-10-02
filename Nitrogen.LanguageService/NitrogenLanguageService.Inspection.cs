@@ -26,6 +26,33 @@ public sealed partial class NitrogenLanguageService
         return result;
     }
 
+    /// <summary>
+    /// Lowering codes that only say lowering was blocked: by recovered syntax, an unresolved name, or invalid
+    /// semantics. Their cause is shown on its own, or is no error at all (a name an open scope accepts).
+    /// </summary>
+    static readonly HashSet<string> s_blockedLowering = new(StringComparer.Ordinal) { "NH0001", "NH0002", "NH0003" };
+
+    /// <summary>
+    /// The lowering diagnostics located in <paramref name="document"/>, from lowering every open document of
+    /// its language: a definition's error is found while lowering the file that calls it. A blocked lowering
+    /// is left out, and so is one at exactly the range of a diagnostic in <paramref name="shown"/> (a
+    /// lowerer's own report of an unresolved name).
+    /// </summary>
+    IEnumerable<ServiceDiagnostic> LoweringDiagnostics(Document document, IReadOnlyList<ServiceDiagnostic> shown)
+    {
+        var lowered = _documents.Values.Where(other => other.Language == document.Language)
+            .OrderBy(other => other.Uri, StringComparer.Ordinal)
+            .SelectMany(other => InspectDocument(other.Uri)!.Diagnostics)
+            .Where(diagnostic => diagnostic.Origin.Path == document.Uri)
+            .DistinctBy(diagnostic => (diagnostic.Code, diagnostic.Origin.Span, diagnostic.Message));
+        foreach (var diagnostic in lowered)
+        {
+            var range = document.Lines.RangeOf(diagnostic.Origin.Span);
+            if (s_blockedLowering.Contains(diagnostic.Code) || shown.Any(other => other.Range == range)) continue;
+            yield return new ServiceDiagnostic(range, ServiceSeverity.Error, diagnostic.Code, diagnostic.Message);
+        }
+    }
+
     /// <summary>The narrowest typed HIR origin at a UTF-16 document position.</summary>
     public SemanticInspection? Inspect(string uri, DocumentPosition position)
     {

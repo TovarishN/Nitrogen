@@ -95,6 +95,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
                 diagnostics.Add(new ServiceDiagnostic(document.Lines.RangeOf(diagnostic.Span),
                     diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal) ? ServiceSeverity.Warning : ServiceSeverity.Error,
                     diagnostic.Code, diagnostic.Message));
+        diagnostics.AddRange(LoweringDiagnostics(document, diagnostics));
         diagnostics.AddRange(GrammarDiagnostics(uri));
         return diagnostics;
     }

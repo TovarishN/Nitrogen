@@ -69,7 +69,10 @@ public sealed class GeometryModuleTests
         Assert.Equal("Core.Scalar", num.Target);
         Assert.Equal([-1], num.Arguments);
         Assert.Equal(2, rules[Nitrogen.Geometry.Syntax.GeometryModule.LParameter].DeclaredTypeChild);
-        Assert.DoesNotContain(BoxMeshModule.Descriptor.Semantics!.Lowerers,
-            lowerer => lowerer.SyntaxKind == Nitrogen.Geometry.Syntax.GeometryKinds.Box);
+        var definition = rules[Nitrogen.Geometry.Syntax.GeometryModule.LDefinition];
+        Assert.Equal(DeclarativeForm.Template, definition.Form);
+        Assert.Equal(2, definition.SequenceStride);
+        Assert.Equal(DeclarativeForm.Expand, rules[Nitrogen.Geometry.Syntax.GeometryModule.LMake].Form);
+        Assert.Empty(BoxMeshModule.Descriptor.Semantics!.Lowerers); // no C# lowering left
     }
 }

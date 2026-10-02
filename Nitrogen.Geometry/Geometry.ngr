@@ -10,21 +10,20 @@ syntax module Geometry
 
   syntax Document = Statements:Statement*;
   syntax Statement = Definition / Make / Box;
-  syntax Definition = "def" Name:Identifier "(" Width:Parameter "," Height:Parameter "," Depth:Parameter ")" "=" Body:DefinitionBody
-    declares shape Name export scope;
+  // A definition is a template: its body lowers only through 'make', with the call's
+  // dimensions in place of its parameters.
+  syntax Definition = "def" Name:Identifier "(" Params:(Parameter; ",")* ")" "=" Body:DefinitionBody
+    declares shape Name export scope lowers template Body(Params);
   syntax Parameter = Name:Identifier ":" Annotation:("Scalar" / "Mesh") declares parameter Name type Annotation
   {
     check GD0001 Annotation.Text == "Scalar" : "box parameters must be Scalar" at Annotation;
   }
   syntax DefinitionBody = TemplateBox / Make;
-  syntax TemplateBox = "box" Width:Dimension Height:Dimension Depth:Dimension ";";
+  syntax TemplateBox = "box" Width:Dimension Height:Dimension Depth:Dimension ";" lowers Geometry.BoxMesh(Width, Height, Depth);
   syntax Dimension = Num / ParameterRef;
   syntax ParameterRef = Name:Identifier references parameter Name;
   syntax Make = "make" Name:Identifier "(" Args:(Dimension; ",")* ")" ";"
-    references shape Name
-  {
-    check GD0003 Args.Count == 3 : "make needs three dimensions" at Name;
-  }
+    references shape Name lowers expand Name(Args);
   syntax Num = Sign:("+" / "-")? Value:Number lowers literal Core.Scalar this
   {
     out Amount : float? = null;

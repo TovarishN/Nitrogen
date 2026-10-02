@@ -17,6 +17,9 @@ internal sealed record LanguagePluginModel(
     public IReadOnlyList<string> SourcePaths { get; init; } = [];
     public IReadOnlyList<string> Usings { get; init; } = [];
 
+    /// <summary>The C# namespace the grammars are generated into, or null for the workspace default.</summary>
+    public string? Namespace { get; init; }
+
     /// <summary>The language's <c>tokens</c> object as written, or null.</summary>
     public string? TokensJson { get; init; }
 
@@ -26,6 +29,7 @@ internal sealed record LanguagePluginModel(
 internal static class LanguagePluginConfig
 {
     static readonly Regex s_version = new(@"^\d+\.\d+\.\d+$");
+    static readonly Regex s_namespace = new(@"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$");
 
     /// <summary>The language of <paramref name="path"/> named <paramref name="language"/> (or its only one); null with an error otherwise.</summary>
     public static LanguagePluginModel? Load(string path, string? language, out string error)
@@ -68,6 +72,13 @@ internal static class LanguagePluginConfig
                     return Fail("version must be MAJOR.MINOR.PATCH", out error);
                 version = versionValue.GetString()!;
             }
+            string? generatedNamespace = null;
+            if (entryValue.TryGetProperty("namespace", out JsonElement namespaceValue))
+            {
+                if (namespaceValue.ValueKind != JsonValueKind.String || !s_namespace.IsMatch(namespaceValue.GetString()!))
+                    return Fail("namespace must be a dotted C# identifier", out error);
+                generatedNamespace = namespaceValue.GetString()!;
+            }
             string baseDirectory = Path.GetDirectoryName(fullPath)!;
             string[] Paths(string property) => entryValue.TryGetProperty(property, out JsonElement values) && values.ValueKind == JsonValueKind.Array
                 ? values.EnumerateArray().Select(x => Path.GetFullPath(Path.Combine(baseDirectory, x.GetString() ?? ""))).ToArray()
@@ -80,6 +91,7 @@ internal static class LanguagePluginConfig
                     ? usings.EnumerateArray().Select(x => x.GetString() ?? "").ToArray() : [],
                 TokensJson = entryValue.TryGetProperty("tokens", out JsonElement tokens) && tokens.ValueKind == JsonValueKind.Object
                     ? tokens.GetRawText() : null,
+                Namespace = generatedNamespace,
                 Version = version,
             };
         }

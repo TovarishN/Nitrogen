@@ -99,6 +99,8 @@ public class SelfHostingTests
     [InlineData("syntax module M { syntax R = \"r\" { out O : int = 0; O = 'c' == ';' ? 1 : /* ; */ 2; // ;\n check O >= 0 : @\"x\"\"y\"; } }")]
     [InlineData("syntax module M { symbols { v w } symbol property T for (v | w) : int = 0; }")]
     [InlineData("syntax module M { symbols { v s } syntax R = \"r\" N:A references v N in s; syntax Q = \"q\" N:A references? (v | s) N in s; }")]
+    [InlineData("syntax module M { symbols { f p } token N = ['a'..'z']+; syntax P = Name:N declares p Name type Core.Scalar; syntax D = \"def\" Name:N \"(\" Params:(P; \",\")* \")\" Body:N declares f Name lowers template Body(Params); }")]
+    [InlineData("syntax module M { symbols { f } token N = ['a'..'z']+; syntax C = \"make\" Name:N \"(\" Args:N* \")\" references f Name lowers expand Name(Args); }")]
     public void Every_declaration_form_maps_to_the_bootstrap_model(string text) => AssertSameModel(text);
 
     [Theory]

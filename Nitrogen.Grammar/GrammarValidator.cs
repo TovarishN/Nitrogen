@@ -334,6 +334,7 @@ public static class GrammarValidator
             {
                 var key = clause.Kind is BindingClauseKind.LowersLiteral or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence
                     or BindingClauseKind.LowersValue or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
+                    or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand
                     ? BindingClauseKind.Lowers : clause.Kind;
                 if (!seen.Add(key))
                     Report(GrammarCodes.DuplicateClause, $"a rule takes at most one '{Keyword(clause.Kind)}' clause", clause.Span, module);
@@ -344,6 +345,7 @@ public static class GrammarValidator
                     Report(GrammarCodes.UnknownSymbolKind, $"unknown symbol kind '{qualifier.Name}'", qualifier.Span, module);
                 if (clause.Kind is BindingClauseKind.Declares or BindingClauseKind.References or BindingClauseKind.LowersLiteral
                     or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence
+                    or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand
                     && clause.Field != "this" && !labels.Contains(clause.Field))
                     Report(GrammarCodes.UnknownBindingField,
                         $"'{clause.Field}' is not a label of this rule's elements; name a labeled element or 'this'", clause.FieldSpan, module);
@@ -384,6 +386,14 @@ public static class GrammarValidator
                                 initializerName.Span, module);
                     }
                 }
+                if (clause.Kind == BindingClauseKind.LowersTemplate &&
+                    !clauses.Any(candidate => candidate.Kind == BindingClauseKind.Declares))
+                    Report(GrammarCodes.InvalidTemplateClause,
+                        "a template needs a declares clause on the same rule: the symbol expansions name", clause.Span, module);
+                if (clause.Kind == BindingClauseKind.LowersExpand &&
+                    !clauses.Any(candidate => candidate.Kind == BindingClauseKind.References && candidate.Field == clause.Field))
+                    Report(GrammarCodes.InvalidTemplateClause,
+                        $"an expansion needs a references clause on its field '{clause.Field}'", clause.FieldSpan, module);
                 if (clause.OperationProperty is { } operationName)
                 {
                     var operationProperty = SemanticsWriter.PropertiesOf(owner)
@@ -401,7 +411,8 @@ public static class GrammarValidator
                     if (!labels.Contains(argument.Name))
                         Report(GrammarCodes.UnknownBindingField,
                             $"'{argument.Name}' is not a label of this rule's elements; name a labeled element", argument.Span, module);
-                    else if (argument.SequenceElementType is not null || argument.InferSequence)
+                    else if (argument.SequenceElementType is not null || argument.InferSequence ||
+                             clause.Kind is BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand)
                     {
                         var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>()
                             .First(element => element.Label == argument.Name);
@@ -433,7 +444,8 @@ public static class GrammarValidator
             BindingClauseKind.Scope => "scope",
             BindingClauseKind.Lowers or BindingClauseKind.LowersLiteral or BindingClauseKind.LowersText
                 or BindingClauseKind.LowersSequence or BindingClauseKind.LowersValue
-                or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat => "lowers",
+                or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
+                or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand => "lowers",
             _ => "dynamic",
         };
 

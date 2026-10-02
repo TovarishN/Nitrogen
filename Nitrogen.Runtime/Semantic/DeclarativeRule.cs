@@ -12,6 +12,10 @@ public enum DeclarativeForm
     Value,
     Reference,
     Repeat,
+    /// <summary>A declaration whose body is lowered only through expansions: arguments are the body and parameter list children.</summary>
+    Template,
+    /// <summary>An expansion of the template its reference names: the one argument is the argument list child.</summary>
+    Expand,
 }
 
 /// <summary>One syntax kind's declarative typing and lowering clauses (issue 251), emitted by the generator as data.</summary>
@@ -27,6 +31,8 @@ public sealed class DeclarativeRule
         ArgumentNullException.ThrowIfNull(arguments);
         if (form == DeclarativeForm.Repeat && (arguments.Length != 3 || target is null))
             throw new ArgumentException("Repeat lowering requires an element type and count, iterator, and template fields.");
+        if (form == DeclarativeForm.Template && arguments.Length != 2 || form == DeclarativeForm.Expand && arguments.Length != 1)
+            throw new ArgumentException("A template needs body and parameter fields; an expansion needs an argument list field.");
         if (form == DeclarativeForm.Value && property is null)
             throw new ArgumentException("Value lowering requires a semantic property.", nameof(property));
         if (form != DeclarativeForm.Value && property is not null)

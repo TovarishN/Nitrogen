@@ -79,6 +79,8 @@ public static class GrammarDumper
         BindingClauseKind.LowersRepeat => $"(lowers repeat {clause.Target!.Name} {string.Join(" ", clause.Arguments.Select(argument => argument.Name))})",
         BindingClauseKind.Lowers => $"(lowers {(clause.OperationProperty is { } operation ? "operation" + (clause.Optional ? "? " : " ") + operation.Name : clause.Target!.Name)}({string.Join(", ", clause.Arguments.Select(a => a.InferSequence ? $"sequence inferred {a.Name}" : a.SequenceElementType is { } type ? $"sequence {type.Name} {a.Name}" : a.OptionalElementType is { } optional ? $"optional {optional.Name} {a.Name}" : a.AsText ? $"text {a.Name}" : a.Name))}))",
         BindingClauseKind.LowersLiteral => $"(lowers literal {clause.Target!.Name} {clause.Field})",
+        BindingClauseKind.LowersTemplate => $"(lowers template {clause.Field}({clause.Arguments[0].Name}))",
+        BindingClauseKind.LowersExpand => $"(lowers expand {clause.Field}({clause.Arguments[0].Name}))",
         BindingClauseKind.LowersText => $"(lowers text {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersSequence => $"(lowers sequence {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersValue => clause.TypeProperty is { } typeProperty

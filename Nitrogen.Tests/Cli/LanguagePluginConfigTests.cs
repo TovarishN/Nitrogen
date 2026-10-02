@@ -23,7 +23,7 @@ public sealed class LanguagePluginConfigTests : IDisposable
         string config = Write("nitrogen.json", """
             { "languages": [ { "name": "Catalog", "extensions": [".ncat"], "grammars": ["language/*.ngr"],
               "start": "Catalog.Record", "sources": ["language/Checks.cs"], "usings": ["My.Checks"],
-              "tokens": { "capability": "type" }, "version": "1.2.3" } ] }
+              "tokens": { "capability": "type" }, "version": "1.2.3", "namespace": "My.Catalog" } ] }
             """);
         var model = LanguagePluginConfig.Load(config, null, out string error);
 
@@ -33,6 +33,7 @@ public sealed class LanguagePluginConfigTests : IDisposable
         Assert.Equal(new[] { "My.Checks" }, model.Usings);
         Assert.Equal("""{ "capability": "type" }""", model.TokensJson);
         Assert.Equal("1.2.3", model.Version);
+        Assert.Equal("My.Catalog", model.Namespace);
     }
 
     [Fact]
@@ -46,6 +47,7 @@ public sealed class LanguagePluginConfigTests : IDisposable
         Assert.Empty(model.SourcePaths);
         Assert.Empty(model.Usings);
         Assert.Null(model.TokensJson);
+        Assert.Null(model.Namespace);
         Assert.Equal("0.1.0", model.Version);
     }
 
@@ -60,5 +62,19 @@ public sealed class LanguagePluginConfigTests : IDisposable
             """);
         Assert.Null(LanguagePluginConfig.Load(config, null, out string error));
         Assert.Equal("version must be MAJOR.MINOR.PATCH", error);
+    }
+
+    [Theory]
+    [InlineData("\"\"")]
+    [InlineData("\"My..Catalog\"")]
+    [InlineData("\"1My\"")]
+    [InlineData("3")]
+    public void A_bad_namespace_is_rejected(string ns)
+    {
+        string config = Write("nitrogen.json", $$"""
+            { "languages": [ { "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program", "namespace": {{ns}} } ] }
+            """);
+        Assert.Null(LanguagePluginConfig.Load(config, null, out string error));
+        Assert.Equal("namespace must be a dotted C# identifier", error);
     }
 }

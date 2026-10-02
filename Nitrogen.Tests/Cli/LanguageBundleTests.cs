@@ -27,7 +27,7 @@ public sealed class LanguageBundleTests : IDisposable
         string config = Write("project/nitrogen.json", $$"""
             { "languages": [ { "name": "Catalog", "extensions": [".ncat"], "grammars": [{{grammars}}],
               "start": "Catalog.Record", "sources": ["language/Checks.cs"], "usings": ["My.Checks"],
-              "tokens": { "capability": "type" } } ] }
+              "namespace": "My.Catalog", "tokens": { "capability": "type" } } ] }
             """);
         Write("server/nitrogen.dll", "dll");
         Write("server/nitrogen.runtimeconfig.json", "{}");
@@ -49,6 +49,7 @@ public sealed class LanguageBundleTests : IDisposable
         Assert.Equal(new[] { "grammars/Catalog.ngr", "grammars/Extra.ngr" }, entry.GetProperty("grammars").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(new[] { "sources/Checks.cs" }, entry.GetProperty("sources").EnumerateArray().Select(x => x.GetString()));
         Assert.Equal(new[] { "My.Checks" }, entry.GetProperty("usings").EnumerateArray().Select(x => x.GetString()));
+        Assert.Equal("My.Catalog", entry.GetProperty("namespace").GetString());
         Assert.Equal("type", entry.GetProperty("tokens").GetProperty("capability").GetString());
         Assert.Equal("class Checks { }", File.ReadAllText(Path.Combine(bundle, "language", "sources", "Checks.cs")));
         Assert.True(File.Exists(Path.Combine(bundle, "language", "grammars", "Extra.ngr")));
