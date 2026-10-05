@@ -51,6 +51,33 @@ public sealed class DeclarativeTypes
         return declaring.DeclaredTypeAt(symbol.Node);
     }
 
+    /// <summary>
+    /// The type the enclosing operation expects of <paramref name="node"/>: the input it is passed as,
+    /// through parents without lowering clauses (parentheses); the element type for a sequence item.
+    /// Null when no operation takes it, or its computed operation is not known yet.
+    /// </summary>
+    public SemanticType? ExpectedTypeOf(int node)
+    {
+        var tree = _file.Tree;
+        if (node < 0 || node >= tree.NodeCount) return null;
+        for (int below = -1, child = node, parent = tree.Parent(node); parent >= 0; below = child, child = parent, parent = tree.Parent(parent))
+        {
+            if (_lowering.RuleFor(tree.Kind(parent)) is not { } rule || rule.Rule.Form == DeclarativeForm.None) continue;
+            if (rule.Rule.Form != DeclarativeForm.Operation || OperationFor(parent, rule) is not { } operation) return null;
+            for (int i = 0; i < rule.Rule.Arguments.Count && i < operation.Inputs.Count; i++)
+            {
+                if (rule.Rule.ArgumentTexts[i]) continue;
+                if (tree.Child(parent, rule.Rule.Arguments[i]) != child) continue;
+                if (rule.ArgumentSequenceTypes[i] is null && !rule.Rule.ArgumentInferredSequences[i])
+                    return rule.ArgumentOptionalTypes[i] ?? operation.Inputs[i];
+                // A sequence: the node is (inside) one of its items.
+                return below >= 0 ? rule.ArgumentSequenceTypes[i] ?? DeclarativeLowering.SequenceElement(operation.Inputs[i]) : null;
+            }
+            return null;
+        }
+        return null;
+    }
+
     SemanticType? Compute(int node)
     {
         var tree = _file.Tree;
@@ -200,7 +227,10 @@ public sealed class DeclarativeTypes
                 }
                 var actual = TypeOf(argument);
                 if (actual is null)
-                    Report("NT0004", argument, $"'{Text(argument)}' has no declared type; '{operation.Id}' needs {expected}");
+                {
+                    if (!UncoveredOperation(argument))
+                        Report("NT0004", argument, $"'{Text(argument)}' has no declared type; '{operation.Id}' needs {expected}");
+                }
                 else if (!actual.Equals(SemanticTypes.Error) && !actual.Equals(expected))
                     Report("NT0001", argument, $"'{operation.Id}' needs {expected}, not {actual}");
             }
@@ -430,7 +460,10 @@ public sealed class DeclarativeTypes
             if (expected is null || expected.Equals(SemanticTypes.Error)) continue;
             var actual = TypeOf(arguments[i]);
             if (actual is null)
-                Report("NT0004", arguments[i], $"'{Text(arguments[i])}' has no declared type; '{parameter.Name}' needs {expected}");
+            {
+                if (!UncoveredOperation(arguments[i]))
+                    Report("NT0004", arguments[i], $"'{Text(arguments[i])}' has no declared type; '{parameter.Name}' needs {expected}");
+            }
             else if (!actual.Equals(SemanticTypes.Error) && !actual.Equals(expected))
                 Report("NT0001", arguments[i], $"'{parameter.Name}' of '{symbol.Name}' needs {expected}, not {actual}");
         }
@@ -531,6 +564,22 @@ public sealed class DeclarativeTypes
 
     bool MissingOptionalOperation(int node, DeclarativeLowering.ResolvedRule rule) =>
         rule.Rule.OptionalOperation && rule.Rule.OperationProperty!.Read(_file, node) is null;
+
+    /// <summary>
+    /// A missing optional computed operation, perhaps in parentheses: an operand combination its language
+    /// does not cover, which the language's own checks explain. An operation it is passed to does not
+    /// report it again as untyped.
+    /// </summary>
+    bool UncoveredOperation(int node)
+    {
+        var tree = _file.Tree;
+        if (_lowering.RuleFor(tree.Kind(node)) is { } rule && rule.Rule.Form != DeclarativeForm.None)
+            return rule.Rule.Form == DeclarativeForm.Operation && MissingOptionalOperation(node, rule);
+        if (_file.HasReference(node)) return false;
+        for (int k = 0; k < tree.ChildCount(node); k++)
+            if (UncoveredOperation(tree.Child(node, k))) return true;
+        return false;
+    }
 
     int FieldNode(int node, DeclarativeRule rule) =>
         rule.Arguments[0] < 0 ? node : _file.Tree.Child(node, rule.Arguments[0]);

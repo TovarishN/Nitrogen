@@ -20,6 +20,7 @@
     <ProjectReference Include="..\Nitrogen.Grammar\Nitrogen.Grammar.csproj" />
     <ProjectReference Include="..\Nitrogen.Ngr\Nitrogen.Ngr.csproj" />
     <ProjectReference Include="..\Nitrogen.Geometry\Nitrogen.Geometry.csproj" />
+    <ProjectReference Include="..\examples\DateCalc\DateCalc.csproj" />
     <ProjectReference Include="..\Nitrogen.Workspace\Nitrogen.Workspace.csproj" />
     <ProjectReference Include="..\Nitrogen.Cli\Nitrogen.Cli.csproj" />
     <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />
@@ -38,6 +39,8 @@
     <!-- Geometry as a nitrogen.json language: its grammar, helper sources and config, served by the workspace. -->
     <None Include="..\Nitrogen.Geometry\nitrogen.json;..\Nitrogen.Geometry\Geometry.ngr;..\Nitrogen.Geometry\BoxMeshModule.cs;..\Nitrogen.Geometry\GeometryValues.cs"
           Link="GeometryLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\examples\DateCalc\nitrogen.json;..\examples\DateCalc\DateCalc.ngr;..\examples\DateCalc\DateCalcLanguage.cs;..\examples\DateCalc\MathModule.cs;..\examples\DateCalc\sample.datecalc"
+          Link="DateCalcLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The runtime tests run against modules generated from these grammars. -->

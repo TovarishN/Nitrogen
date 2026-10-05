@@ -1,0 +1,13 @@
+{
+  "languages": [
+    {
+      "name": "DateCalc",
+      "extensions": [".datecalc"],
+      "grammars": ["DateCalc.ngr"],
+      "start": "DateCalc.Program",
+      "namespace": "DateCalc.Syntax",
+      "sources": ["DateCalcLanguage.cs", "MathModule.cs"],
+      "tokens": { "value": "variable", "function": "function" }
+    }
+  ]
+}

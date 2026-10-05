@@ -69,7 +69,7 @@ public static class GrammarValidator
         void CheckAlternatives(EquatableArray<Alternative> alternatives, ModuleDecl module, string pointKey, string implicitModule, ExtensibleRule point)
         {
             var partialTypeProperties = new HashSet<string>(alternatives.SelectMany(alternative => alternative.Clauses)
-                .SelectMany(clause => new[] { clause.TypeProperty, clause.OperationProperty })
+                .SelectMany(clause => new[] { clause.TypeProperty, clause.OperationProperty, clause.InitializerProperty })
                 .Where(property => property is not null)
                 .Select(property => property!.Name), StringComparer.Ordinal);
             foreach (var alternative in alternatives)

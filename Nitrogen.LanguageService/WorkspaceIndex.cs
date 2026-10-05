@@ -20,7 +20,7 @@ public sealed partial class NitrogenLanguageService
     public IReadOnlyList<string> IndexWorkspace(string root)
     {
         _workspaceRoot = Path.GetFullPath(root);
-        return Reindex();
+        return Visible(Reindex());
     }
 
     /// <summary>The file extensions indexed now, for clients that watch files for the server.</summary>

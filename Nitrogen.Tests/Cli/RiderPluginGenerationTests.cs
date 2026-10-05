@@ -219,12 +219,31 @@ public sealed class RiderPluginGenerationTests
             Assert.StartsWith("package ", text, StringComparison.Ordinal);
             return text[text.IndexOf('\n')..];
         }
-        foreach (string file in new[] { "NitrogenSettings.kt", "NitrogenConfigurable.kt", "NitrogenBundles.kt" })
+        foreach (string file in new[] { "NitrogenSettings.kt", "NitrogenConfigurable.kt", "NitrogenBundles.kt", "NitrogenCSharpStrings.kt", "NitrogenParserDefinition.kt", "NitrogenHighlighting.kt" })
         {
             string path = Path.Combine("src/main/kotlin/org/nitrogen/rider", file);
             Assert.Equal(AfterPackage(File.ReadAllText(Path.Combine(template, path))),
                 AfterPackage(File.ReadAllText(Path.Combine(request.OutputDirectory, path))));
         }
+    }
+
+    [Fact]
+    public void Generated_plugins_serve_csharp_strings_tagged_with_their_language()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var request = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+
+        string lsp = Kotlin(request.OutputDirectory, "NitrogenLspSupport.kt");
+        Assert.Contains("if (NitrogenCSharpClient.isCSharp(file))", lsp, StringComparison.Ordinal);
+        Assert.Contains("NitrogenCSharpClient(project, \"Calc\", ::commandLine)", lsp, StringComparison.Ordinal);
+        Assert.StartsWith("package " + KotlinPackage(request.OutputDirectory) + "\n", Kotlin(request.OutputDirectory, "NitrogenCSharpStrings.kt"), StringComparison.Ordinal);
+        Assert.Contains("/*lang=calc*/", File.ReadAllText(Path.Combine(request.OutputDirectory, "README.md")), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -335,7 +354,7 @@ public sealed class RiderPluginGenerationTests
 
         Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "language", "nitrogen.json")));
         Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "server", "nitrogen.dll")));
-        Assert.Contains("tasks.prepareSandbox", Read("build.gradle.kts"));
+        Assert.Contains("PrepareSandboxTask", Read("build.gradle.kts"));
         Assert.Contains("version = \"2.0.1\"", Read("build.gradle.kts"));
         string lsp = Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt");
         Assert.Contains("\"lsp\", \"--config\", config", lsp);
@@ -355,7 +374,7 @@ public sealed class RiderPluginGenerationTests
 
         Assert.False(Directory.Exists(Path.Combine(request.OutputDirectory, "bundle")));
         Assert.False(File.Exists(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenLanguageBundle.kt")));
-        Assert.DoesNotContain("prepareSandbox", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
+        Assert.DoesNotContain("PrepareSandbox", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
         Assert.Contains($"version = \"{typeof(LanguagePluginConfig).Assembly.GetName().Version!.ToString(3)}\"", File.ReadAllText(Path.Combine(request.OutputDirectory, "build.gradle.kts")));
     }
 

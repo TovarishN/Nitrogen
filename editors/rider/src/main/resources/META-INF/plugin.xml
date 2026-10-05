@@ -6,6 +6,7 @@
   <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
     <fileType name="NitrogenGrammar" language="Nitrogen" extensions="ngr" implementationClass="org.nitrogen.rider.NitrogenFileType" />
+    <lang.parserDefinition language="Nitrogen" implementationClass="org.nitrogen.rider.NitrogenParserDefinition" />
     <applicationConfigurable parentId="tools" instance="org.nitrogen.rider.NitrogenConfigurable" id="org.nitrogen.rider.settings" displayName="Nitrogen" />
   </extensions>
   <extensions defaultExtensionNs="com.intellij.platform.lsp">

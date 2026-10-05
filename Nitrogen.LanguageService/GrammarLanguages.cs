@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Nitrogen.Binding;
+using Nitrogen.Semantic;
 using Nitrogen.Workspace;
 
 namespace Nitrogen.LanguageService;
@@ -60,11 +61,13 @@ public sealed partial class NitrogenLanguageService
     public IReadOnlyList<string> ConfigureWorkspace(string root)
     {
         _root = Path.GetFullPath(root);
-        return LoadConfiguration();
+        return Visible(LoadConfiguration());
     }
 
     /// <summary>A file changed on disk (<c>workspace/didChangeWatchedFiles</c>): <c>nitrogen.json</c> or a closed grammar.</summary>
-    public IReadOnlyList<string> FileChanged(string path)
+    public IReadOnlyList<string> FileChanged(string path) => Visible(FileChangedCore(path));
+
+    IReadOnlyList<string> FileChangedCore(string path)
     {
         path = Path.GetFullPath(path);
         if (_root is not null && path == Path.Combine(_root, "nitrogen.json")) return LoadConfiguration();
@@ -95,16 +98,27 @@ public sealed partial class NitrogenLanguageService
             var styles = new Dictionary<string, SymbolStyle>();
             if (entry.TryGetProperty("tokens", out var tokens))
                 foreach (var style in tokens.EnumerateObject()) styles[style.Name] = Style(style.Value.GetString() ?? "");
+            var types = new Dictionary<string, TokenType>(StringComparer.Ordinal);
+            if (entry.TryGetProperty("types", out var typeTokens))
+                foreach (var style in typeTokens.EnumerateObject()) types[style.Name] = Style(style.Value.GetString() ?? "").Token;
             var language = new GrammarLanguage(entry.GetProperty("name").GetString()!, Strings(entry, "extensions"),
                 entry.GetProperty("start").GetString()!, _root!, Strings(entry, "grammars"),
                 entry.TryGetProperty("sources", out _) ? Strings(entry, "sources") : [],
                 entry.TryGetProperty("usings", out _) ? Strings(entry, "usings") : [],
-                entry.TryGetProperty("namespace", out var ns) ? ns.GetString() : null, new Presentation(styles));
+                entry.TryGetProperty("namespace", out var ns) ? ns.GetString() : null, new Presentation(styles, types));
             _grammarLanguages.Add(language);
             affected.AddRange(Compile(language));
         }
         affected.AddRange(Reindex()); // the languages may have changed
         return affected.Distinct().ToList();
+    }
+
+    /// <summary>The last good semantic catalog of the workspace language whose grammars include <paramref name="uri"/>; null when none does.</summary>
+    SemanticCatalog? CatalogFor(string uri)
+    {
+        if (!System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile) return null;
+        string path = Path.GetFullPath(parsed.LocalPath);
+        return _grammarLanguages.FirstOrDefault(l => l.Workspace.Paths.Contains(path, StringComparer.Ordinal))?.Snapshot?.Language?.SemanticCatalog;
     }
 
     IReadOnlyList<string> GrammarHook(string uri) =>
@@ -149,6 +163,7 @@ public sealed partial class NitrogenLanguageService
     /// <summary>Serves <paramref name="replacement"/> in place of <paramref name="old"/>: its documents and any unserved ones it now covers are re-parsed.</summary>
     IReadOnlyList<string> Reregister(LanguageEntry? old, LanguageEntry replacement)
     {
+        UnembedAll(); // tagged strings are served again below, by the languages registered then
         if (old is not null) Registry.Remove(old);
         Registry.Add(replacement);
         var previous = old is null ? [] : _documents.Values.Where(d => d.Language == old).ToList();
@@ -178,12 +193,13 @@ public sealed partial class NitrogenLanguageService
             }
         foreach (var document in previous) document.Dispose(); // after their replacements are bound
         if (old is not null) _projects.Remove(old);
-        return texts.Select(t => t.Uri).ToList();
+        return texts.Select(t => t.Uri).Concat(EmbedAll()).ToList();
     }
 
     IReadOnlyList<string> Unregister(GrammarLanguage language)
     {
         if (language.Entry is not { } entry) return [];
+        UnembedAll();
         Registry.Remove(entry);
         var moved = _documents.Values.Where(d => d.Language == entry).ToList();
         foreach (var document in moved)
@@ -195,7 +211,7 @@ public sealed partial class NitrogenLanguageService
         }
         foreach (var closed in _closed.Values.Where(d => d.Language == entry).ToList()) RemoveClosed(closed.Uri);
         _projects.Remove(entry);
-        return moved.Select(d => d.Uri).ToList();
+        return moved.Select(d => d.Uri).Concat(EmbedAll()).ToList();
     }
 
     IEnumerable<ServiceDiagnostic> GrammarDiagnostics(string uri)

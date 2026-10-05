@@ -7,7 +7,9 @@ namespace Nitrogen.LanguageService;
 /// Completion (issue 238). Names: at a reference's name (the outermost one, so a dotted prefix is
 /// whole) or at a hole, the symbols visible there of the kinds the grammar allows, filtered by the
 /// typed prefix. Keywords: the text before the word being typed, with a sentinel no grammar accepts,
-/// is parsed fast; the word literals it expected there are offered. Names come first.
+/// is parsed fast; the word literals it expected there are offered. Names come first, those of the
+/// expected type before the rest: the type an <c>expected</c> property asks for, else the input type of
+/// the operation the name is lowered into. A name's detail shows its type.
 /// </summary>
 internal static class CompletionBuilder
 {
@@ -15,6 +17,11 @@ internal static class CompletionBuilder
 
     public static List<CompletionItem> Build(Document document, Project project, FileSemantics? semantics, SemanticsInfo info, int offset)
     {
+        object? ExpectedAt(int at) => semantics is null || at < 0 ? null
+            : (info.Expected is { } expected ? expected.Read(semantics, at) : null) ?? semantics.DeclarativeTypes.ExpectedTypeOf(at);
+        object? TypeOf(Symbol symbol) => semantics is null ? null
+            : (info.SymbolType is { } property ? property.Read(semantics, symbol) : null) ?? semantics.DeclarativeTypes.TypeOfSymbol(symbol);
+
         string text = document.Text;
         var binding = project[document.Uri];
         var items = new List<CompletionItem>();
@@ -37,13 +44,12 @@ internal static class CompletionBuilder
             node = hole.Node;
             candidates = project.CandidatesFor(hole);
         }
-        else if (semantics is not null && info.Expected is { } expectedProperty && info.SymbolType is { } typeProperty
-            && MissingAt(semantics.Tree, text, offset) is int missing && expectedProperty.Read(semantics, missing) is { } wanted)
+        else if (semantics is not null && MissingAt(semantics.Tree, text, offset) is int missing && ExpectedAt(missing) is { } wanted)
         {
             // A missing expression (recovery inserted it) with an expected type: the visible names of that type (issue 239).
             node = missing;
             var kinds = binding.References.SelectMany(r => r.Kinds).Concat(binding.Declarations.Select(d => d.Kind)).Distinct().ToArray();
-            candidates = project.VisibleAt(document.Uri, offset, kinds).Where(s => Equals(typeProperty.Read(semantics, s), wanted)).ToList();
+            candidates = project.VisibleAt(document.Uri, offset, kinds).Where(s => Equals(TypeOf(s), wanted)).ToList();
         }
 
         if (candidates is not null)
@@ -52,11 +58,14 @@ internal static class CompletionBuilder
             var replace = new DocumentRange(document.Lines.PositionOf(nameStart), document.Lines.PositionOf(offset));
             var names = candidates.Where(s => s.Name.StartsWith(prefix, StringComparison.Ordinal) && seen.Add(s.Name)).ToList();
             // Names whose type is the expected one come first (a stable sort keeps the rest in scope order).
-            if (semantics is not null && node >= 0 && info.Expected?.Read(semantics, node) is { } expected && info.SymbolType is { } type)
-                names = names.OrderBy(s => Equals(type.Read(semantics, s), expected) ? 0 : 1).ToList();
+            if (ExpectedAt(node) is { } expected)
+                names = names.OrderBy(s => Equals(TypeOf(s), expected) ? 0 : 1).ToList();
             foreach (var symbol in names)
+            {
+                string detail = TypeOf(symbol) is { } type ? $"{symbol.Kind} : {type}" : symbol.Kind;
                 items.Add(new CompletionItem(symbol.Name, KindOf(document.Language.Presentation.StyleOf(symbol.Kind).Outline),
-                    symbol.IsBuiltin ? $"{symbol.Kind} (built-in)" : symbol.Kind, replace));
+                    symbol.IsBuiltin ? $"{detail} (built-in)" : detail, replace));
+            }
         }
 
         int wordStart = offset;

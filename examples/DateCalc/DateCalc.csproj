@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>DateCalc</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\Nitrogen.Runtime\Nitrogen.Runtime.csproj" />
+    <ProjectReference Include="..\..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <AdditionalFiles Include="DateCalc.ngr" Namespace="DateCalc.Syntax" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+  </ItemGroup>
+</Project>

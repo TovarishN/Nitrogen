@@ -11,7 +11,7 @@ internal static class LspCommand
     public static LanguageRegistry Registry()
     {
         var registry = new LanguageRegistry();
-        registry.Add(new LanguageEntry("ngr", NgrParser.Language, new Dictionary<string, Rule> { [".ngr"] = NitrogenModule.File }, NgrStyles));
+        registry.Add(new LanguageEntry("ngr", NgrParser.Language, new Dictionary<string, Rule> { [".ngr"] = NitrogenModule.File }, NgrStyles, new NgrAssist()));
         return registry;
     }
 
