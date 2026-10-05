@@ -410,6 +410,15 @@ coloring and paints the server's tokens in C# files as decorations. Rename and o
 with C# outside the tagged strings. Generated VS Code plugins (`nitrogen package`) include the same
 support and also activate for C# files. Other LSP clients get the server's results directly.
 
+In Rider, C# files get a second Nitrogen client of their own (the platform switches features per
+client, not per file). Its colors are added to Rider's, and diagnostics, completion, hover, go to
+definition and find usages work in the strings; rename, structure view, formatting and the rest stay
+with Rider. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
+always does, for its own language. Each Rider plugin also gives its language a minimal parser
+definition, because Rider itself injects the language named by a `language=` comment, and asks the
+server for semantic tokens in every file it serves (the platform asks only in plain-text and TextMate
+files by default, so Rider showed no Nitrogen coloring before).
+
 ## Project map
 
 | Project | Role |

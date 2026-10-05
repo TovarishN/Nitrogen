@@ -25,6 +25,9 @@ internal static class RiderPluginRenderer
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenPlugin.kt"] = PluginKt(request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"] = request.SelfContainedServer is null ? LspKt(request) : SelfContainedLspKt(request),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenFileType.kt"] = FileTypeKt(request.Model),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenCSharpStrings.kt"] = InPackage(Resource("rider/NitrogenCSharpStrings.kt"), request.Model),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenParserDefinition.kt"] = InPackage(Resource("rider/NitrogenParserDefinition.kt"), request.Model),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenHighlighting.kt"] = InPackage(Resource("rider/NitrogenHighlighting.kt"), request.Model),
                 ["README.md"] = Readme(request),
                 ["src/main/resources/nitrogen-bundles.json"] = BundlesJson(request.Bundles),
             };
@@ -86,8 +89,9 @@ dependencies {
 intellijPlatform { pluginConfiguration { ideaVersion { sinceBuild = "262" } } }
 """ + (request.SelfContainedServer is null ? "" : """
 
-tasks.prepareSandbox {
-    // The language bundle (grammar, helper sources, portable server) sits beside lib/ in the installed plugin.
+// The language bundle (grammar, helper sources, portable server) sits beside lib/ in the installed plugin,
+// and in every sandbox: runIde and the tests prepare their own.
+tasks.withType<org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask>().configureEach {
     from(layout.projectDirectory.dir("bundle")) { into(pluginName.map { "$it/bundle" }) }
 }
 """);
@@ -324,6 +328,7 @@ object NitrogenPlugin {
   <depends>com.intellij.modules.ultimate</depends>
   <extensions defaultExtensionNs="com.intellij">
     <fileType name="{{Escape(model.PluginId)}}" language="{{LanguageId(model)}}" extensions="{{string.Join(';', model.Extensions.Select(x => x.TrimStart('.')).Select(Escape))}}" implementationClass="{{KotlinPackage(model)}}.NitrogenFileType" />
+    <lang.parserDefinition language="{{LanguageId(model)}}" implementationClass="{{KotlinPackage(model)}}.NitrogenParserDefinition" />
     <applicationConfigurable parentId="tools" instance="{{KotlinPackage(model)}}.NitrogenConfigurable" id="org.nitrogen.rider.{{model.PluginId}}.settings" displayName="{{Escape(model.DisplayName)}}" />
   </extensions>
   <extensions defaultExtensionNs="com.intellij.platform.lsp">
@@ -357,23 +362,29 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.LspIntegrationProvider
 import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
+import com.intellij.platform.lsp.api.customization.LspCustomization
 
 class NitrogenLspSupport : LspIntegrationProvider {
     companion object {
         const val defaultExecutable = "{{EscapeKotlin(request.NitrogenPath)}}"
         const val startRule = "{{EscapeKotlin(request.Model.StartRule)}}"
+
+        fun commandLine(): GeneralCommandLine =
+            GeneralCommandLine(NitrogenSettings.getInstance().resolveExecutable(defaultExecutable), "lsp")
     }
 
     override fun fileOpened(project: Project, file: VirtualFile, clientStarter: LspClientStarter) {
         if (file.extension in setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})) {
             clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
         }
+        if (NitrogenCSharpClient.isCSharp(file))
+            clientStarter.ensureClientStarted(NitrogenCSharpClient(project, "{{EscapeKotlin(request.Model.DisplayName)}}", ::commandLine))
     }
 
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
         override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})
-        override fun createCommandLine(): GeneralCommandLine =
-            GeneralCommandLine(NitrogenSettings.getInstance().resolveExecutable(defaultExecutable), "lsp")
+        override fun createCommandLine(): GeneralCommandLine = commandLine()
+        override val lspCustomization: LspCustomization = NitrogenCustomization()
     }
 }
 """;
@@ -387,22 +398,15 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.LspIntegrationProvider
 import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
+import com.intellij.platform.lsp.api.customization.LspCustomization
 
 class NitrogenLspSupport : LspIntegrationProvider {
     companion object {
         const val defaultExecutable = "{{EscapeKotlin(request.NitrogenPath)}}"
         val extensions = setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})
-    }
-
-    override fun fileOpened(project: Project, file: VirtualFile, clientStarter: LspClientStarter) {
-        if (file.extension in extensions) clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
-    }
-
-    private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
-        override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in extensions
 
         /** The executable set in Settings when there is one, else the bundled server on the dotnet host; both get the bundled config. */
-        override fun createCommandLine(): GeneralCommandLine {
+        fun commandLine(): GeneralCommandLine {
             val bundle = NitrogenLanguageBundle.directory()
             val config = bundle.resolve("language/nitrogen.json").toString()
             val settings = NitrogenSettings.getInstance()
@@ -411,6 +415,18 @@ class NitrogenLspSupport : LspIntegrationProvider {
             else
                 GeneralCommandLine(NitrogenLanguageBundle.dotnet(), bundle.resolve("server/nitrogen.dll").toString(), "lsp", "--config", config)
         }
+    }
+
+    override fun fileOpened(project: Project, file: VirtualFile, clientStarter: LspClientStarter) {
+        if (file.extension in extensions) clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
+        if (NitrogenCSharpClient.isCSharp(file))
+            clientStarter.ensureClientStarted(NitrogenCSharpClient(project, "{{EscapeKotlin(request.Model.DisplayName)}}", ::commandLine))
+    }
+
+    private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
+        override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in extensions
+        override fun createCommandLine(): GeneralCommandLine = commandLine()
+        override val lspCustomization: LspCustomization = NitrogenCustomization()
     }
 }
 """;
@@ -458,7 +474,7 @@ object NitrogenLanguageBundle {
     static string Readme(RiderPluginRequest request) => $$"""
 # {{request.Model.DisplayName}} for Rider
 
-This plugin starts `nitrogen lsp` for `{{string.Join("`, `", request.Model.Extensions)}}` files.
+This plugin starts `nitrogen lsp` for `{{string.Join("`, `", request.Model.Extensions)}}` files, and a second server for C# files, which serves {{request.Model.DisplayName}} in string literals tagged `/*lang={{request.Model.Extensions.First().TrimStart('.')}}*/` (or preceded by a `// language={{request.Model.Extensions.First().TrimStart('.')}}` line): colours added to Rider's, diagnostics, completion, hover, go to definition and find usages. Rename and the rest of C# editing stay with Rider.
 
 The server runs the first of: the executable set in Settings | Tools | {{request.Model.DisplayName}}; the bundled server for this machine, if the plugin was generated with `--bundle`; `{{request.NitrogenPath}}`. The plugin expects the grammar start rule `{{request.Model.StartRule}}`.
 
@@ -469,6 +485,14 @@ Build with `gradle buildPlugin` and install the resulting ZIP from Rider's plugi
 
 This plugin carries its language and a portable server in `bundle/`, run with `dotnet` (.NET 10); a Nitrogen executable set in Settings replaces the bundled server.
 """);
+
+    static string Resource(string name)
+    {
+        using var stream = typeof(RiderPluginRenderer).Assembly.GetManifestResourceStream(name)
+            ?? throw new InvalidOperationException($"missing embedded resource '{name}'");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
 
     static string BundlesJson(IReadOnlyList<RiderBundleInput> bundles)
     {
