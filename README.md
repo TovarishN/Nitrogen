@@ -257,12 +257,12 @@ Geometry's `def`/`make` use these clauses; see the [design](docs/superpowers/spe
 Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.com/TovarishN/index.json`):
 
 ```xml
-<PackageReference Include="Nitrogen.Runtime" Version="0.4.0" />
-<PackageReference Include="Nitrogen.Generator" Version="0.4.0" PrivateAssets="all" />
+<PackageReference Include="Nitrogen.Runtime" Version="0.4.1" />
+<PackageReference Include="Nitrogen.Generator" Version="0.4.1" PrivateAssets="all" />
 <AdditionalFiles Include="MyLanguage.ngr" Namespace="My.Language.Syntax" />
 ```
 
-and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.4.0`. Reading the feed needs a GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>` (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from freshly packed packages; a `v*` tag publishes them.
+and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.4.1`. Reading the feed needs a GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>` (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from freshly packed packages; a `v*` tag publishes them.
 
 ## Use the CLI
 
