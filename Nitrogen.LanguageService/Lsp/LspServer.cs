@@ -73,6 +73,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     string? root = initialize?.RootUri ?? initialize?.WorkspaceFolders?.FirstOrDefault()?.Uri;
                     if (root is not null && System.Uri.TryCreate(root, UriKind.Absolute, out var uri) && uri.IsFile) _workspaceRoot = uri.LocalPath;
                     _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
+                    service.SkipEmbedded(initialize?.InitializationOptions?.SkipLanguages ?? []);
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(

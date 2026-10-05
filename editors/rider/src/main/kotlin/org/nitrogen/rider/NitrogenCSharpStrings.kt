@@ -1,6 +1,7 @@
 package org.nitrogen.rider
 
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
@@ -43,6 +44,7 @@ import com.intellij.platform.lsp.api.customization.LspTypeHierarchyCustomizer
 import com.intellij.platform.lsp.api.customization.LspTypeHierarchyDisabled
 import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolCustomizer
 import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolDisabled
+import java.nio.file.Files
 
 /**
  * Languages inside tagged C# strings (`/*lang=calc*/ "1 + 2;"`, or `// language=calc` before the
@@ -51,13 +53,23 @@ import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolDisabled
  * only inside tagged strings: its colours are added to Rider's, and diagnostics, completion, hover, go to
  * definition and find usages work in the strings. Everything that would compete with Rider's C# support
  * (rename, structure view, formatting, code actions, highlighting usages, hints) is left to Rider.
+ *
+ * [skipLanguages] names the languages (by name or extension) this client's server leaves alone: a client
+ * whose server reads the workspace's nitrogen.json skips those another installed plugin carries itself,
+ * so their strings are not served twice.
  */
-class NitrogenCSharpClient(project: Project, name: String, private val commandLine: () -> GeneralCommandLine) :
-    ProjectWideLspClientDescriptor(project, "$name in C# strings") {
+class NitrogenCSharpClient(
+    project: Project,
+    name: String,
+    private val commandLine: () -> GeneralCommandLine,
+    private val skipLanguages: () -> List<String> = { emptyList() },
+) : ProjectWideLspClientDescriptor(project, "$name in C# strings") {
 
     override fun isSupportedFile(file: VirtualFile): Boolean = isCSharp(file)
 
     override fun createCommandLine(): GeneralCommandLine = commandLine()
+
+    override fun createInitializationOptions(): Any = mapOf("skipLanguages" to skipLanguages())
 
     override val lspCustomization: LspCustomization = object : NitrogenCustomization() {
         override val renameCustomizer: LspRenameCustomizer = LspRenameDisabled
@@ -83,5 +95,24 @@ class NitrogenCSharpClient(project: Project, name: String, private val commandLi
 
     companion object {
         fun isCSharp(file: VirtualFile): Boolean = file.extension.equals("cs", ignoreCase = true)
+
+        /**
+         * The languages the other loaded Nitrogen plugins carry in their own bundle (bundle/language/nitrogen.json):
+         * their names and extensions without the dot.
+         */
+        fun languagesOfOtherPlugins(ownId: String): List<String> = PluginManagerCore.loadedPlugins
+            .filter { it.pluginId.idString.startsWith("org.nitrogen.rider") && it.pluginId.idString != ownId }
+            .mapNotNull { plugin -> plugin.pluginPath.resolve("bundle/language/nitrogen.json").takeIf { Files.isRegularFile(it) } }
+            .flatMap { languagesIn(Files.readString(it)) }
+            .distinct()
+
+        private val name = Regex(""""name"\s*:\s*"([^"]+)"""")
+        private val extensions = Regex(""""extensions"\s*:\s*\[([^\]]*)]""")
+        private val string = Regex(""""([^"]+)"""")
+
+        /** The language names and extensions (without the dot) a nitrogen.json declares. */
+        fun languagesIn(json: String): List<String> =
+            name.findAll(json).map { it.groupValues[1] }.toList() +
+                extensions.findAll(json).flatMap { list -> string.findAll(list.groupValues[1]).map { it.groupValues[1].removePrefix(".") } }
     }
 }

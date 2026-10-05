@@ -244,6 +244,21 @@ public sealed class RiderPluginGenerationTests
         Assert.Contains("NitrogenCSharpClient(project, \"Calc\", ::commandLine)", lsp, StringComparison.Ordinal);
         Assert.StartsWith("package " + KotlinPackage(request.OutputDirectory) + "\n", Kotlin(request.OutputDirectory, "NitrogenCSharpStrings.kt"), StringComparison.Ordinal);
         Assert.Contains("/*lang=calc*/", File.ReadAllText(Path.Combine(request.OutputDirectory, "README.md")), StringComparison.Ordinal);
+        // Its server reads the workspace's nitrogen.json, so it leaves languages other plugins carry to them.
+        Assert.Contains("NitrogenCSharpClient.languagesOfOtherPlugins(\"org.nitrogen.rider.calc\")", lsp, StringComparison.Ordinal);
+
+        // A plugin that carries its language serves that language's strings itself.
+        dir.Write("a.ngr", "syntax module Calc { }");
+        dir.Write("server/nitrogen.dll", "dll");
+        dir.Write("server/nitrogen.runtimeconfig.json", "{}");
+        string server = Path.Combine(dir.Path, "server");
+        var carried = RiderPluginInput.ParseRequest(new[] { "generate", "rider", "--config", config, "--self-contained",
+            "--server", server, "--output", Path.Combine(dir.Path, "carried") }, out error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(carried!, carried!.OutputDirectory, CancellationToken.None);
+        string carriedLsp = Kotlin(carried.OutputDirectory, "NitrogenLspSupport.kt");
+        Assert.Contains("NitrogenCSharpClient(project, \"Calc\", ::commandLine)", carriedLsp, StringComparison.Ordinal);
+        Assert.DoesNotContain("languagesOfOtherPlugins", carriedLsp, StringComparison.Ordinal);
     }
 
     [Fact]
