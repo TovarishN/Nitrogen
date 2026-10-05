@@ -48,7 +48,11 @@ public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapa
 
 public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
 
-public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders, ClientCapabilities? Capabilities = null);
+/// <param name="SkipLanguages">Languages, by name or extension without the dot, whose tagged C# strings this server leaves to another (an editor plugin that carries the language).</param>
+public sealed record InitializationOptions(string[]? SkipLanguages);
+
+public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders, ClientCapabilities? Capabilities = null,
+    InitializationOptions? InitializationOptions = null);
 
 public sealed record FileEvent(string Uri, int Type);
 

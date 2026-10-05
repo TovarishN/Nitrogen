@@ -27,6 +27,7 @@ public sealed partial class NitrogenLanguageService
     }
 
     readonly Dictionary<string, Host> _hosts = new(StringComparer.Ordinal);
+    readonly HashSet<string> _skipped = new(StringComparer.OrdinalIgnoreCase);
     readonly Dictionary<string, (Host Host, EmbeddedString Source)> _embedded = new(StringComparer.Ordinal);
 
     /// <summary>Documents whose tagged strings are served: C# sources.</summary>
@@ -103,10 +104,24 @@ public sealed partial class NitrogenLanguageService
         return _hosts.Keys.ToList();
     }
 
+    /// <summary>
+    /// Leaves the tagged strings of these languages (by name, or extension without the dot, ignoring case)
+    /// to another server: an editor plugin that carries the language serves them itself. Set before the
+    /// first document opens.
+    /// </summary>
+    public void SkipEmbedded(IEnumerable<string> languages)
+    {
+        foreach (string language in languages) _skipped.Add(language.TrimStart('.'));
+    }
+
+    bool IsSkipped(LanguageEntry entry) =>
+        _skipped.Contains(entry.Name) || entry.Starts.Keys.Any(extension => _skipped.Contains(extension.TrimStart('.')));
+
     (LanguageEntry Entry, Rule Start)? Tagged(string tag)
     {
         foreach (var entry in Registry.Entries)
         {
+            if (IsSkipped(entry)) continue;
             if (entry.Starts.TryGetValue("." + tag, out var start)) return (entry, start);
             if (string.Equals(entry.Name, tag, StringComparison.OrdinalIgnoreCase) && entry.Starts.Count > 0)
                 return (entry, entry.Starts.OrderBy(s => s.Key, StringComparer.Ordinal).First().Value);

@@ -378,7 +378,10 @@ class NitrogenLspSupport : LspIntegrationProvider {
             clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
         }
         if (NitrogenCSharpClient.isCSharp(file))
-            clientStarter.ensureClientStarted(NitrogenCSharpClient(project, "{{EscapeKotlin(request.Model.DisplayName)}}", ::commandLine))
+            clientStarter.ensureClientStarted(NitrogenCSharpClient(project, "{{EscapeKotlin(request.Model.DisplayName)}}", ::commandLine) {
+                // This server reads the workspace's nitrogen.json: languages other plugins carry are theirs.
+                NitrogenCSharpClient.languagesOfOtherPlugins("org.nitrogen.rider.{{request.Model.PluginId}}")
+            })
     }
 
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {

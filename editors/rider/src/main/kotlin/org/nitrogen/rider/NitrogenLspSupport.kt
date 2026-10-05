@@ -21,7 +21,9 @@ class NitrogenLspSupport : LspIntegrationProvider {
         if (file.extension == "ngr") clientStarter.ensureClientStarted(NitrogenClientDescriptor(project))
         // The project's nitrogen.json declares the languages a C# string can be tagged with.
         if (NitrogenCSharpClient.isCSharp(file) && project.basePath?.let { File(it, "nitrogen.json").isFile } == true)
-            clientStarter.ensureClientStarted(NitrogenCSharpClient(project, "Nitrogen", ::commandLine))
+            clientStarter.ensureClientStarted(NitrogenCSharpClient(project, "Nitrogen", ::commandLine) {
+                NitrogenCSharpClient.languagesOfOtherPlugins("org.nitrogen.rider")
+            })
     }
 
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "Nitrogen") {

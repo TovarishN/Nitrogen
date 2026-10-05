@@ -122,6 +122,34 @@ public sealed class EmbeddedStringTests : IDisposable
     }
 
     [Fact]
+    public void A_skipped_language_is_left_to_another_server_by_name_or_extension()
+    {
+        const string host = "Run(/*lang=datecalc*/ \"2026-10-05 + 2026-10-06;\");";
+        foreach (var (skip, served) in new[] { ("DATECALC", false), (".datecalc", false), ("geom", true) })
+        {
+            using var service = Service();
+            service.SkipEmbedded([skip]);
+            service.Open(Uri("C.cs"), 1, host);
+            Assert.Equal(served, service.Diagnostics(Uri("C.cs")).Any(d => d.Code == "DC0002"));
+        }
+    }
+
+    [Fact]
+    public async Task The_initialize_request_names_the_languages_to_skip()
+    {
+        string Session(bool skip) => "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"capabilities\":{}" +
+            (skip ? ",\"initializationOptions\":{\"skipLanguages\":[\"scopes\"]}" : "") + "}}";
+        const string open = """{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///w/C.cs","languageId":"csharp","version":1,"text":"Run(/*lang=scopes*/ \"unit a { let y = q; }\");"}}}""";
+        foreach (bool skip in new[] { false, true })
+        {
+            using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+            var (_, messages, _) = await LspServerTests.Session(service, Session(skip), open);
+            var publish = Assert.Single(messages, m => m.TryGetProperty("method", out var method) && method.GetString() == "textDocument/publishDiagnostics");
+            Assert.Equal(skip ? 0 : 1, publish.GetProperty("params").GetProperty("diagnostics").GetArrayLength());
+        }
+    }
+
+    [Fact]
     public void Closing_the_host_stops_serving_its_strings()
     {
         using var service = Service();

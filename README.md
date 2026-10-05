@@ -414,7 +414,10 @@ In Rider, C# files get a second Nitrogen client of their own (the platform switc
 client, not per file). Its colors are added to Rider's, and diagnostics, completion, hover, go to
 definition and find usages work in the strings; rename, structure view, formatting and the rest stay
 with Rider. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
-always does, for its own language. Each Rider plugin also gives its language a minimal parser
+always does, for its own language. A client whose server reads the workspace's `nitrogen.json` leaves
+the strings of languages that another installed Nitrogen plugin carries in its bundle to that plugin
+(it passes them as the `skipLanguages` initialization option, which any client can send), so they are
+not served twice. Each Rider plugin also gives its language a minimal parser
 definition, because Rider itself injects the language named by a `language=` comment, and asks the
 server for semantic tokens in every file it serves (the platform asks only in plain-text and TextMate
 files by default, so Rider showed no Nitrogen coloring before).
