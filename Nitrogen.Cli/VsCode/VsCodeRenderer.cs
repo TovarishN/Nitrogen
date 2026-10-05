@@ -30,6 +30,7 @@ internal static class VsCodeRenderer
                 [".vscodeignore"] = VscodeIgnore,
                 ["README.md"] = Readme(model),
                 ["src/extension.ts"] = ExtensionTs(model),
+                ["src/csharpStrings.ts"] = Resource("vscode/csharpStrings.ts"),
             };
             foreach (var (relative, content) in files)
             {
@@ -81,7 +82,7 @@ internal static class VsCodeRenderer
             ["publisher"] = "nitrogen",
             ["engines"] = template["engines"]!.DeepClone(),
             ["main"] = "./out/extension.js",
-            ["activationEvents"] = new JsonArray("onLanguage:" + name),
+            ["activationEvents"] = new JsonArray("onLanguage:" + name, "onLanguage:csharp"), // C# strings tagged with the language
             ["contributes"] = new JsonObject
             {
                 ["languages"] = new JsonArray(new JsonObject
@@ -155,7 +156,7 @@ tsconfig.json
     static string Readme(LanguagePluginModel model) => $$"""
 # {{model.DisplayName}}
 
-{{model.DisplayName}} support for `{{string.Join("`, `", model.Extensions)}}` files: diagnostics, go to definition, references, rename, and semantic colouring, served by the bundled Nitrogen language server.
+{{model.DisplayName}} support for `{{string.Join("`, `", model.Extensions)}}` files: diagnostics, go to definition, references, rename, and semantic colouring, served by the bundled Nitrogen language server. The same works inside C# string literals tagged with the language, such as `/*lang={{model.Extensions.FirstOrDefault()?.TrimStart('.')}}*/ "..."` or a `// language={{model.Extensions.FirstOrDefault()?.TrimStart('.')}}` comment before the statement.
 
 The server runs on the .NET 10 runtime. If `dotnet` is not found through `DOTNET_ROOT`, the standard install locations, or `PATH`, set `{{ExtensionName(model)}}.dotnetPath`.
 
@@ -168,11 +169,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ExtensionContext, window, workspace } from 'vscode';
 import { LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
+import { CSharpStrings, csharpSelector } from './csharpStrings';
 
 const LANGUAGE = {{JsonSerializer.Serialize(ExtensionName(model))}};
 const DISPLAY = {{JsonSerializer.Serialize(model.DisplayName)}};
 
 let client: LanguageClient | undefined;
+let strings: CSharpStrings | undefined;
 
 /** The dotnet host: the setting, then DOTNET_ROOT, then the standard install locations, then PATH. */
 function dotnet(): string {
@@ -195,8 +198,10 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const serverOptions: ServerOptions = server
     ? { command: server, args: ['lsp', '--config', config] }
     : { command: dotnet(), args: [context.asAbsolutePath(path.join('bundle', 'server', 'nitrogen.dll')), 'lsp', '--config', config] };
+  strings = new CSharpStrings(() => client);
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: 'file', language: LANGUAGE }, { scheme: 'untitled', language: LANGUAGE }],
+    documentSelector: [{ scheme: 'file', language: LANGUAGE }, { scheme: 'untitled', language: LANGUAGE }, ...csharpSelector],
+    middleware: strings.middleware,
   };
   client = new LanguageClient(LANGUAGE, DISPLAY, serverOptions, clientOptions);
   try {
@@ -209,6 +214,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
 }
 
 export function deactivate(): Thenable<void> | undefined {
+  strings?.dispose();
   return client?.stop();
 }
 

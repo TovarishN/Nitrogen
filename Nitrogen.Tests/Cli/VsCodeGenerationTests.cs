@@ -45,6 +45,7 @@ public sealed class VsCodeGenerationTests : IDisposable
         Assert.Equal("1.4.0", (string?)package["version"]);
         Assert.Equal("nitrogen", (string?)package["publisher"]);
         Assert.Equal("onLanguage:nitrogen-catalog", (string?)package["activationEvents"]![0]);
+        Assert.Equal("onLanguage:csharp", (string?)package["activationEvents"]![1]);
         var language = package["contributes"]!["languages"]![0]!;
         Assert.Equal("nitrogen-catalog", (string?)language["id"]);
         Assert.Equal(".ncat", (string?)language["extensions"]![0]);
@@ -79,6 +80,18 @@ public sealed class VsCodeGenerationTests : IDisposable
         Assert.Contains("path.join('bundle', 'server', 'nitrogen.dll')", extension);
         Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "language", "nitrogen.json")));
         Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "server", "nitrogen.dll")));
+    }
+
+    [Fact]
+    public void Extension_serves_csharp_strings_tagged_with_the_language()
+    {
+        var request = Request();
+        VsCodeRenderer.Render(request, CancellationToken.None);
+
+        Assert.Contains("...csharpSelector", Read(request, "src/extension.ts"));
+        Assert.Contains("middleware: strings.middleware", Read(request, "src/extension.ts"));
+        Assert.Equal(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "editors", "vscode", "src", "csharpStrings.ts")),
+            Read(request, "src/csharpStrings.ts"));
     }
 
     [Fact]

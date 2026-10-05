@@ -26,6 +26,10 @@ public sealed partial class NitrogenLanguageService
         return result;
     }
 
+    /// <summary>The document's typed HIR roots, for the features that show what source lowers to; empty when none.</summary>
+    IReadOnlyList<HirNode> LoweredRoots(Document document) =>
+        document.Language.Language.SemanticCatalog.Operations.Count == 0 ? [] : InspectDocument(document.Uri)?.Roots ?? [];
+
     /// <summary>
     /// Lowering codes that only say lowering was blocked: by recovered syntax, an unresolved name, or invalid
     /// semantics. Their cause is shown on its own, or is no error at all (a name an open scope accepts).

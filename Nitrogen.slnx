@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="examples/DateCalc/DateCalc.csproj" />
   <Project Path="Nitrogen.Cli/Nitrogen.Cli.csproj" />
   <Project Path="Nitrogen.Generator/Nitrogen.Generator.csproj" />
   <Project Path="Nitrogen.Geometry/Nitrogen.Geometry.csproj" />

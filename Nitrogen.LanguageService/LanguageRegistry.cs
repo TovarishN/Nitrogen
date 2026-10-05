@@ -5,7 +5,9 @@ namespace Nitrogen.LanguageService;
 /// <summary>A language the service serves: its documents share one binding project.</summary>
 /// <param name="starts">File extension (with the dot) → the start rule its documents parse with.</param>
 /// <param name="presentation">How its symbol kinds look in the editor; <see cref="Presentation.Default"/> when null.</param>
-public sealed class LanguageEntry(string name, Language language, IReadOnlyDictionary<string, Rule> starts, Presentation? presentation = null)
+/// <param name="assist">What its editor knows beyond its grammar; none when null.</param>
+public sealed class LanguageEntry(string name, Language language, IReadOnlyDictionary<string, Rule> starts, Presentation? presentation = null,
+    ILanguageAssist? assist = null)
 {
     public string Name { get; } = name;
 
@@ -14,6 +16,8 @@ public sealed class LanguageEntry(string name, Language language, IReadOnlyDicti
     public IReadOnlyDictionary<string, Rule> Starts { get; } = starts;
 
     public Presentation Presentation { get; } = presentation ?? Presentation.Default;
+
+    public ILanguageAssist? Assist { get; } = assist;
 }
 
 /// <summary>File extensions → languages (issue 238). An extension belongs to one language.</summary>

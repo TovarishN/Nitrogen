@@ -73,10 +73,17 @@ public readonly record struct SymbolStyle(TokenType Token, OutlineKind Outline)
     public static SymbolStyle Default => new(TokenType.Variable, OutlineKind.Variable);
 }
 
-/// <summary>A language's symbol kind → <see cref="SymbolStyle"/> map (issue 238); an unmapped kind is a variable.</summary>
-public sealed class Presentation(IReadOnlyDictionary<string, SymbolStyle> styles)
+/// <summary>
+/// A language's symbol kind → <see cref="SymbolStyle"/> map (issue 238); an unmapped kind is a variable.
+/// <paramref name="types"/> colours a token that lowers to a value of a semantic type (by its id, such as
+/// <c>DateCalc.Date</c>); an unmapped type is a number, or a string for <c>Core.Text</c>.
+/// </summary>
+public sealed class Presentation(IReadOnlyDictionary<string, SymbolStyle> styles, IReadOnlyDictionary<string, TokenType>? types = null)
 {
     public static Presentation Default { get; } = new(new Dictionary<string, SymbolStyle>());
 
     public SymbolStyle StyleOf(string kind) => styles.TryGetValue(kind, out var style) ? style : SymbolStyle.Default;
+
+    public TokenType? TypeStyle(Nitrogen.Semantic.SemanticType type) =>
+        types is not null && types.TryGetValue(type.Id, out var token) ? token : null;
 }

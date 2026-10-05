@@ -37,6 +37,43 @@ After updating Nitrogen, copy the updated skill files into that installed direct
 
 The skill also checks for an existing sibling catalog checkout. If the private repository is unavailable, the agent can finish the main task and keep catalog findings as an unpublished local draft. Catalog publication does not grant permission to execute a module: a receiving host must validate its exact contract and admission requirements.
 
+## Example: a calculator with dates
+
+[examples/DateCalc](examples/DateCalc) is a complete typed language: an 84-line grammar, two semantic modules
+(DateCalc, 81 lines, and Math, 58 lines) and an 87-line evaluator. [DateCalc.ngr](examples/DateCalc/DateCalc.ngr) gives the syntax, and its `lowers` clauses map each
+construct to an operation of [DateCalcLanguage.cs](examples/DateCalc/DateCalcLanguage.cs), which declares
+the `DateCalc.Date` and `DateCalc.Duration` types and the operator overloads:
+
+```text
+let start = 2026-10-05;
+let sprint = 2 weeks;
+start + sprint;                 // 2026-10-19 Mon
+weekday(start + 3 * sprint);    // Monday
+(2026-12-25 - start) in days;   // 81
+round(2 * pi, 2);               // 6.28
+max(start + 10 weeks, 2026-12-25);  // 2026-12-25 Fri
+```
+
+[MathModule.cs](examples/DateCalc/MathModule.cs) is the standard math library as a separate semantic module:
+`abs sign sqrt cbrt exp ln log10 log2 sin cos tan asin acos atan sinh cosh tanh floor ceil trunc round`,
+`pow log atan2 min max mod round(x, digits)`, and the constants `pi`, `e` and `tau`. Each function is one
+table line: the name a call uses, its typed operation and its implementation. DateCalc adds `weekday`
+and `min`, `max` and `abs` overloads for dates and durations. The grammar declares the names as
+built-in symbols, so the editor colors and completes them, and a call such as `sqrt(x)` picks its
+overload by name and argument types. `sqrt(2026-10-05)` and `pow(2)` report `DC0003`; `sqrt(0 - 1)`
+stops at the call because its result is not finite.
+
+`+`, `-`, `*` and `/` use `lowers operation? Selected(Left, Right)`, so the operand types choose the
+overload: date + duration, date − date, duration × number, and so on. Unsupported combinations are
+source diagnostics: `2026-10-05 + 2026-10-06` reports `DC0002`, `weekday(3)` reports `DC0003`, and
+`2026-02-30` reports `DC0001`. [DateCalcEvaluator.cs](examples/DateCalc/DateCalcEvaluator.cs)
+lowers each statement to typed HIR and runs it through one handler per operation. With
+[nitrogen.json](examples/DateCalc/nitrogen.json), the same grammar and module give the editor coloring,
+completion, hover types, diagnostics and rename in `.datecalc` files and in C# strings tagged
+`/*lang=datecalc*/` ([Snippets.cs](examples/DateCalc/Snippets.cs)). To open it in VS Code, open
+`examples/DateCalc` as the workspace folder; `nitrogen package --config examples/DateCalc/nitrogen.json --output dist`
+builds its plugins.
+
 ## Requirements
 
 - .NET 10 SDK or newer
@@ -326,6 +363,53 @@ packages Geometry this way:
 nitrogen package --config Nitrogen.Geometry/nitrogen.json --output dist --vscode
 ```
 
+## Editor support for lowered languages
+
+The language server uses what a document lowers to as well as its syntax:
+
+- **In `.ngr` grammars**, the lowering clauses form a small language of their own. Operation names in
+  `lowers Op(...)` are colored as functions, semantic types (`Core.Scalar`, the type after `declares … type`)
+  as types, and the fields a clause passes as parameters, like the labels that declare them
+  (`Width:Dimension`). Completion after `lowers` offers the operations of the semantic catalog with their
+  signatures, after `literal`, `text`, `sequence`, `repeat` or `value` its types, and inside the
+  argument list the rule's fields. Hover shows an operation's signature. An operation or type missing
+  from the catalog (`NM0008`, `NM0009`), or a call with the wrong number of arguments (`NM0010`), is
+  reported at the clause. The catalog is the last good one of the `nitrogen.json` language the grammar
+  belongs to; other grammars see only the built-in types.
+- **In a language's documents**, a word that spells an operation (`weekday`, `days`, `box`) is colored
+  as a function, and a token that lowers to a value is colored by its type: a number, or a string for
+  `Core.Text`. A language's `nitrogen.json` entry can map types to token types, for example
+  `"types": { "DateCalc.Date": "enumMember" }`. Completion details show each name's type, and the names
+  whose type the enclosing operation expects come first (`DeclarativeTypes.ExpectedTypeOf`). Hover shows
+  what the expression lowers to.
+
+`ILanguageAssist` is the hook behind the `.ngr` support: a `LanguageEntry` can add colors, completions,
+hovers and diagnostics for text that its binding and lowering do not describe.
+
+## Languages inside C# strings
+
+A C# string literal tagged with a language is served as a document of that language:
+
+```csharp
+var due = DateCalcEvaluator.Run(/*lang=datecalc*/ "2026-10-05 + 6 weeks;");
+
+// language=datecalc
+const string Deadline = "2026-10-05 + 6 weeks;";
+```
+
+A tag is a `/*lang=NAME*/` or `/* language=NAME */` comment right before the literal, or a
+`// language=NAME` line comment before the statement whose first literal it tags (the conventions of
+Rider and Visual Studio). `NAME` is a language's name or one of its extensions without the dot,
+ignoring case. Regular, verbatim and raw literals are supported, including escapes and the indentation
+of raw literals; interpolated literals are not. Coloring, diagnostics, completion, hover, go to
+definition, references and rename work inside the string, with positions mapped to the C# file. The
+strings of a language share its project with its files, so they can use names those files export.
+
+VS Code shows one semantic-token provider per document, so the extension keeps the C# extension's
+coloring and paints the server's tokens in C# files as decorations. Rename and outline in C# files stay
+with C# outside the tagged strings. Generated VS Code plugins (`nitrogen package`) include the same
+support and also activate for C# files. Other LSP clients get the server's results directly.
+
 ## Project map
 
 | Project | Role |
@@ -337,6 +421,7 @@ nitrogen package --config Nitrogen.Geometry/nitrogen.json --output dist --vscode
 | `Nitrogen.Workspace` | Dynamic grammar compilation and workspace state |
 | `Nitrogen.LanguageService` | Editor queries and LSP server |
 | `Nitrogen.Geometry` | Standalone geometry language example |
+| `examples/DateCalc` | A calculator with dates: typed overloads, editor support and C# strings |
 | `Nitrogen.Cli` | `parse`, `watch`, and `lsp` commands |
 | `Nitrogen.Tests` | Standalone regression suite |
 

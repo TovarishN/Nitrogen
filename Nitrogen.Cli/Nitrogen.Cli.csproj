@@ -26,6 +26,7 @@
     <EmbeddedResource Include="..\editors\vscode\package.json" LogicalName="vscode/package.json" />
     <EmbeddedResource Include="..\editors\vscode\package-lock.json" LogicalName="vscode/package-lock.json" />
     <EmbeddedResource Include="..\editors\vscode\tsconfig.json" LogicalName="vscode/tsconfig.json" />
+    <EmbeddedResource Include="..\editors\vscode\src\csharpStrings.ts" LogicalName="vscode/csharpStrings.ts" />
   </ItemGroup>
 
   <ItemGroup>

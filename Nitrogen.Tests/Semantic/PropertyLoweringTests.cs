@@ -55,6 +55,21 @@ public sealed class PropertyLoweringTests
     }
 
     [Fact]
+    public void A_present_optional_computed_operation_is_a_lowering_root()
+    {
+        var language = DynamicLanguage();
+        using var parsed = language.Parse("optional-dynamic 1+1", PropertyLoweringModule.OptionalDynamicFile);
+        var project = new Project(language);
+        project.Set("optional-root.txt", parsed.Tree);
+        var file = new ProjectSemantics(project)["optional-root.txt"];
+
+        var lowered = HirLowering.Lower(file, language.SemanticCatalog);
+
+        Assert.Empty(lowered.Diagnostics);
+        Assert.Equal("Test.AddScalars", Assert.IsType<HirOperation>(Assert.Single(lowered.Roots)).Signature.Id);
+    }
+
+    [Fact]
     public void Optional_computed_operation_lowers_inside_a_supported_parent()
     {
         var language = DynamicLanguage();
