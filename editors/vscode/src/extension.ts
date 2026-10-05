@@ -1,8 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { ExtensionContext, workspace } from 'vscode';
+import { ExtensionContext, extensions, workspace } from 'vscode';
 import { DocumentSelector, LanguageClient, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 import { CSharpStrings, csharpSelector } from './csharpStrings';
+import { languagesOfOtherExtensions } from './otherExtensions';
 
 let client: LanguageClient | undefined;
 let strings: CSharpStrings | undefined;
@@ -19,7 +20,7 @@ function workspaceExtensions(): string[] {
   }
 }
 
-export async function activate(_context: ExtensionContext): Promise<void> {
+export async function activate(context: ExtensionContext): Promise<void> {
   const command = workspace.getConfiguration('nitrogen').get<string>('server.path') || 'nitrogen';
   const serverOptions: ServerOptions = { command, args: ['lsp'] };
   const selector: DocumentSelector = [
@@ -31,6 +32,8 @@ export async function activate(_context: ExtensionContext): Promise<void> {
   const clientOptions: LanguageClientOptions = {
     documentSelector: selector,
     middleware: strings.middleware,
+    // This server reads the workspace's nitrogen.json: the C# strings of languages other extensions carry are theirs.
+    initializationOptions: { skipLanguages: languagesOfOtherExtensions(extensions.all, context.extension.id) },
     synchronize: { fileEvents: workspace.createFileSystemWatcher('**/{*.ngr,nitrogen.json}') },
   };
   client = new LanguageClient('nitrogen', 'Nitrogen', serverOptions, clientOptions);

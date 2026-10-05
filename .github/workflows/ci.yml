@@ -30,6 +30,7 @@ jobs:
           cache-dependency-path: editors/vscode/package-lock.json
       - run: npm ci
       - run: npm run compile
+      - run: npm test
 
   packages:
     runs-on: ubuntu-latest
