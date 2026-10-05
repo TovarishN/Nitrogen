@@ -408,7 +408,9 @@ strings of a language share its project with its files, so they can use names th
 VS Code shows one semantic-token provider per document, so the extension keeps the C# extension's
 coloring and paints the server's tokens in C# files as decorations. Rename and outline in C# files stay
 with C# outside the tagged strings. Generated VS Code plugins (`nitrogen package`) include the same
-support and also activate for C# files. Other LSP clients get the server's results directly.
+support and also activate for C# files; the generic extension leaves the strings of languages an
+installed generated extension carries to that extension (`skipLanguages`, see below). Other LSP clients
+get the server's results directly.
 
 In Rider, C# files get a second Nitrogen client of their own (the platform switches features per
 client, not per file). Its colors are added to Rider's, and diagnostics, completion, hover, go to
