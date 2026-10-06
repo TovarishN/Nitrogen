@@ -30,11 +30,6 @@ public class SelfHostingTests
             for (int x = 0; x < e.Extends.Count; x++) Assert.Equal(e.Extends[x], a.Extends[x]);
             Assert.Equal(e.Span, a.Span);
         }
-        // Stage-2 cutover check (removed when Parse projects): the HIR projection gives the same model.
-        var projected = NgrParser.ParseProjected(text);
-        Assert.True(projected.Success, projected.Diagnostics.Count > 0 ? "projected: " + projected.Diagnostics[0] : "");
-        Assert.Equal(GrammarDumper.Dump(expected), GrammarDumper.Dump(projected.File!));
-        Assert.Equal(expected, projected.File);
         Assert.Equal(expected, actual);
     }
 
@@ -144,9 +139,6 @@ public class SelfHostingTests
         var result = NgrParser.Parse(text);
         Assert.False(result.Success);
         Assert.Equal(GrammarCodes.Syntax, Assert.Single(result.Diagnostics).Code);
-        var projectedFailure = NgrParser.ParseProjected(text); // stage-2 cutover check
-        Assert.False(projectedFailure.Success);
-        Assert.Equal(GrammarCodes.Syntax, Assert.Single(projectedFailure.Diagnostics).Code);
     }
 
     [Fact]
