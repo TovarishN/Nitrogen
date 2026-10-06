@@ -1,6 +1,6 @@
 # Self-hosted grammar lowering: `lowers` clauses in `Nitrogen.ngr`
 
-Status: stage 1 implemented (2026-10-06); stage 2 not started.
+Status: implemented (2026-10-06); stage 2 implemented in [the projection design](2026-10-06-self-hosted-grammar-projection-design.md).
 
 ## Problem
 

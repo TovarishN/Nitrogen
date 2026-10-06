@@ -8,14 +8,24 @@ public sealed record LoweringRegistration(int SyntaxKind, string OperationId,
 
 public enum SemanticCheckScope { WholeFile, SubtreeAndAncestors }
 
-public sealed class LoweringContext(FileSemantics file, Guid snapshotId, SemanticCheckScope checkScope = SemanticCheckScope.WholeFile)
+/// <summary>What blocks lowering a node besides its own lowering rules.</summary>
+public enum LoweringAdmission
+{
+    /// <summary>Recovered syntax, unresolved names, and binding or semantic errors in the subtree block it.</summary>
+    Full,
+    /// <summary>Only recovered syntax blocks it; for callers that validate the lowered result themselves.</summary>
+    SyntaxOnly,
+}
+
+public sealed class LoweringContext(FileSemantics file, Guid snapshotId, SemanticCheckScope checkScope = SemanticCheckScope.WholeFile,
+    LoweringAdmission admission = LoweringAdmission.Full)
 {
     readonly List<LoweringDiagnostic> _reported = new();
     readonly HashSet<(string Path, int Node)> _activeTemplates = new();
 
     /// <summary>The context of a template body in <paramref name="file"/>: its parameters bound to the arguments; reports go to <paramref name="caller"/>.</summary>
     LoweringContext(FileSemantics file, LoweringContext caller, IReadOnlyDictionary<Binding.Symbol, HirNode> arguments)
-        : this(file, caller.SnapshotId, caller.CheckScope)
+        : this(file, caller.SnapshotId, caller.CheckScope, caller.Admission)
     {
         _reported = caller._reported;
         _activeTemplates = caller._activeTemplates;
@@ -34,6 +44,7 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
     public SemanticCheckScope CheckScope { get; } = checkScope;
+    public LoweringAdmission Admission { get; } = admission;
     public SourceOrigin Origin(int node) => new(File.Path, SnapshotId, node, File.Tree.Span(node));
     public void Report(string code, SourceOrigin origin, string message)
     {
@@ -72,6 +83,7 @@ public static class HirLowering
             context.Report("NH0001", origin, "Recovered syntax cannot be lowered.");
             return false;
         }
+        if (context.Admission == LoweringAdmission.SyntaxOnly) return true;
         var span = origin.Span;
         var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
             !reference.IsOptional && file.SymbolOf(reference.Node) is null);
@@ -130,12 +142,14 @@ public static class HirLowering
         return new LoweringResult(roots.AsReadOnly(), Array.AsReadOnly(context.Reported.ToArray()));
     }
 
-    public static LoweringResult Lower(FileSemantics file, SemanticCatalog catalog, Guid snapshotId)
+    /// <summary>Lower every registered root of the file; <paramref name="admission"/> chooses what blocks a root.</summary>
+    public static LoweringResult Lower(FileSemantics file, SemanticCatalog catalog, Guid snapshotId,
+        LoweringAdmission admission = LoweringAdmission.Full)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(catalog);
         if (snapshotId == Guid.Empty) throw new ArgumentException("A snapshot ID is required.", nameof(snapshotId));
-        var context = new LoweringContext(file, snapshotId);
+        var context = new LoweringContext(file, snapshotId, admission: admission);
         var roots = new List<HirNode>();
         var diagnostics = new List<LoweringDiagnostic>();
         var tree = file.Tree;
@@ -150,26 +164,29 @@ public static class HirLowering
                     diagnostics.Add(new LoweringDiagnostic("NH0001", origin, "Recovered syntax cannot be lowered."));
                     continue;
                 }
-                var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
-                    !reference.IsOptional && file.SymbolOf(reference.Node) is null);
-                if (unresolved is not null && !registration.HandlesUnresolvedReferences)
+                if (admission == LoweringAdmission.Full)
                 {
-                    diagnostics.Add(new LoweringDiagnostic("NH0002",
-                        new SourceOrigin(file.Path, context.SnapshotId, unresolved.Node, unresolved.NameSpan),
-                        "An unresolved symbol prevents lowering."));
-                    continue;
-                }
-                var bindingError = file.Binding.Diagnostics.FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
-                var semanticError = file.Diagnostics().FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
-                if (bindingError is not null || semanticError is not null)
-                {
-                    var site = bindingError?.Span ?? semanticError!.Span;
-                    int sourceNode = Enumerable.Range(0, tree.NodeCount)
-                        .FirstOrDefault(candidate => tree.Span(candidate) == site, node);
-                    diagnostics.Add(new LoweringDiagnostic("NH0003",
-                        new SourceOrigin(file.Path, context.SnapshotId, sourceNode, site),
-                        "Invalid semantics prevents lowering."));
-                    continue;
+                    var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
+                        !reference.IsOptional && file.SymbolOf(reference.Node) is null);
+                    if (unresolved is not null && !registration.HandlesUnresolvedReferences)
+                    {
+                        diagnostics.Add(new LoweringDiagnostic("NH0002",
+                            new SourceOrigin(file.Path, context.SnapshotId, unresolved.Node, unresolved.NameSpan),
+                            "An unresolved symbol prevents lowering."));
+                        continue;
+                    }
+                    var bindingError = file.Binding.Diagnostics.FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
+                    var semanticError = file.Diagnostics().FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
+                    if (bindingError is not null || semanticError is not null)
+                    {
+                        var site = bindingError?.Span ?? semanticError!.Span;
+                        int sourceNode = Enumerable.Range(0, tree.NodeCount)
+                            .FirstOrDefault(candidate => tree.Span(candidate) == site, node);
+                        diagnostics.Add(new LoweringDiagnostic("NH0003",
+                            new SourceOrigin(file.Path, context.SnapshotId, sourceNode, site),
+                            "Invalid semantics prevents lowering."));
+                        continue;
+                    }
                 }
                 try
                 {

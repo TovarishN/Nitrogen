@@ -383,6 +383,7 @@ The language server uses what a document lowers to as well as its syntax:
   `Nitrogen.ngr` itself lowers every grammar to typed HIR over the `Grammar` semantic module
   (`GrammarSemantics`): hover over a rule, expression or clause shows the `Grammar` operation it lowers
   to. Its colours stay those of the grammar's syntax (`Presentation.ColorFromLowering` is off for `.ngr`).
+  `NgrParser.Parse` builds its `GrammarModel` from that HIR (`NgrProjector`), with no separate syntax walk.
 - **In a language's documents**, a word that spells an operation (`weekday`, `days`, `box`) is colored
   as a function, and a token that lowers to a value is colored by its type: a number, or a string for
   `Core.Text`. A language's `nitrogen.json` entry can map types to token types, for example
