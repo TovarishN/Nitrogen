@@ -71,7 +71,7 @@ Lowering checks types exactly, so every alternative of a pure choice rule (`Memb
 | `Grammar.LoweringArgument` | `LowersSequenceArgument`, `LowersOptionalArgument`, `LowersOptionalTextArgument`, `LowersTextArgument`, `FieldArgument` |
 | `Grammar.Semantics` | `Semantics` |
 | `Grammar.SemanticItem` | `PropertyDecl`, `Check`, `Assignment` |
-| `Grammar.Expression` | `Expression`, `Sequence`, `Element`, `Unary`, `Postfix`, `Literal`, `Any`, `CharClass`, `Parenthesized`, `Reference` |
+| `Grammar.Expression` | `Expression`, `Sequence`, `Element`, `Unary`, `Postfix`, `StringLiteral`, `Any`, `CharClass`, `Parenthesized`, `Reference` |
 | `Grammar.Tail` | `SeparatorTail`, `GroupClose` |
 | `Grammar.ClassItem` | `ClassItem` |
 
@@ -146,7 +146,7 @@ written, the grammar is reshaped without changing the accepted language:
 
 - **Token lists** become lists of text-only rules: `Word = Value:Identifier` (`Symbols`, `KindGroup`),
   `BuiltinName = Value:QualifiedName` (`Builtin`), `ExceptWord = Value:String` (`ExceptList`).
-- **Token alternatives** in choice rules become rules: `Literal = Value:String` in `Primary`,
+- **Token alternatives** in choice rules become rules: `StringLiteral = Value:String` in `Primary`,
   `SingleKind = Kind:Identifier` in `KindList`, `FieldArgument = Field:Identifier` in `LowersArgument`.
 - **Optional keyword groups** become named rules used as optional fields: `ExceptList`
   (`"except" Words:ExceptWord+`), `InKind` (`"in" Kind:Identifier`), `DeclaredType`
@@ -157,8 +157,9 @@ written, the grammar is reshaped without changing the accepted language:
 - **Mixed alternatives** become rules: `End:(Terminator / RuleSemantics)`, `Tail:(SeparatorTail /
   GroupClose)`, `Type:(ComputedType / FixedType)` in `LowersValue`, `Operation:(ComputedOperation /
   FixedOperation)` in `LowersCall`.
-- **Literal-choice rules** gain a label so they lower as text: `RepeatOp`, `PredicateOp`,
-  `PropertyFlag`, `Associativity`. `PropertyDecl.Direction` lowers with `text Direction`.
+- **Literal-choice rules** lower as their own text with `lowers text Core.Text this`: `RepeatOp`,
+  `PredicateOp`, `PropertyFlag`, `Associativity`. `PropertyDecl.Direction` lowers with `text Direction`.
+- New labels avoid the generated views' own members (`Tree`, `Index`, `Span`, `IsMissing`, `IsSkipped`).
 - `Declares.FileScope:("in" "file")?` stays as written and lowers with `optional text`; only its
   presence is meaningful.
 
@@ -170,8 +171,13 @@ for `Nitrogen` change and are re-approved.
 ## 4. Wiring
 
 `NgrParser.Language` is built with `.AddSemantic(GrammarSemantics.Module)`. The `ngr` language entry
-in `LspCommand` therefore gets declarative types, hover, typed colouring, and HIR inspection.
-`NgrParser.Parse` is unchanged.
+in `LspCommand` therefore gets declarative types, hover of what a node lowers to, lowering diagnostics,
+and HIR inspection. `NgrParser.Parse` is unchanged.
+
+Colouring from lowered HIR would recolour `.ngr` files for the worse: keyword literals outside an
+operation's arguments become functions and every `Core.Text` token a string. `Presentation` therefore
+gains `ColorFromLowering` (default `true`); the `ngr` entry sets it to `false`, so `.ngr` semantic
+tokens stay exactly as they are. Hover over a name now also shows what it lowers to.
 
 ## 5. Errors
 
@@ -189,8 +195,10 @@ in `LspCommand` therefore gets declarative types, hover, typed colouring, and HI
 - **Shape.** A small grammar's HIR is checked structurally: a present and an absent optional keyword,
   an optional group, a separated list, a nested choice, a character range, and a semantics block.
 - **`optional text`.** Bootstrap and self-hosted parsers agree on the clause; validation rejects a
-  required field; checking rejects a non-`Core.Optional<Core.Text>` input; lowering covers present,
-  absent, and missing-token fields.
+  required field; composition rejects a non-`Core.Optional<Core.Text>` input; lowering covers present
+  and absent fields. Recovered syntax is blocked by admission (`NH0001`), as for every form.
+- **Editor.** A `.ngr` document's semantic tokens contain no function tokens outside `lowers` clauses,
+  and hover over a node names its `Grammar` operation.
 - **Regression.** `SelfHostingTests` unchanged; full `dotnet build Nitrogen.slnx -warnaserror` and
   `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj`.
 
