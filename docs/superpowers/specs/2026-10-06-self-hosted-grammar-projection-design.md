@@ -1,6 +1,6 @@
 # Self-hosted grammar projection: HIR → `GrammarModel` replaces `NgrMapper`
 
-Status: approved design (2026-10-06), stage 2 of 2. Builds on
+Status: implemented (2026-10-06), stage 2 of 2. Builds on
 [stage 1](2026-10-06-self-hosted-grammar-lowering-design.md).
 
 ## Problem
