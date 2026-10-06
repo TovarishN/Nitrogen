@@ -193,6 +193,10 @@ Use `declares value Name sequential` for ordered declarations: a concrete name b
 
 Operation arguments may use `sequence inferred Field` when their element type depends on the selected operation. For example, `lowers operation Selected(sequence inferred Args)` takes the exact element type from the corresponding `Core.Sequence<T>` input of `Selected`. Every item must lower as that type; no casts or unit conversions are inserted. Empty lists keep the signature's element type, and separated lists skip separator nodes. A fixed non-sequence input fails composition; a computed non-sequence input fails semantic checking. The field must still be a repeated or separated list. `inferred` is special in this argument position; a fixed type with that name can be qualified with its module.
 
+`optional text Field` passes an optional field's spelling as `Core.Optional<Core.Text>`: present, its tokens
+without trivia; absent, an empty optional. It suits bare optional keywords (`Export:"export"?`). After
+`optional`, `text` is reserved; a type of that name must be qualified with its module.
+
 ## Derived declarations
 
 Names emitted by checked lowering can replace authored file-scope templates using `Project.SetDerivedDeclarations(path, kind, declarations)`. Each `DerivedDeclaration` carries the emitted name, a source node and name span in that document, and an optional export flag. The replacement is the complete index for that kind: it removes template declarations, seals dynamic file-scope openness, and retains local declarations and indexes for other kinds. An empty index means no names were emitted. Normal lookup, definition locations, completion, duplicate checks, and export visibility then use the emitted names.
@@ -376,6 +380,9 @@ The language server uses what a document lowers to as well as its syntax:
   from the catalog (`NM0008`, `NM0009`), or a call with the wrong number of arguments (`NM0010`), is
   reported at the clause. The catalog is the last good one of the `nitrogen.json` language the grammar
   belongs to; other grammars see only the built-in types.
+  `Nitrogen.ngr` itself lowers every grammar to typed HIR over the `Grammar` semantic module
+  (`GrammarSemantics`): hover over a rule, expression or clause shows the `Grammar` operation it lowers
+  to. Its colours stay those of the grammar's syntax (`Presentation.ColorFromLowering` is off for `.ngr`).
 - **In a language's documents**, a word that spells an operation (`weekday`, `days`, `box`) is colored
   as a function, and a token that lowers to a value is colored by its type: a number, or a string for
   `Core.Text`. A language's `nitrogen.json` entry can map types to token types, for example
