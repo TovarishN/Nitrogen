@@ -94,6 +94,7 @@ public class SelfHostingTests
     [InlineData("syntax module M { symbols { value } token N = ['a'..'z']+; syntax R = Name:N references value Name lowers reference type Resolved initializer Source { out Resolved : Nitrogen.Semantic.SemanticType? = null; out Source : int? = null; } }")]
     [InlineData("syntax module M { token T = ['0'..'9']+; syntax R = Value:T lowers value typeFoo Number { out Number : float? = null; } }")]
     [InlineData("syntax module M { token T = ['0'..'9']+; syntax R = Value:T? lowers M.Build(optional Core.Scalar Value); }")]
+    [InlineData("syntax module M { token T = ['a'..'z']+; syntax R = Mark:\"!\"? Value:T lowers M.Build(optional text Mark, text Value); }")]
     [InlineData("syntax module M { extensible syntax E { | N = \"-\"? V:X lowers literal Core.Scalar this | P = L:E \"+\" R:E precedence 6 left lowers M.Add(L, R) } }")]
     [InlineData("syntax module M { extensible syntax E { out hover T : int = 0; in expected X : string? = null; | N = \"n\" { T = 1; } | P = E \"+\" E precedence 6 left { T = E1.T + E2.T; E1.X = \"a;b\"; check AB0001 (T > 0 ? true : false) : $\"bad {T}\"; } } }")]
     [InlineData("syntax module M { syntax R = \"r\" { out O : int = 0; O = 'c' == ';' ? 1 : /* ; */ 2; // ;\n check O >= 0 : @\"x\"\"y\"; } }")]

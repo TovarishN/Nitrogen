@@ -22,6 +22,7 @@ internal sealed partial class NgrAssist : ILanguageAssist
         NitrogenKinds.LowersCall, NitrogenKinds.LowersLiteral, NitrogenKinds.LowersText, NitrogenKinds.LowersSequence,
         NitrogenKinds.LowersValue, NitrogenKinds.LowersReference, NitrogenKinds.LowersRepeat, NitrogenKinds.LowersTemplate,
         NitrogenKinds.LowersExpand, NitrogenKinds.LowersSequenceArgument, NitrogenKinds.LowersOptionalArgument,
+        NitrogenKinds.LowersOptionalTextArgument,
         NitrogenKinds.LowersTextArgument, NitrogenKinds.Declares,
     ];
 

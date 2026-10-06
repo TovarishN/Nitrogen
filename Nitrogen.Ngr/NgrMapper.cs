@@ -249,6 +249,11 @@ internal sealed class NgrMapper(SyntaxTree tree)
                                 : new LoweringArgument(field.ToString(), Span(field.Span),
                                     new NameDecl(type.ToString(), Span(type.Span))));
                         }
+                        else if (argument.Kind == NitrogenKinds.LowersOptionalTextArgument)
+                        {
+                            var field = argument.Child(2);
+                            arguments.Add(new LoweringArgument(field.ToString(), Span(field.Span), OptionalText: true));
+                        }
                         else if (argument.Kind == NitrogenKinds.LowersOptionalArgument)
                         {
                             var type = argument.Child(1);

@@ -65,8 +65,9 @@ syntax module Nitrogen
   syntax LowersValue    = "value" Type:(("type" Identifier) / QualifiedName) Field:Identifier;
   syntax LowersReference = "reference" "type" Property:Identifier Initializer:("initializer" Identifier)?;
   syntax LowersCall     = Operation:(("operation" "?"? Identifier) / QualifiedName) "(" Arguments:(LowersArgument; ",")* Close:")";
-  syntax LowersArgument = LowersSequenceArgument / LowersOptionalArgument / LowersTextArgument / Identifier;
+  syntax LowersArgument = LowersSequenceArgument / LowersOptionalTextArgument / LowersOptionalArgument / LowersTextArgument / Identifier;
   syntax LowersSequenceArgument = "sequence" Type:QualifiedName Field:Identifier;
+  syntax LowersOptionalTextArgument = "optional" "text" Field:Identifier;
   syntax LowersOptionalArgument = "optional" Type:QualifiedName Field:Identifier;
   syntax LowersTextArgument = "text" Field:Identifier;
 
