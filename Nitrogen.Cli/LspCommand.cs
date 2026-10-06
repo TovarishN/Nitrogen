@@ -15,10 +15,11 @@ internal static class LspCommand
         return registry;
     }
 
-    static Presentation Styles(params (string Kind, TokenType Token, OutlineKind Outline)[] styles) =>
-        new(styles.ToDictionary(s => s.Kind, s => new SymbolStyle(s.Token, s.Outline)));
+    static Presentation Styles(bool colorFromLowering, params (string Kind, TokenType Token, OutlineKind Outline)[] styles) =>
+        new(styles.ToDictionary(s => s.Kind, s => new SymbolStyle(s.Token, s.Outline)), colorFromLowering: colorFromLowering);
 
-    static readonly Presentation NgrStyles = Styles(
+    // What a grammar lowers to (GrammarSemantics) shows on hover; its colours stay those of the grammar's syntax.
+    static readonly Presentation NgrStyles = Styles(false,
         ("module", TokenType.Namespace, OutlineKind.Module), ("rule", TokenType.Type, OutlineKind.Class),
         ("property", TokenType.Property, OutlineKind.Property));
 

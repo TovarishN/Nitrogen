@@ -71,6 +71,13 @@ public sealed class DeclarativeLowering
                     }
                     for (int i = 0; i < rule.Arguments.Count; i++)
                         {
+                            if (rule.ArgumentOptionalTexts[i])
+                            {
+                                if (operation is not null && !operation.Inputs[i].Equals(SemanticTypes.OptionalOf(SemanticTypes.Text)))
+                                    errors.Add(new CompositionDiagnostic("NM0011", [module.Name],
+                                        $"{where} passes optional text to '{operation.Id}', which needs {operation.Inputs[i]}."));
+                                continue;
+                            }
                             if (rule.ArgumentTexts[i] && operation is not null &&
                                 !operation.Inputs[i].Equals(SemanticTypes.Text))
                             {

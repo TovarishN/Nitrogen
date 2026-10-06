@@ -1,0 +1,7 @@
+// optional text Field: an optional keyword lowers to Core.Optional<Core.Text>.
+syntax module OptionalText
+{
+  token Name = ['a'..'z']+;
+
+  syntax Flagged = "flag" Mark:"!"? Value:Name lowers Test.Flag(optional text Mark, text Value);
+}

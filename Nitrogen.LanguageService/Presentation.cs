@@ -77,10 +77,15 @@ public readonly record struct SymbolStyle(TokenType Token, OutlineKind Outline)
 /// A language's symbol kind → <see cref="SymbolStyle"/> map (issue 238); an unmapped kind is a variable.
 /// <paramref name="types"/> colours a token that lowers to a value of a semantic type (by its id, such as
 /// <c>DateCalc.Date</c>); an unmapped type is a number, or a string for <c>Core.Text</c>.
+/// <paramref name="colorFromLowering"/> false keeps lowered HIR from colouring tokens (the .ngr grammars).
 /// </summary>
-public sealed class Presentation(IReadOnlyDictionary<string, SymbolStyle> styles, IReadOnlyDictionary<string, TokenType>? types = null)
+public sealed class Presentation(IReadOnlyDictionary<string, SymbolStyle> styles, IReadOnlyDictionary<string, TokenType>? types = null,
+    bool colorFromLowering = true)
 {
     public static Presentation Default { get; } = new(new Dictionary<string, SymbolStyle>());
+
+    /// <summary>Whether what a document lowers to colours its tokens.</summary>
+    public bool ColorFromLowering { get; } = colorFromLowering;
 
     public SymbolStyle StyleOf(string kind) => styles.TryGetValue(kind, out var style) ? style : SymbolStyle.Default;
 

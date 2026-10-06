@@ -46,11 +46,9 @@ internal sealed class NgrMapper(SyntaxTree tree)
                 var except = new List<LiteralExpr>();
                 if (r.Except.HasValue)
                 {
-                    var words = r.Except.Value.Child(1); // the String+ list
-                    for (int i = 0; i < words.ChildCount; i++)
+                    foreach (var word in r.Except.Value.Words)
                     {
-                        var word = words.Child(i);
-                        string value = Unquote(word.ToString());
+                        string value = Unquote(word.Value.ToString());
                         if (value.Length == 0) throw new NgrMappingException("a literal must not be empty", Span(word.Span));
                         except.Add(new LiteralExpr(value, Span(word.Span)));
                     }
@@ -60,7 +58,8 @@ internal sealed class NgrMapper(SyntaxTree tree)
             else if (kind == NitrogenKinds.SyntaxRule)
             {
                 var r = Cast<SyntaxRuleNode>(member);
-                SemanticsBlock? semantics = r.End.Kind == NitrogenKinds.Semantics ? Semantics(Cast<SemanticsNode>(r.End)) : null;
+                SemanticsBlock? semantics = r.End.Kind == NitrogenKinds.RuleSemantics
+                    ? Semantics(Cast<RuleSemanticsNode>(r.End).Block) : null;
                 rules.Add(new SyntaxRule(r.Name.ToString(), Expression(r.Body), Span(r.Span), Clauses(r.Clauses), semantics));
             }
             else if (kind == NitrogenKinds.ExtensibleRule)
@@ -72,18 +71,18 @@ internal sealed class NgrMapper(SyntaxTree tree)
             {
                 var s = Cast<SymbolsNode>(member);
                 var kinds = new List<NameDecl>();
-                foreach (var k in s.Kinds) kinds.Add(Name(k));
+                foreach (var k in s.Kinds) kinds.Add(Name(k.Value));
                 symbols.Add(new SymbolsDecl(kinds.ToArray(), Span(s.Span)));
             }
             else if (kind == NitrogenKinds.Builtin)
             {
                 var b = Cast<BuiltinNode>(member);
                 var names = new List<NameDecl>();
-                foreach (var n in b.Names) names.Add(new NameDecl(n.ToString(), Span(n.Span)));
+                foreach (var n in b.Names) names.Add(new NameDecl(n.Value.ToString(), Span(n.Value.Span)));
                 NameDecl? scope = null;
                 if (b.Within.HasValue)
                 {
-                    var rule = b.Within.Value.Child(1);
+                    var rule = b.Within.Value.Name;
                     scope = new NameDecl(rule.ToString(), Span(rule.Span));
                 }
                 builtins.Add(new BuiltinDecl(Name(b.SymbolKind), names.ToArray(), Span(b.Span), scope));
@@ -109,7 +108,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
         foreach (var node in nodes)
         {
             var body = Expression(node.Body);
-            string? name = node.Named.HasValue ? node.Named.Value.Child(0).ToString() : null;
+            string? name = node.Named.HasValue ? node.Named.Value.Name.ToString() : null;
             int end = body.Span.End;
             int? precedence = null;
             GrammarAssociativity? associativity = null;
@@ -117,13 +116,12 @@ internal sealed class NgrMapper(SyntaxTree tree)
             {
                 var group = node.Precedence.Value;
                 end = group.Span.End;
-                var number = group.Child(1);
+                var number = group.Level;
                 string digits = number.ToString();
                 if (digits.Length > 9) throw new NgrMappingException("precedence is too large", Span(number.Span));
                 precedence = int.Parse(digits, CultureInfo.InvariantCulture);
-                var word = group.Child(2);
-                if (word.Kind != SyntaxKinds.Empty)
-                    associativity = word.ToString() == "left" ? GrammarAssociativity.Left : GrammarAssociativity.Right;
+                if (group.Associativity.HasValue)
+                    associativity = Text(group.Associativity.Value.Index) == "left" ? GrammarAssociativity.Left : GrammarAssociativity.Right;
             }
             var clauses = Clauses(node.Clauses);
             if (clauses.Count > 0) end = clauses[clauses.Count - 1].Span.End;
@@ -171,7 +169,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
                 NameDecl? type = null;
                 if (d.Type.HasValue)
                 {
-                    var name = d.Type.Value.Child(1);
+                    var name = d.Type.Value.Name;
                     type = new NameDecl(name.ToString(), Span(name.Span));
                     end = name.Span.End;
                 }
@@ -224,7 +222,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
                 {
                     var property = l.Form.Child(2);
                     var source = Cast<LowersReferenceNode>(l.Form).Initializer;
-                    SyntaxNode? initializer = source.HasValue ? source.Value.Child(1) : null;
+                    Token? initializer = source.HasValue ? source.Value.Name : null;
                     clauses.Add(new BindingClause(BindingClauseKind.LowersReference, default, "", default,
                         false, false, GrammarSpan.FromBounds(l.Span.Start, initializer?.Span.End ?? property.Span.End),
                         TypeProperty: new NameDecl(property.ToString(), Span(property.Span)),
@@ -248,6 +246,11 @@ internal sealed class NgrMapper(SyntaxTree tree)
                                 ? new LoweringArgument(field.ToString(), Span(field.Span), InferSequence: true)
                                 : new LoweringArgument(field.ToString(), Span(field.Span),
                                     new NameDecl(type.ToString(), Span(type.Span))));
+                        }
+                        else if (argument.Kind == NitrogenKinds.LowersOptionalTextArgument)
+                        {
+                            var field = argument.Child(2);
+                            arguments.Add(new LoweringArgument(field.ToString(), Span(field.Span), OptionalText: true));
                         }
                         else if (argument.Kind == NitrogenKinds.LowersOptionalArgument)
                         {
@@ -278,7 +281,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
                 int end = r.Field.Span.End;
                 if (r.Within.HasValue)
                 {
-                    var qualifierKind = r.Within.Value.Child(1);
+                    var qualifierKind = r.Within.Value.Name;
                     qualifier = new NameDecl(qualifierKind.ToString(), Span(qualifierKind.Span));
                     end = qualifierKind.Span.End;
                 }
@@ -298,7 +301,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
     {
         var kinds = new List<NameDecl>();
         if (node.Kind == NitrogenKinds.KindGroup)
-            foreach (var k in Cast<KindGroupNode>(node).Kinds) kinds.Add(Name(k));
+            foreach (var k in Cast<KindGroupNode>(node).Kinds) kinds.Add(Name(k.Value));
         else
             kinds.Add(new NameDecl(node.ToString(), Span(node.Span)));
         return kinds.ToArray();
@@ -392,7 +395,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
         var inner = Unary(node.Body);
         if (!node.Label.HasValue) return inner;
         var label = node.Label.Value;
-        return new LabeledExpr(label.Child(0).ToString(), inner, GrammarSpan.FromBounds(label.Span.Start, inner.Span.End));
+        return new LabeledExpr(label.Name.ToString(), inner, GrammarSpan.FromBounds(label.Span.Start, inner.Span.End));
     }
 
     Expr Unary(UnaryNode node)
@@ -426,7 +429,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
     Expr Primary(SyntaxNode node)
     {
         int kind = node.Kind;
-        if (kind == NitrogenKinds.String)
+        if (kind == NitrogenKinds.StringLiteral)
         {
             string value = Unquote(node.ToString());
             if (value.Length == 0) throw new NgrMappingException("a literal must not be empty", Span(node.Span));
@@ -455,7 +458,7 @@ internal sealed class NgrMapper(SyntaxTree tree)
             char last = first;
             if (item.Last.HasValue)
             {
-                var lastToken = item.Last.Value.Child(1);
+                var lastToken = item.Last.Value.Last;
                 last = Unquote(lastToken.ToString())[0];
                 if (last < first)
                     throw new NgrMappingException("empty character range", GrammarSpan.FromBounds(item.First.Span.Start, lastToken.Span.End));

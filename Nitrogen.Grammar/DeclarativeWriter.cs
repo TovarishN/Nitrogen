@@ -51,7 +51,7 @@ internal static class DeclarativeWriter
                 operationProperty = owner.ClassPrefix(info) + "P_" + ruleName + "_" + operationName.Name;
             }
             arguments = Ints(lowers.Arguments.Select(a => BindingWriter.ChildIndex(elements, a.Name)));
-            if (lowers.Arguments.Any(a => a.SequenceElementType is not null || a.InferSequence || a.OptionalElementType is not null || a.AsText))
+            if (lowers.Arguments.Any(a => a.SequenceElementType is not null || a.InferSequence || a.OptionalElementType is not null || a.AsText || a.OptionalText))
             {
                 var types = lowers.Arguments.Select(a => a.SequenceElementType is { } t ? CSharpText.Literal(t.Name) : "null");
                 var strides = lowers.Arguments.Select(a =>
@@ -66,6 +66,8 @@ internal static class DeclarativeWriter
                     + $"new string?[] {{ {string.Join(", ", optionalTypes)} }}";
                 if (lowers.Arguments.Any(a => a.InferSequence))
                     extraArguments += $", argumentInferredSequences: new[] {{ {string.Join(", ", lowers.Arguments.Select(a => a.InferSequence ? "true" : "false"))} }}";
+                if (lowers.Arguments.Any(a => a.OptionalText))
+                    extraArguments += $", argumentOptionalTexts: new[] {{ {string.Join(", ", lowers.Arguments.Select(a => a.OptionalText ? "true" : "false"))} }}";
             }
         }
         else if (lowers is { Kind: BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand })

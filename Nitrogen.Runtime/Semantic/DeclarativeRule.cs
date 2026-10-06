@@ -26,7 +26,8 @@ public sealed class DeclarativeRule
         string?[]? argumentSequenceTypes = null, int[]? argumentSequenceStrides = null,
         bool[]? argumentTexts = null, string?[]? argumentOptionalTypes = null,
         Property? property = null, Property? typeProperty = null, Property? operationProperty = null,
-        bool optionalOperation = false, Property? initializerProperty = null, bool[]? argumentInferredSequences = null)
+        bool optionalOperation = false, Property? initializerProperty = null, bool[]? argumentInferredSequences = null,
+        bool[]? argumentOptionalTexts = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (form == DeclarativeForm.Repeat && (arguments.Length != 3 || target is null))
@@ -69,6 +70,8 @@ public sealed class DeclarativeRule
             ? new string?[arguments.Length] : (string?[])argumentOptionalTypes.Clone());
         ArgumentInferredSequences = Array.AsReadOnly(argumentInferredSequences is null
             ? new bool[arguments.Length] : (bool[])argumentInferredSequences.Clone());
+        ArgumentOptionalTexts = Array.AsReadOnly(argumentOptionalTexts is null
+            ? new bool[arguments.Length] : (bool[])argumentOptionalTexts.Clone());
         Property = property;
         TypeProperty = typeProperty;
         OperationProperty = operationProperty;
@@ -76,11 +79,13 @@ public sealed class DeclarativeRule
         InitializerProperty = initializerProperty;
         if (ArgumentSequenceTypes.Count != arguments.Length || ArgumentSequenceStrides.Count != arguments.Length ||
             ArgumentTexts.Count != arguments.Length || ArgumentOptionalTypes.Count != arguments.Length ||
-            ArgumentInferredSequences.Count != arguments.Length ||
+            ArgumentInferredSequences.Count != arguments.Length || ArgumentOptionalTexts.Count != arguments.Length ||
             ArgumentSequenceStrides.Any(stride => stride is not 1 and not 2) ||
             Enumerable.Range(0, arguments.Length).Any(i =>
                 (ArgumentTexts[i] && (ArgumentSequenceTypes[i] is not null || ArgumentOptionalTypes[i] is not null)) ||
                 (ArgumentSequenceTypes[i] is not null && ArgumentOptionalTypes[i] is not null) ||
+                (ArgumentOptionalTexts[i] && (ArgumentTexts[i] || ArgumentSequenceTypes[i] is not null ||
+                    ArgumentOptionalTypes[i] is not null || ArgumentInferredSequences[i])) ||
                 (ArgumentInferredSequences[i] && (ArgumentTexts[i] || ArgumentSequenceTypes[i] is not null || ArgumentOptionalTypes[i] is not null))))
             throw new ArgumentException("Invalid operation argument sequence metadata.");
     }
@@ -110,6 +115,9 @@ public sealed class DeclarativeRule
     public IReadOnlyList<int> ArgumentSequenceStrides { get; }
 
     public IReadOnlyList<bool> ArgumentTexts { get; }
+
+    /// <summary>Per argument: an optional field lowered as <c>Core.Optional&lt;Core.Text&gt;</c> of its spelling.</summary>
+    public IReadOnlyList<bool> ArgumentOptionalTexts { get; }
 
     public IReadOnlyList<string?> ArgumentOptionalTypes { get; }
 

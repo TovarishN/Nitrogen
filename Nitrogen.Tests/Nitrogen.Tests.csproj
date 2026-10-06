@@ -66,6 +66,7 @@
     <AdditionalFiles Include="Grammars\ScopedChecks.ngr" Namespace="Nitrogen.Tests.ScopedChecks" />
     <AdditionalFiles Include="Grammars\PropertyLowering.ngr" Namespace="Nitrogen.Tests.PropertyLowering" />
     <AdditionalFiles Include="Grammars\Templates.ngr" Namespace="Nitrogen.Tests.Templates" />
+    <AdditionalFiles Include="Grammars\OptionalText.ngr" Namespace="Nitrogen.Tests.OptionalText" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
     <CompilerVisibleProperty Include="RootNamespace" />
   </ItemGroup>

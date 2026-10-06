@@ -66,7 +66,7 @@ public sealed class DeclarativeTypes
             if (rule.Rule.Form != DeclarativeForm.Operation || OperationFor(parent, rule) is not { } operation) return null;
             for (int i = 0; i < rule.Rule.Arguments.Count && i < operation.Inputs.Count; i++)
             {
-                if (rule.Rule.ArgumentTexts[i]) continue;
+                if (rule.Rule.ArgumentTexts[i] || rule.Rule.ArgumentOptionalTexts[i]) continue;
                 if (tree.Child(parent, rule.Rule.Arguments[i]) != child) continue;
                 if (rule.ArgumentSequenceTypes[i] is null && !rule.Rule.ArgumentInferredSequences[i])
                     return rule.ArgumentOptionalTypes[i] ?? operation.Inputs[i];
@@ -182,6 +182,12 @@ public sealed class DeclarativeTypes
             {
                 int argument = tree.Child(node, rule.Rule.Arguments[i]);
                 var expected = operation.Inputs[i];
+                if (rule.Rule.ArgumentOptionalTexts[i])
+                {
+                    if (tree.Kind(argument) != SyntaxKinds.Empty && Spelled(argument) is null)
+                        Report("NT0005", argument, "text argument has no complete source text");
+                    continue;
+                }
                 if (rule.Rule.ArgumentTexts[i])
                 {
                     if (Spelled(argument) is null)
@@ -375,7 +381,17 @@ public sealed class DeclarativeTypes
             {
                 int source = tree.Child(node, rule.Rule.Arguments[i]);
                 HirNode? argument;
-                if (rule.Rule.ArgumentTexts[i])
+                if (rule.Rule.ArgumentOptionalTexts[i])
+                {
+                    HirText? text = null;
+                    if (tree.Kind(source) != SyntaxKinds.Empty)
+                    {
+                        if (Spelled(source) is not { } spelled) return null;
+                        text = new HirText(spelled, context.Origin(source));
+                    }
+                    argument = new HirOptional(SemanticTypes.Text, text, context.Origin(source));
+                }
+                else if (rule.Rule.ArgumentTexts[i])
                     argument = Spelled(source) is { } text ? new HirText(text, context.Origin(source)) : null;
                 else if (rule.ArgumentOptionalTypes[i] is { } optionalType)
                 {

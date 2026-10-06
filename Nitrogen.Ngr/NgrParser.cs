@@ -10,9 +10,9 @@ namespace Nitrogen.Ngr;
 /// </summary>
 public static class NgrParser
 {
-    static readonly Language s_language = new LanguageBuilder().Add(NitrogenModule.Instance).Build();
+    static readonly Language s_language = new LanguageBuilder().Add(NitrogenModule.Instance).AddSemantic(GrammarSemantics.Module).Build();
 
-    /// <summary>The generated <c>.ngr</c> language, for tests and tools.</summary>
+    /// <summary>The generated <c>.ngr</c> language with the <see cref="GrammarSemantics"/> catalog, for tests and tools.</summary>
     public static Language Language => s_language;
 
     public static GrammarParseResult Parse(string text)

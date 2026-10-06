@@ -104,7 +104,7 @@ public sealed record NameDecl(string Name, GrammarSpan Span);
 
 /// <summary>An operation input from a field, optionally projecting a repeated field as a sequence.</summary>
 public sealed record LoweringArgument(string Name, GrammarSpan Span, NameDecl? SequenceElementType = null,
-    bool AsText = false, NameDecl? OptionalElementType = null, bool InferSequence = false);
+    bool AsText = false, NameDecl? OptionalElementType = null, bool InferSequence = false, bool OptionalText = false);
 
 /// <summary><c>symbols { kind … }</c>: the symbol kinds a module declares (issue 237).</summary>
 public sealed record SymbolsDecl(EquatableArray<NameDecl> Kinds, GrammarSpan Span);

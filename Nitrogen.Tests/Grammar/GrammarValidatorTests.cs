@@ -342,6 +342,14 @@ public class GrammarValidatorTests
         Assert.Contains("optional element", d.Message);
     }
 
+    [Fact]
+    public void Optional_text_argument_requires_an_optional_field()
+    {
+        var d = Single(GrammarCodes.OptionalArgumentNeedsOptionalField,
+            "syntax module M { token T = ['a'..'z']+; syntax R = Mark:\"!\" V:T lowers M.Build(optional text Mark, text V); }");
+        Assert.Contains("optional element", d.Message);
+    }
+
     [Theory]
     [InlineData("text")]
     [InlineData("sequence")]
