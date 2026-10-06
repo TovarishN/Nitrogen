@@ -32,89 +32,109 @@ syntax module Nitrogen
   // qualified or used name from another module simply stays unresolved and unreported.
   symbols { module rule property }
 
-  syntax File           = Modules:Module*;
-  syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope;
+  syntax File           = Modules:Module*  lowers Grammar.File(sequence Grammar.Module Modules);
+  syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
+                          lowers Grammar.Module(text Name, sequence Grammar.Member Members);
   syntax Member         = Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
-  syntax Symbols        = "symbols" "{" Kinds:Word+ "}";
-  syntax Word           = Value:Identifier;
-  syntax Builtin        = "builtin" SymbolKind:Identifier Within:InKind? "{" Names:BuiltinName+ "}";
-  syntax BuiltinName    = Value:QualifiedName;
-  syntax InKind         = "in" Name:Identifier;
-  syntax Using          = "using" Module:QualifiedName ";"  references? module Module;
-  syntax TokenRule      = "token" Name:Identifier "=" Body:Expression Except:ExceptList? ";"  declares rule Name;
-  syntax ExceptList     = "except" Words:ExceptWord+;
-  syntax ExceptWord     = Value:String;
-  syntax SyntaxRule     = "syntax" Name:Identifier "=" Body:Expression Clauses:Clause* End:(Terminator / RuleSemantics)  declares rule Name scope;
-  syntax Terminator     = ";";
-  syntax RuleSemantics  = Block:Semantics;
-  syntax ExtensibleRule = "extensible" "syntax" Name:Identifier "{" Properties:PropertyDecl* Alternatives:Alternative* "}"  declares rule Name scope;
-  syntax Extend         = "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"  references? rule Target;
-  syntax Alternative    = "|" Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?;
-  syntax AlternativeName = Name:Identifier "=";
-  syntax PrecedenceSpec = "precedence" Level:Integer Associativity:Associativity?;
-  syntax Associativity  = "left" / "right";
+  syntax Symbols        = "symbols" "{" Kinds:Word+ "}"  lowers Grammar.Symbols(sequence Core.Text Kinds);
+  syntax Word           = Value:Identifier  lowers text Core.Text Value;
+  syntax Builtin        = "builtin" SymbolKind:Identifier Within:InKind? "{" Names:BuiltinName+ "}"
+                          lowers Grammar.Builtin(text SymbolKind, optional Core.Text Within, sequence Core.Text Names);
+  syntax BuiltinName    = Value:QualifiedName  lowers text Core.Text Value;
+  syntax InKind         = "in" Name:Identifier  lowers text Core.Text Name;
+  syntax Using          = "using" Module:QualifiedName ";"  references? module Module  lowers Grammar.Using(text Module);
+  syntax TokenRule      = "token" Name:Identifier "=" Body:Expression Except:ExceptList? ";"  declares rule Name
+                          lowers Grammar.TokenRule(text Name, Body, optional Grammar.Except Except);
+  syntax ExceptList     = "except" Words:ExceptWord+  lowers Grammar.Except(sequence Core.Text Words);
+  syntax ExceptWord     = Value:String  lowers text Core.Text Value;
+  syntax SyntaxRule     = "syntax" Name:Identifier "=" Body:Expression Clauses:Clause* End:(Terminator / RuleSemantics)  declares rule Name scope
+                          lowers Grammar.SyntaxRule(text Name, Body, sequence Grammar.Clause Clauses, End);
+  syntax Terminator     = ";"  lowers Grammar.Terminator();
+  syntax RuleSemantics  = Block:Semantics  lowers Grammar.RuleSemantics(Block);
+  syntax ExtensibleRule = "extensible" "syntax" Name:Identifier "{" Properties:PropertyDecl* Alternatives:Alternative* "}"  declares rule Name scope
+                          lowers Grammar.ExtensibleRule(text Name, sequence Grammar.SemanticItem Properties, sequence Grammar.Alternative Alternatives);
+  syntax Extend         = "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"  references? rule Target
+                          lowers Grammar.Extend(text Target, sequence Grammar.Alternative Alternatives);
+  syntax Alternative    = "|" Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?
+                          lowers Grammar.Alternative(optional Core.Text Named, Body, optional Grammar.Precedence Precedence,
+                            sequence Grammar.Clause Clauses, optional Grammar.Semantics Semantics);
+  syntax AlternativeName = Name:Identifier "="  lowers text Core.Text Name;
+  syntax PrecedenceSpec = "precedence" Level:Integer Associativity:Associativity?
+                          lowers Grammar.Precedence(text Level, optional Core.Text Associativity);
+  syntax Associativity  = "left" / "right"  lowers text Core.Text this;
 
   // Binding clauses (issue 237).
   syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;
-  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:DeclaredType?;
-  syntax DeclaredType   = "type" Name:QualifiedName;
-  syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:InKind?;
+  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:DeclaredType?
+                          lowers Grammar.Declares(text SymbolKind, text Field, optional text Sequential, optional text FileScope,
+                            optional text Export, optional Core.Text Type);
+  syntax DeclaredType   = "type" Name:QualifiedName  lowers text Core.Text Name;
+  syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:InKind?
+                          lowers Grammar.References(optional text Question, Kinds, text Field, optional Core.Text Within);
   syntax KindList       = KindGroup / SingleKind;
-  syntax KindGroup      = "(" Kinds:(Word; "|")+ ")";
-  syntax SingleKind     = Name:Identifier;
-  syntax ScopeClause    = "scope";
-  syntax DynamicClause  = "dynamic";
+  syntax KindGroup      = "(" Kinds:(Word; "|")+ ")"  lowers Grammar.KindGroup(sequence Core.Text Kinds);
+  syntax SingleKind     = Name:Identifier  lowers Grammar.SingleKind(text Name);
+  syntax ScopeClause    = "scope"  lowers Grammar.Scope();
+  syntax DynamicClause  = "dynamic"  lowers Grammar.Dynamic();
 
   // Declarative typing and lowering (issue 251).
-  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall);
-  syntax LowersTemplate = "template" Field:Identifier "(" Parameters:Identifier Close:")";
-  syntax LowersExpand   = "expand" Field:Identifier "(" Arguments:Identifier Close:")";
-  syntax LowersRepeat   = "repeat" Type:QualifiedName Count:Identifier Iterator:Identifier Children:Identifier;
-  syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier;
-  syntax LowersText     = "text" Type:QualifiedName Field:Identifier;
-  syntax LowersSequence = "sequence" Type:QualifiedName Field:Identifier;
-  syntax LowersValue    = "value" Type:(ComputedType / FixedType) Field:Identifier;
-  syntax ComputedType   = "type" Property:Identifier;
-  syntax FixedType      = Name:QualifiedName;
-  syntax LowersReference = "reference" "type" Property:Identifier Initializer:InitializerSpec?;
-  syntax InitializerSpec = "initializer" Name:Identifier;
-  syntax LowersCall     = Operation:(ComputedOperation / FixedOperation) "(" Arguments:(LowersArgument; ",")* Close:")";
-  syntax ComputedOperation = "operation" Question:"?"? Property:Identifier;
-  syntax FixedOperation = Name:QualifiedName;
+  syntax Lowers         = "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall)
+                          lowers Grammar.Lowers(Form);
+  syntax LowersTemplate = "template" Field:Identifier "(" Parameters:Identifier Close:")"  lowers Grammar.LowersTemplate(text Field, text Parameters);
+  syntax LowersExpand   = "expand" Field:Identifier "(" Arguments:Identifier Close:")"  lowers Grammar.LowersExpand(text Field, text Arguments);
+  syntax LowersRepeat   = "repeat" Type:QualifiedName Count:Identifier Iterator:Identifier Children:Identifier
+                          lowers Grammar.LowersRepeat(text Type, text Count, text Iterator, text Children);
+  syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier  lowers Grammar.LowersLiteral(text Type, text Field);
+  syntax LowersText     = "text" Type:QualifiedName Field:Identifier  lowers Grammar.LowersText(text Type, text Field);
+  syntax LowersSequence = "sequence" Type:QualifiedName Field:Identifier  lowers Grammar.LowersSequence(text Type, text Field);
+  syntax LowersValue    = "value" Type:(ComputedType / FixedType) Field:Identifier  lowers Grammar.LowersValue(Type, text Field);
+  syntax ComputedType   = "type" Property:Identifier  lowers Grammar.ComputedType(text Property);
+  syntax FixedType      = Name:QualifiedName  lowers Grammar.FixedType(text Name);
+  syntax LowersReference = "reference" "type" Property:Identifier Initializer:InitializerSpec?
+                          lowers Grammar.LowersReference(text Property, optional Core.Text Initializer);
+  syntax InitializerSpec = "initializer" Name:Identifier  lowers text Core.Text Name;
+  syntax LowersCall     = Operation:(ComputedOperation / FixedOperation) "(" Arguments:(LowersArgument; ",")* Close:")"
+                          lowers Grammar.LowersCall(Operation, sequence Grammar.LoweringArgument Arguments);
+  syntax ComputedOperation = "operation" Question:"?"? Property:Identifier  lowers Grammar.ComputedOperation(optional text Question, text Property);
+  syntax FixedOperation = Name:QualifiedName  lowers Grammar.FixedOperation(text Name);
   syntax LowersArgument = LowersSequenceArgument / LowersOptionalTextArgument / LowersOptionalArgument / LowersTextArgument / FieldArgument;
-  syntax LowersSequenceArgument = "sequence" Type:QualifiedName Field:Identifier;
-  syntax LowersOptionalTextArgument = "optional" "text" Field:Identifier;
-  syntax LowersOptionalArgument = "optional" Type:QualifiedName Field:Identifier;
-  syntax LowersTextArgument = "text" Field:Identifier;
-  syntax FieldArgument  = Field:Identifier;
+  syntax LowersSequenceArgument = "sequence" Type:QualifiedName Field:Identifier  lowers Grammar.SequenceArgument(text Type, text Field);
+  syntax LowersOptionalTextArgument = "optional" "text" Field:Identifier  lowers Grammar.OptionalTextArgument(text Field);
+  syntax LowersOptionalArgument = "optional" Type:QualifiedName Field:Identifier  lowers Grammar.OptionalArgument(text Type, text Field);
+  syntax LowersTextArgument = "text" Field:Identifier  lowers Grammar.TextArgument(text Field);
+  syntax FieldArgument  = Field:Identifier  lowers Grammar.FieldArgument(text Field);
 
   // Semantics (issue 239).
-  syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
-  syntax Semantics      = "{" Items:SemanticItem* "}";
+  syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name
+                          lowers Grammar.SymbolProperty(text Name, Kinds, text Type, text Default);
+  syntax Semantics      = "{" Items:SemanticItem* "}"  lowers Grammar.Semantics(sequence Grammar.SemanticItem Items);
   syntax SemanticItem   = PropertyDecl / Check / Assignment;
-  syntax PropertyDecl   = Direction:("out" / "in") Flags:PropertyFlag* Name:Identifier ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
-  syntax PropertyFlag   = "hover" / "expected";
-  syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:CheckAt? ";";
-  syntax CheckAt        = "at" Name:Identifier;
-  syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target;
+  syntax PropertyDecl   = Direction:("out" / "in") Flags:PropertyFlag* Name:Identifier ":" Type:CsType "=" Default:CsCode ";"  declares property Name
+                          lowers Grammar.PropertyDecl(text Direction, sequence Core.Text Flags, text Name, text Type, text Default);
+  syntax PropertyFlag   = "hover" / "expected"  lowers text Core.Text this;
+  syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:CheckAt? ";"
+                          lowers Grammar.Check(optional text Code, text Condition, text Message, optional Core.Text At);
+  syntax CheckAt        = "at" Name:Identifier  lowers text Core.Text Name;
+  syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target  lowers Grammar.Assignment(text Target, text Value);
 
-  syntax Expression     = Choices:(Sequence; "/")+;
-  syntax Sequence       = Elements:Element+;
-  syntax Element        = Label:LabelPrefix? Body:Unary;
-  syntax LabelPrefix    = Name:Identifier ":";
-  syntax Unary          = Prefixes:PredicateOp* Body:Postfix;
-  syntax PredicateOp    = "!" / "&";
-  syntax Postfix        = Body:Primary Operators:RepeatOp*;
-  syntax RepeatOp       = "?" / "*" / "+";
+  syntax Expression     = Choices:(Sequence; "/")+  lowers Grammar.Choice(sequence Grammar.Expression Choices);
+  syntax Sequence       = Elements:Element+  lowers Grammar.Sequence(sequence Grammar.Expression Elements);
+  syntax Element        = Label:LabelPrefix? Body:Unary  lowers Grammar.Element(optional Core.Text Label, Body);
+  syntax LabelPrefix    = Name:Identifier ":"  lowers text Core.Text Name;
+  syntax Unary          = Prefixes:PredicateOp* Body:Postfix  lowers Grammar.Unary(sequence Core.Text Prefixes, Body);
+  syntax PredicateOp    = "!" / "&"  lowers text Core.Text this;
+  syntax Postfix        = Body:Primary Operators:RepeatOp*  lowers Grammar.Postfix(Body, sequence Core.Text Operators);
+  syntax RepeatOp       = "?" / "*" / "+"  lowers text Core.Text this;
   syntax Primary        = StringLiteral / CharClass / Any / Parenthesized / Reference;
-  syntax StringLiteral  = Value:String;
-  syntax Any            = ".";
-  syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / GroupClose);
-  syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+");
-  syntax GroupClose     = ")";
-  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" Name:QualifiedName  references? rule Name;
+  syntax StringLiteral  = Value:String  lowers Grammar.Literal(text Value);
+  syntax Any            = "."  lowers Grammar.Any();
+  syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / GroupClose)  lowers Grammar.Parenthesized(Inner, Tail);
+  syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+")  lowers Grammar.SeparatorTail(Separator, text Op);
+  syntax GroupClose     = ")"  lowers Grammar.GroupClose();
+  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" Name:QualifiedName  references? rule Name
+                          lowers Grammar.Reference(text Name);
   syntax QualifiedName  = DottedName / Identifier;
-  syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]";
-  syntax ClassItem      = First:Char Last:RangeEnd?;
-  syntax RangeEnd       = ".." Last:Char;
+  syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]"  lowers Grammar.CharClass(optional text Negated, sequence Grammar.ClassItem Items);
+  syntax ClassItem      = First:Char Last:RangeEnd?  lowers Grammar.ClassItem(text First, optional Core.Text Last);
+  syntax RangeEnd       = ".." Last:Char  lowers text Core.Text Last;
 }
