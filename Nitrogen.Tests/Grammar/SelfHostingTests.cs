@@ -30,6 +30,11 @@ public class SelfHostingTests
             for (int x = 0; x < e.Extends.Count; x++) Assert.Equal(e.Extends[x], a.Extends[x]);
             Assert.Equal(e.Span, a.Span);
         }
+        // Stage-2 cutover check (removed when Parse projects): the HIR projection gives the same model.
+        var projected = NgrParser.ParseProjected(text);
+        Assert.True(projected.Success, projected.Diagnostics.Count > 0 ? "projected: " + projected.Diagnostics[0] : "");
+        Assert.Equal(GrammarDumper.Dump(expected), GrammarDumper.Dump(projected.File!));
+        Assert.Equal(expected, projected.File);
         Assert.Equal(expected, actual);
     }
 
@@ -105,6 +110,9 @@ public class SelfHostingTests
     [InlineData("syntax module M { syntax R = \"a\"; syntax R = \"b\"; }")]
     [InlineData("syntax module M { } syntax module M { }")]
     [InlineData("syntax module M { extensible syntax E { out T : int = 0; out T : int = 1; | A = \"a\" } }")]
+    [InlineData("syntax module M { symbols { v s } builtin v in s { a b.c } }")]
+    [InlineData("syntax module M { syntax R = N:A { check N != null : \"m\" at N; } }")]
+    [InlineData("syntax module M { syntax R = \"r\" { check AB0001 1 > 0 : $\"x\"; } }")]
     public void Every_declaration_form_maps_to_the_bootstrap_model(string text) => AssertSameModel(text);
 
     [Theory]
@@ -136,6 +144,9 @@ public class SelfHostingTests
         var result = NgrParser.Parse(text);
         Assert.False(result.Success);
         Assert.Equal(GrammarCodes.Syntax, Assert.Single(result.Diagnostics).Code);
+        var projectedFailure = NgrParser.ParseProjected(text); // stage-2 cutover check
+        Assert.False(projectedFailure.Success);
+        Assert.Equal(GrammarCodes.Syntax, Assert.Single(projectedFailure.Diagnostics).Code);
     }
 
     [Fact]

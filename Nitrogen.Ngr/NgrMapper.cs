@@ -5,11 +5,6 @@ using Nitrogen.Ngr.Syntax;
 
 namespace Nitrogen.Ngr;
 
-internal sealed class NgrMappingException(string message, GrammarSpan span) : Exception(message)
-{
-    public GrammarSpan Span { get; } = span;
-}
-
 /// <summary>
 /// Maps a tree parsed by the generated Nitrogen module to the GrammarModel, following the
 /// bootstrap parser's span rules exactly.
