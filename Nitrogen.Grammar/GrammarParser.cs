@@ -408,6 +408,14 @@ public static class GrammarParser
         /// <summary>Binding clauses (issue 237) after a rule body or an alternative; none is fine.</summary>
         LoweringArgument ParseLoweringArgument()
         {
+            if (AtKeyword("optional") && Next.Kind == TokenKind.Identifier && Next.Value == "text" &&
+                TokenAt(_position + 2).Kind == TokenKind.Identifier)
+            {
+                Advance();
+                Advance();
+                var field = Name(Advance());
+                return new LoweringArgument(field.Name, field.Span, OptionalText: true);
+            }
             if (AtKeyword("optional") && Next.Kind is TokenKind.Identifier or TokenKind.QualifiedName &&
                 TokenAt(_position + 2).Kind == TokenKind.Identifier)
             {

@@ -421,7 +421,7 @@ public static class GrammarValidator
                             Report(GrammarCodes.SequenceArgumentNeedsList,
                                 $"'{argument.Name}' must label a repeated or separated list", argument.Span, module);
                     }
-                    else if (argument.OptionalElementType is not null)
+                    else if (argument.OptionalElementType is not null || argument.OptionalText)
                     {
                         var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>()
                             .First(element => element.Label == argument.Name);

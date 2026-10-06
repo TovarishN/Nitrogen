@@ -311,6 +311,7 @@ public class GrammarParserTests
     [InlineData("syntax R = V:X lowers text Core.Text V;", "(lowers text Core.Text V)")]
     [InlineData("syntax R = V:X* lowers sequence M.Part V;", "(lowers sequence M.Part V)")]
     [InlineData("syntax R = V:X* lowers M.Op(sequence inferred V);", "(lowers M.Op(sequence inferred V))")]
+    [InlineData("syntax R = Mark:\"!\"? V:X lowers M.Op(optional text Mark, V);", "(lowers M.Op(optional text Mark, V))")]
     [InlineData("syntax R = \"-\"? V:X lowers literal Core.Scalar this;", "(lowers literal Core.Scalar this)")]
     [InlineData("syntax R = \"r\" A:X lowers literal(A);", "(lowers literal(A))")]
     [InlineData("syntax R = N:X T:Y declares v N type T;", "(declares v N type T)")]
@@ -330,5 +331,17 @@ public class GrammarParserTests
         Assert.Equal("lowers M.Op(A)", text.Substring(clause.Span.Start, clause.Span.Length));
         Assert.Equal("M.Op", clause.Target!.Name);
         Assert.Equal(["A"], clause.Arguments.Select(argument => argument.Name));
+    }
+
+    [Fact]
+    public void Optional_text_argument_keeps_its_field_and_span()
+    {
+        const string text = "syntax module M { syntax R = Mark:\"!\"? lowers M.Op(optional text Mark); }";
+        var clause = Assert.Single(((SyntaxRule)ParseOk(text).Modules[0].Rules[0]).Clauses);
+        var argument = Assert.Single(clause.Arguments);
+        Assert.True(argument.OptionalText);
+        Assert.Null(argument.OptionalElementType);
+        Assert.Equal("Mark", argument.Name);
+        Assert.Equal(text.LastIndexOf("Mark", StringComparison.Ordinal), argument.Span.Start);
     }
 }
