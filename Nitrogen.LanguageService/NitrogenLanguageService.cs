@@ -110,7 +110,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     public IReadOnlyList<SemanticToken> SemanticTokens(string uri) =>
         _hosts.TryGetValue(uri, out var host) ? HostTokens(host)
         : _documents.TryGetValue(uri, out var document)
-            ? SemanticTokenBuilder.Build(document, _projects[document.Language], LoweredRoots(document), AssistOf(document) is { } assisted ? document.Language.Assist!.Tokens(assisted) : null)
+            ? SemanticTokenBuilder.Build(document, _projects[document.Language],
+                document.Language.Presentation.ColorFromLowering ? LoweredRoots(document) : [],
+                AssistOf(document) is { } assisted ? document.Language.Assist!.Tokens(assisted) : null)
             : [];
 
     /// <summary>The document's outline; empty when it is not open.</summary>
