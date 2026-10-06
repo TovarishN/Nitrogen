@@ -35,22 +35,33 @@ syntax module Nitrogen
   syntax File           = Modules:Module*;
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope;
   syntax Member         = Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
-  syntax Symbols        = "symbols" "{" Kinds:Identifier+ "}";
-  syntax Builtin        = "builtin" SymbolKind:Identifier Within:("in" Identifier)? "{" Names:QualifiedName+ "}";
+  syntax Symbols        = "symbols" "{" Kinds:Word+ "}";
+  syntax Word           = Value:Identifier;
+  syntax Builtin        = "builtin" SymbolKind:Identifier Within:InKind? "{" Names:BuiltinName+ "}";
+  syntax BuiltinName    = Value:QualifiedName;
+  syntax InKind         = "in" Name:Identifier;
   syntax Using          = "using" Module:QualifiedName ";"  references? module Module;
-  syntax TokenRule      = "token" Name:Identifier "=" Body:Expression Except:("except" String+)? ";"  declares rule Name;
-  syntax SyntaxRule     = "syntax" Name:Identifier "=" Body:Expression Clauses:Clause* End:(";" / Semantics)  declares rule Name scope;
+  syntax TokenRule      = "token" Name:Identifier "=" Body:Expression Except:ExceptList? ";"  declares rule Name;
+  syntax ExceptList     = "except" Words:ExceptWord+;
+  syntax ExceptWord     = Value:String;
+  syntax SyntaxRule     = "syntax" Name:Identifier "=" Body:Expression Clauses:Clause* End:(Terminator / RuleSemantics)  declares rule Name scope;
+  syntax Terminator     = ";";
+  syntax RuleSemantics  = Block:Semantics;
   syntax ExtensibleRule = "extensible" "syntax" Name:Identifier "{" Properties:PropertyDecl* Alternatives:Alternative* "}"  declares rule Name scope;
   syntax Extend         = "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"  references? rule Target;
-  syntax Alternative    = "|" Named:(Identifier "=")? Body:Expression Precedence:("precedence" Integer Associativity?)? Clauses:Clause* Semantics:Semantics?;
+  syntax Alternative    = "|" Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?;
+  syntax AlternativeName = Name:Identifier "=";
+  syntax PrecedenceSpec = "precedence" Level:Integer Associativity:Associativity?;
   syntax Associativity  = "left" / "right";
 
   // Binding clauses (issue 237).
   syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;
-  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:("type" QualifiedName)?;
-  syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:("in" Identifier)?;
-  syntax KindList       = KindGroup / Identifier;
-  syntax KindGroup      = "(" Kinds:(Identifier; "|")+ ")";
+  syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:DeclaredType?;
+  syntax DeclaredType   = "type" Name:QualifiedName;
+  syntax References     = "references" Question:"?"? Kinds:KindList Field:Identifier Within:InKind?;
+  syntax KindList       = KindGroup / SingleKind;
+  syntax KindGroup      = "(" Kinds:(Word; "|")+ ")";
+  syntax SingleKind     = Name:Identifier;
   syntax ScopeClause    = "scope";
   syntax DynamicClause  = "dynamic";
 
@@ -62,14 +73,20 @@ syntax module Nitrogen
   syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier;
   syntax LowersText     = "text" Type:QualifiedName Field:Identifier;
   syntax LowersSequence = "sequence" Type:QualifiedName Field:Identifier;
-  syntax LowersValue    = "value" Type:(("type" Identifier) / QualifiedName) Field:Identifier;
-  syntax LowersReference = "reference" "type" Property:Identifier Initializer:("initializer" Identifier)?;
-  syntax LowersCall     = Operation:(("operation" "?"? Identifier) / QualifiedName) "(" Arguments:(LowersArgument; ",")* Close:")";
-  syntax LowersArgument = LowersSequenceArgument / LowersOptionalTextArgument / LowersOptionalArgument / LowersTextArgument / Identifier;
+  syntax LowersValue    = "value" Type:(ComputedType / FixedType) Field:Identifier;
+  syntax ComputedType   = "type" Property:Identifier;
+  syntax FixedType      = Name:QualifiedName;
+  syntax LowersReference = "reference" "type" Property:Identifier Initializer:InitializerSpec?;
+  syntax InitializerSpec = "initializer" Name:Identifier;
+  syntax LowersCall     = Operation:(ComputedOperation / FixedOperation) "(" Arguments:(LowersArgument; ",")* Close:")";
+  syntax ComputedOperation = "operation" Question:"?"? Property:Identifier;
+  syntax FixedOperation = Name:QualifiedName;
+  syntax LowersArgument = LowersSequenceArgument / LowersOptionalTextArgument / LowersOptionalArgument / LowersTextArgument / FieldArgument;
   syntax LowersSequenceArgument = "sequence" Type:QualifiedName Field:Identifier;
   syntax LowersOptionalTextArgument = "optional" "text" Field:Identifier;
   syntax LowersOptionalArgument = "optional" Type:QualifiedName Field:Identifier;
   syntax LowersTextArgument = "text" Field:Identifier;
+  syntax FieldArgument  = Field:Identifier;
 
   // Semantics (issue 239).
   syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
@@ -77,22 +94,27 @@ syntax module Nitrogen
   syntax SemanticItem   = PropertyDecl / Check / Assignment;
   syntax PropertyDecl   = Direction:("out" / "in") Flags:PropertyFlag* Name:Identifier ":" Type:CsType "=" Default:CsCode ";"  declares property Name;
   syntax PropertyFlag   = "hover" / "expected";
-  syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:("at" Identifier)? ";";
+  syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:CheckAt? ";";
+  syntax CheckAt        = "at" Name:Identifier;
   syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target;
 
   syntax Expression     = Choices:(Sequence; "/")+;
   syntax Sequence       = Elements:Element+;
-  syntax Element        = Label:(Identifier ":")? Body:Unary;
+  syntax Element        = Label:LabelPrefix? Body:Unary;
+  syntax LabelPrefix    = Name:Identifier ":";
   syntax Unary          = Prefixes:PredicateOp* Body:Postfix;
   syntax PredicateOp    = "!" / "&";
   syntax Postfix        = Body:Primary Operators:RepeatOp*;
   syntax RepeatOp       = "?" / "*" / "+";
-  syntax Primary        = String / CharClass / Any / Parenthesized / Reference;
+  syntax Primary        = StringLiteral / CharClass / Any / Parenthesized / Reference;
+  syntax StringLiteral  = Value:String;
   syntax Any            = ".";
-  syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / ")");
+  syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / GroupClose);
   syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+");
+  syntax GroupClose     = ")";
   syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" Name:QualifiedName  references? rule Name;
   syntax QualifiedName  = DottedName / Identifier;
   syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]";
-  syntax ClassItem      = First:Char Last:(".." Char)?;
+  syntax ClassItem      = First:Char Last:RangeEnd?;
+  syntax RangeEnd       = ".." Last:Char;
 }
