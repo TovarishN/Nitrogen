@@ -101,7 +101,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     new ServerCapabilities(1, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
-                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true),
+                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"])),
                     new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
@@ -181,6 +181,21 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     .Select(h => new LspInlayHint(new LspPosition(h.At.Line, h.At.Character), h.Label, PaddingLeft: true, h.Tooltip))
                     .ToArray();
                 await RespondAsync(id, hints, LspJson.Default.LspInlayHintArray, cancel);
+                break;
+            }
+            case "textDocument/codeAction":
+            {
+                var request = Params(parameters, LspJson.Default.CodeActionParams);
+                string uri = request.TextDocument.Uri;
+                var actions = service.QuickFixes(uri, new DocumentRange(Position(request.Range.Start), Position(request.Range.End)))
+                    .Select(fix => new LspCodeAction(fix.Title, "quickfix",
+                        [new LspDiagnostic(Range(fix.Diagnostic.Range), (int)fix.Diagnostic.Severity, fix.Diagnostic.Code, "nitrogen", fix.Diagnostic.Message)],
+                        new WorkspaceEdit(new Dictionary<string, LspTextEdit[]>
+                        {
+                            [uri] = fix.Edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText)).ToArray(),
+                        })))
+                    .ToArray();
+                await RespondAsync(id, actions, LspJson.Default.LspCodeActionArray, cancel);
                 break;
             }
             default:

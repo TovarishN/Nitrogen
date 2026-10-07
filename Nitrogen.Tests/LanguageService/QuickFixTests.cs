@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nitrogen.Cli;
 using Nitrogen.LanguageService;
 using Xunit;
@@ -98,5 +99,31 @@ public sealed class QuickFixTests : IDisposable
         Assert.Equal("Change to 2026-02-28", fix.Title);
         Assert.Equal(host.Replace("2026-02-30", "2026-02-28"), Apply(host, fix));
         Assert.Equal(new DocumentPosition(0, date), fix.Diagnostic.Range.Start);
+    }
+
+    [Fact]
+    public async Task The_server_answers_code_actions_with_quick_fixes()
+    {
+        string doc = Uri("a.datecalc");
+        string initialize = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new System.Uri(_root).AbsoluteUri + "\",\"capabilities\":{}}}";
+        string open = "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + doc
+            + "\",\"languageId\":\"datecalc\",\"version\":1,\"text\":\"2026-02-30;\"}}}";
+        string request = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/codeAction\",\"params\":{\"textDocument\":{\"uri\":\"" + doc
+            + "\"},\"range\":{\"start\":{\"line\":0,\"character\":2},\"end\":{\"line\":0,\"character\":2}},\"context\":{\"diagnostics\":[]}}}";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+
+        var (_, messages, _) = await LspServerTests.Session(service, initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}""",
+            open, request, """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
+
+        var kinds = messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("codeActionProvider").GetProperty("codeActionKinds");
+        Assert.Equal("quickfix", Assert.Single(kinds.EnumerateArray()).GetString());
+        var action = Assert.Single(messages.Single(m => m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt32() == 5)
+            .GetProperty("result").EnumerateArray());
+        Assert.Equal("Change to 2026-02-28", action.GetProperty("title").GetString());
+        Assert.Equal("quickfix", action.GetProperty("kind").GetString());
+        Assert.Equal("DC0001", Assert.Single(action.GetProperty("diagnostics").EnumerateArray()).GetProperty("code").GetString());
+        var edit = Assert.Single(action.GetProperty("edit").GetProperty("changes").GetProperty(doc).EnumerateArray());
+        Assert.Equal("2026-02-28", edit.GetProperty("newText").GetString());
+        Assert.Equal(10, edit.GetProperty("range").GetProperty("end").GetProperty("character").GetInt32());
     }
 }

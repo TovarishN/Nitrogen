@@ -37,7 +37,8 @@ public sealed record ServerCapabilities(
     bool? HoverProvider = null,
     RenameOptions? RenameProvider = null,
     CompletionOptions? CompletionProvider = null,
-    bool? InlayHintProvider = null);
+    bool? InlayHintProvider = null,
+    CodeActionOptions? CodeActionProvider = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -97,6 +98,13 @@ public sealed record SemanticTokensResult(int[] Data);
 
 public sealed record LspDocumentSymbol(string Name, string Detail, int Kind, LspRange Range, LspRange SelectionRange, LspDocumentSymbol[] Children);
 
+public sealed record CodeActionOptions(string[] CodeActionKinds);
+
+/// <summary>The params of <c>textDocument/codeAction</c>; the client's diagnostics are not used: the server checks its own.</summary>
+public sealed record CodeActionParams(TextDocumentIdentifier TextDocument, LspRange Range);
+
+public sealed record LspCodeAction(string Title, string Kind, LspDiagnostic[] Diagnostics, WorkspaceEdit Edit);
+
 public sealed record InlayHintParams(TextDocumentIdentifier TextDocument, LspRange Range);
 
 /// <summary>An inlay hint with a plain-text label; no kind, since a value is neither a type nor a parameter name.</summary>
@@ -128,4 +136,6 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(LspCompletionItem[]))]
 [JsonSerializable(typeof(InlayHintParams))]
 [JsonSerializable(typeof(LspInlayHint[]))]
+[JsonSerializable(typeof(CodeActionParams))]
+[JsonSerializable(typeof(LspCodeAction[]))]
 internal sealed partial class LspJson : JsonSerializerContext;
