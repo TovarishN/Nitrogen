@@ -7,9 +7,10 @@ namespace Nitrogen.LanguageService;
 /// <summary>
 /// A C# string literal tagged with a language: its tag, its value, and where each value character
 /// came from. <see cref="Map"/> has one source offset per value character plus one for the end, so
-/// a value span [s, e) is the source span [Map[s], Map[e]).
+/// a value span [s, e) is the source span [Map[s], Map[e]). <see cref="End"/> is the source offset just
+/// past the literal (its closing quote, and a <c>u8</c> suffix).
 /// </summary>
-internal sealed record EmbeddedString(string Tag, string Value, int[] Map)
+internal sealed record EmbeddedString(string Tag, string Value, int[] Map, int End)
 {
     /// <summary>The value offset at a source offset, or null when the offset is outside the value.</summary>
     public int? ValueOffset(int source)
@@ -72,7 +73,7 @@ internal static partial class EmbeddedStrings
             if (Literal(text, i) is { } literal)
             {
                 string? tag = inlineTag ?? lineTag;
-                if (tag is not null && literal.Value is { } value) found.Add(new EmbeddedString(tag, value.Text, value.Map));
+                if (tag is not null && literal.Value is { } value) found.Add(new EmbeddedString(tag, value.Text, value.Map, literal.End));
                 inlineTag = null;
                 lineTag = null;
                 i = literal.End;

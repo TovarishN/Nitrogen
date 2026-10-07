@@ -173,6 +173,10 @@ public sealed class RiderPluginGenerationTests
         // Rider asks a server for inlay hints (statement values) only where a client opts in.
         Assert.Contains("override val inlayHintCustomizer: LspInlayHintCustomizer = NitrogenInlayHints",
             Read("src/main/kotlin/org/nitrogen/rider/NitrogenHighlighting.kt"), StringComparison.Ordinal);
+        // The C# client shows the values of tagged strings too.
+        string csharpClient = Read("src/main/kotlin/org/nitrogen/rider/NitrogenCSharpStrings.kt");
+        Assert.Contains("override val inlayHintCustomizer: LspInlayHintCustomizer = NitrogenInlayHints", csharpClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("LspInlayHintDisabled", csharpClient, StringComparison.Ordinal);
     }
 
     [Fact]

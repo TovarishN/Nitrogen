@@ -55,6 +55,26 @@ public sealed class InlayHintLspTests : IDisposable
         Assert.Equal("= 14 days", hints[1].GetProperty("label").GetString());
     }
 
+    [Fact]
+    public async Task A_csharp_file_gets_the_values_of_its_tagged_strings()
+    {
+        string host = Uri("Host.cs");
+        const string text = "class C { const string D = /*lang=datecalc*/ \"1 + 1;\"; }";
+        string open = "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + host
+            + "\",\"languageId\":\"csharp\",\"version\":1,\"text\":" + JsonSerializer.Serialize(text) + "}}}";
+        string request = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/inlayHint\",\"params\":{\"textDocument\":{\"uri\":\"" + host
+            + "\"},\"range\":{\"start\":{\"line\":0,\"character\":0},\"end\":{\"line\":1,\"character\":0}}}}";
+
+        var messages = await Session(Initialize("{}"), Initialized, open, request, Shutdown, Exit);
+
+        var hint = Assert.Single(messages.Single(m => m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt32() == 5)
+            .GetProperty("result").EnumerateArray());
+        Assert.Equal("= 2", hint.GetProperty("label").GetString());
+        Assert.Equal(0, hint.GetProperty("position").GetProperty("line").GetInt32());
+        Assert.Equal(text.IndexOf("\"1 + 1;\"", StringComparison.Ordinal) + "\"1 + 1;\"".Length,
+            hint.GetProperty("position").GetProperty("character").GetInt32());
+    }
+
     [Theory]
     [InlineData("""{"workspace":{"inlayHint":{"refreshSupport":true}}}""", 1)]
     [InlineData("{}", 0)]

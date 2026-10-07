@@ -29,7 +29,6 @@ import com.intellij.platform.lsp.api.customization.LspFormattingDisabled
 import com.intellij.platform.lsp.api.customization.LspGoToTypeDefinitionCustomizer
 import com.intellij.platform.lsp.api.customization.LspGoToTypeDefinitionDisabled
 import com.intellij.platform.lsp.api.customization.LspInlayHintCustomizer
-import com.intellij.platform.lsp.api.customization.LspInlayHintDisabled
 import com.intellij.platform.lsp.api.customization.LspOnTypeFormattingCustomizer
 import com.intellij.platform.lsp.api.customization.LspOnTypeFormattingDisabled
 import com.intellij.platform.lsp.api.customization.LspOptimizeImportsCustomizer
@@ -51,8 +50,8 @@ import java.nio.file.Files
  * statement). C# files get a Nitrogen client of their own, separate from the one for the language's
  * files, because the platform switches features per client rather than per file. The server answers it
  * only inside tagged strings: its colours are added to Rider's, and diagnostics, completion, hover, go to
- * definition and find usages work in the strings. Everything that would compete with Rider's C# support
- * (rename, structure view, formatting, code actions, highlighting usages, hints) is left to Rider.
+ * definition, find usages and statement values work in the strings. Everything that would compete with
+ * Rider's C# support (rename, structure view, formatting, code actions, highlighting usages) is left to Rider.
  *
  * [skipLanguages] names the languages (by name or extension) this client's server leaves alone: a client
  * whose server reads the workspace's nitrogen.json skips those another installed plugin carries itself,
@@ -83,7 +82,7 @@ class NitrogenCSharpClient(
         override val documentColorCustomizer: LspDocumentColorCustomizer = LspDocumentColorDisabled
         override val documentLinkCustomizer: LspDocumentLinkCustomizer = LspDocumentLinkDisabled
         override val foldingRangeCustomizer: LspFoldingRangeCustomizer = LspFoldingRangeDisabled
-        override val inlayHintCustomizer: LspInlayHintCustomizer = LspInlayHintDisabled
+        override val inlayHintCustomizer: LspInlayHintCustomizer = NitrogenInlayHints
         override val codeLensCustomizer: LspCodeLensCustomizer = LspCodeLensDisabled
         override val selectionRangeCustomizer: LspSelectionRangeCustomizer = LspSelectionRangeDisabled
         override val signatureHelpCustomizer: LspSignatureHelpCustomizer = LspSignatureHelpDisabled
