@@ -43,6 +43,24 @@ public class EvaluationProfileTests
     }
 
     [Fact]
+    public void The_original_constructor_does_not_read_the_clock()
+    {
+        Assert.False(Profile(_ => []).ReadsClock);
+    }
+
+    [Fact]
+    public void A_profile_can_declare_that_it_reads_the_clock()
+    {
+        var profile = new EvaluationProfile(new HashSet<int> { 7 }, _ => [],
+            (_, context) => new ProjectedValue(SemanticTypes.Text, context.Today.ToString("yyyy-MM-dd")), value => (string)value.Value,
+            readsClock: true);
+
+        Assert.True(profile.ReadsClock);
+        Assert.Equal(new DateOnly(2026, 10, 7),
+            new EvaluationContext(new DateTimeOffset(2026, 10, 7, 23, 30, 0, TimeSpan.FromHours(3))).Today);
+    }
+
+    [Fact]
     public void Format_delegates_to_the_profile()
     {
         Assert.Equal("<3>", Profile(_ => []).Format(new ProjectedValue(SemanticTypes.Scalar, 3f)));

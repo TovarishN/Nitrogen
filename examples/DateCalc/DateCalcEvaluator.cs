@@ -22,18 +22,21 @@ public static class DateCalcEvaluator
     /// <summary>The language <see cref="Run"/> parses with, built on first use: reading <see cref="Profile"/> does not build it.</summary>
     public static Language Language => s_language.Value;
 
-    /// <summary>Lets and shown expressions, each projected to a number, date, duration or text.</summary>
+    /// <summary>Lets and shown expressions, each projected to a number, date, duration or text; <c>today</c> is the context's date.</summary>
     public static readonly EvaluationProfile Profile = new(
         new HashSet<int> { DateCalcKinds.Let, DateCalcKinds.Show },
         Handlers,
-        symbol => MathModule.Constants.Where(c => c.Name == symbol.Name)
-            .Select(c => new ProjectedValue(DateCalcLanguage.Number, c.Value)).FirstOrDefault(),
-        value => Show(value.Value));
+        (symbol, context) => symbol.Name == "today"
+            ? new ProjectedValue(DateCalcLanguage.Date, context.Today)
+            : MathModule.Constants.Where(c => c.Name == symbol.Name)
+                .Select(c => new ProjectedValue(DateCalcLanguage.Number, c.Value)).FirstOrDefault(),
+        value => Show(value.Value),
+        readsClock: true);
 
     static readonly Lazy<BoundEvaluation> s_bound = new(() => Profile.Bind(Language.SemanticCatalog));
 
-    /// <summary>The value of each statement, in order, or the diagnostics that stop it from running.</summary>
-    public static IReadOnlyList<DateCalcLine> Run(string source)
+    /// <summary>The value of each statement, in order, or the diagnostics that stop it from running; <c>today</c> is <paramref name="today"/>, else the local date.</summary>
+    public static IReadOnlyList<DateCalcLine> Run(string source, DateOnly? today = null)
     {
         using var parsed = Language.Parse(source, DateCalcModule.Program);
         var project = new Project(Language);
@@ -48,10 +51,11 @@ public static class DateCalcEvaluator
         var lowered = HirLowering.LowerSelected(file, Profile.StatementKinds, Guid.NewGuid());
         if (lowered.Diagnostics.Count > 0)
             return lowered.Diagnostics.Select(d => Error(source, d.Origin.Span, $"{d.Code}: {d.Message}")).ToList();
+        var context = new EvaluationContext(today is { } day ? new DateTimeOffset(day.ToDateTime(TimeOnly.MinValue)) : DateTimeOffset.Now);
         var registry = s_bound.Value.Registry;
         return lowered.Roots.Select(root =>
         {
-            var result = HirProjector.Project(root, registry, Builtins(root));
+            var result = HirProjector.Project(root, registry, Builtins(root, context));
             return result.Value is { } value
                 ? new DateCalcLine(LineOf(source, root.Origins[0].Span.Start), Profile.Format(value))
                 : Error(source, root.Origins[0].Span, string.Join("; ", result.Diagnostics.Select(d => d.Message)));
@@ -88,10 +92,10 @@ public static class DateCalcEvaluator
         ];
     }
 
-    /// <summary>The values of the builtin constants the root refers to.</summary>
-    static Dictionary<Symbol, ProjectedValue> Builtins(HirNode root) => HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
+    /// <summary>The values of the builtins the root refers to, in <paramref name="context"/>.</summary>
+    static Dictionary<Symbol, ProjectedValue> Builtins(HirNode root, EvaluationContext context) => HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
         .Select(r => r.Symbol.Binding).Where(s => s.IsBuiltin).Distinct()
-        .Select(s => (Symbol: s, Value: Profile.Builtin(s))).Where(p => p.Value is not null)
+        .Select(s => (Symbol: s, Value: Profile.Builtin(s, context))).Where(p => p.Value is not null)
         .ToDictionary(p => p.Symbol, p => p.Value!);
 
     static string Show(object value) => value switch

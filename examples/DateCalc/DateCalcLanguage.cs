@@ -69,9 +69,9 @@ public static class DateCalcLanguage
     public static string NoCall(string name, params SemanticType?[] arguments) =>
         $"'{name}' does not take ({string.Join(", ", arguments.Select(a => a?.ToString()))})";
 
-    /// <summary>The type of a built-in value: the Math constants are numbers.</summary>
+    /// <summary>The type of a built-in value: <c>today</c> is a date; the Math constants are numbers.</summary>
     public static SemanticType? Builtin(string name) =>
-        MathModule.Constants.Any(c => c.Name == name) ? Number : null;
+        name == "today" ? Date : MathModule.Constants.Any(c => c.Name == name) ? Number : null;
 
     public static string Mismatch(string op, SemanticType? left, SemanticType? right) =>
         $"'{op}' does not apply to {left} and {right}";

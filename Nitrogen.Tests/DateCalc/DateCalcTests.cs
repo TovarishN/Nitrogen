@@ -80,7 +80,7 @@ public sealed class DateCalcTests
         }
         Assert.Equal(DateCalcLanguage.AllFunctions.Select(f => f.Name).ToHashSet(),
             Builtins("function").Split((char[])[' ', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries).ToHashSet());
-        Assert.Equal(MathModule.Constants.Select(c => c.Name).ToHashSet(),
+        Assert.Equal(MathModule.Constants.Select(c => c.Name).Append("today").ToHashSet(),
             Builtins("value").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToHashSet());
     }
 
@@ -92,6 +92,19 @@ public sealed class DateCalcTests
         Assert.Equal(new HashSet<int> { DateCalcKinds.Let, DateCalcKinds.Show }, bound.Profile.StatementKinds);
         Assert.Equal("2026-10-05 Mon", DateCalcEvaluator.Profile.Format(
             new Nitrogen.Semantic.ProjectedValue(DateCalcLanguage.Date, new DateOnly(2026, 10, 5))));
+    }
+
+    [Theory]
+    [InlineData("today;", "2026-10-07 Wed")]
+    [InlineData("(2026-12-25 - today) in days;", "79")]
+    [InlineData("today + 6 weeks;", "2026-11-18 Wed")]
+    public void Today_is_the_date_the_caller_gives(string source, string expected) =>
+        Assert.Equal(expected, Assert.Single(DateCalcEvaluator.Run(source, new DateOnly(2026, 10, 7))).Text);
+
+    [Fact]
+    public void The_profile_reads_the_clock()
+    {
+        Assert.True(DateCalcEvaluator.Profile.ReadsClock);
     }
 
     [Fact]
