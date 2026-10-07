@@ -170,6 +170,9 @@ public sealed class RiderPluginGenerationTests
         // LspClientStarter is nested in LspIntegrationProvider in the 262 platform.
         Assert.Contains("import com.intellij.platform.lsp.api.LspIntegrationProvider.LspClientStarter",
             Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"), StringComparison.Ordinal);
+        // Rider asks a server for inlay hints (statement values) only where a client opts in.
+        Assert.Contains("override val inlayHintCustomizer: LspInlayHintCustomizer = NitrogenInlayHints",
+            Read("src/main/kotlin/org/nitrogen/rider/NitrogenHighlighting.kt"), StringComparison.Ordinal);
     }
 
     [Fact]
