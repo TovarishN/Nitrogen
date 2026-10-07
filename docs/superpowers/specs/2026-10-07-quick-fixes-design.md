@@ -1,6 +1,6 @@
 # Quick fixes for language diagnostics
 
-Status: approved design (2026-10-07). Builds on
+Status: implemented (2026-10-07). Builds on
 [inlay-hint evaluation](2026-10-07-inlay-hint-evaluation-design.md), which introduced discovering
 helper-source objects for a workspace language.
 
@@ -16,7 +16,7 @@ A workspace language can supply quick fixes for its diagnostics, in C#. The serv
 after checking that it works: the error goes away and nothing new breaks. Proven with DateCalc:
 
 - **DC0001:** `2026-02-30` → "Change to 2026-02-28".
-- **DC0002:** `2026-12-25 + 2026-10-05` → "Use `-`", and nothing for `2 weeks + 2026-10-05`, where
+- **DC0002:** `2026-12-25 + 2026-10-05` → "Use '-'", and nothing for `2 weeks + 2026-10-05`, where
   `-` doesn't fix it either.
 
 Out of scope: DC0003 (a call with the wrong arguments, where no single edit is obvious), fixes for
@@ -102,8 +102,9 @@ test project's file copy, exports `public static readonly DiagnosticFixes Fixes`
   the day clamped to 1–(days in that month). The title is "Change to 2026-02-28", and the edit
   replaces the date literal.
 - **DC0002:** when the diagnostic's span holds an `Add` expression, replace its `+` operator with `-`;
-  the title is "Use `-`". The fixer proposes this for every `+` mismatch, and the server's check keeps
-  it only where `-` type-checks.
+  the title is "Use '-'". The fixer proposes this for every `+` mismatch, and the server's check keeps
+  it only where `-` type-checks. The fixer finds the node whose span equals the diagnostic's and has three children,
+  and replaces the middle one when it is `+`.
 
 ## 7. Tests
 
@@ -112,7 +113,7 @@ test project's file copy, exports `public static readonly DiagnosticFixes Fixes`
 - **Service, on DateCalc:**
   - `let d = 2026-02-30;` → one fix, "Change to 2026-02-28", replacing the literal;
   - `2026-13-05;` → "Change to 2026-12-05";
-  - `2026-12-25 + 2026-10-05;` → "Use `-`", whose edit replaces the `+`;
+  - `2026-12-25 + 2026-10-05;` → "Use '-'", whose edit replaces the `+`;
   - `2 weeks + 2026-10-05;` → no fix (proposed, then rejected by the check);
   - a range away from the error → no fix;
   - a language without fixes (the Scopes test language) → none;
