@@ -7,8 +7,8 @@ language (`/*lang=calc*/ "1 + 2;"` or a `// language=calc` comment before the st
 are painted as decorations so the C# extension keeps its own. Strings of a language that an installed
 generated extension (`nitrogen package`) carries are left to that extension.
 
-Build: `npm install`, `npm run compile`, `npm run package` gives `nitrogen-0.5.0.vsix`; install it with
-`code --install-extension nitrogen-0.5.0.vsix`. Point `nitrogen.server.path` at the nitrogen executable,
+Build: `npm install`, `npm run compile`, `npm run package` gives `nitrogen-0.6.0.vsix`; install it with
+`code --install-extension nitrogen-0.6.0.vsix`. Point `nitrogen.server.path` at the nitrogen executable,
 for example `Nitrogen.Cli/bin/Release/net10.0/nitrogen` after `dotnet build Nitrogen.slnx -c Release`.
 
 A workspace grammar language:
