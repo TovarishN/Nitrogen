@@ -1,6 +1,6 @@
 # A `today` builtin: the first clock-dependent value
 
-Status: approved design (2026-10-07). Builds on
+Status: implemented (2026-10-07). Builds on
 [inlay-hint evaluation](2026-10-07-inlay-hint-evaluation-design.md) and
 [values on hover](2026-10-07-hover-values-design.md).
 

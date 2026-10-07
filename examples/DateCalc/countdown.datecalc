@@ -1,0 +1,5 @@
+// Countdowns from today: the editor shows each value, and updates them at midnight.
+let christmas = 2026-12-25;
+(christmas - today) in days;
+weekday(christmas);
+today + 6 weeks;
