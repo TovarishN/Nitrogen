@@ -176,7 +176,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         var inspection = Inspect(uri, position);
         if (inspection is null) return existing;
         // What the node lowers to says more than its hover property, which a name's hover keeps.
-        if (NameAt(uri, position) is not { Symbols.Count: > 0 }) existing = null;
+        bool atName = NameAt(uri, position) is { Symbols.Count: > 0 };
+        if (!atName) existing = null;
         var summary = inspection.Node switch
         {
             HirOperation operation => $"`{inspection.Type}` · `{operation.Signature.Id}`",
@@ -186,6 +187,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         };
         if (!ReferenceEquals(inspection.Root, inspection.Node) && inspection.Root is HirOperation root)
             summary += $" · `{root.Signature.Id}`";
+        if (HoverValue(_documents[uri], inspection, atName) is { } value) summary += "\n\n" + value;
         return new HoverInfo(existing is null ? summary : existing.Markdown + "\n\n" + summary,
             existing?.Range ?? inspection.Range);
     }

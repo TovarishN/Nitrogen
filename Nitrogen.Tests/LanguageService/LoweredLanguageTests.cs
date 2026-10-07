@@ -167,7 +167,7 @@ public sealed class LoweredLanguageTests : IDisposable
 
         var hover = service.Hover(Uri("a.datecalc"), At(text, "+"))!;
 
-        Assert.Equal("`DateCalc.Date` · `DateCalc.Later`", hover.Markdown);
+        Assert.Equal("`DateCalc.Date` · `DateCalc.Later`\n\n= 2026-10-08 Thu", hover.Markdown); // DateCalc has an evaluation profile
     }
 
     [Fact]
