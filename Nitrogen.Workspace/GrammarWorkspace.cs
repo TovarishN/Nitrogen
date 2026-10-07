@@ -3,6 +3,7 @@ using System.Reflection;
 using Microsoft.CodeAnalysis.CSharp;
 using Nitrogen.Grammar;
 using Nitrogen.Semantic;
+using Nitrogen.Semantics;
 using CodeAnalysis = Microsoft.CodeAnalysis; // Nitrogen has its own Diagnostic types
 
 namespace Nitrogen.Workspace;
@@ -11,8 +12,9 @@ namespace Nitrogen.Workspace;
 /// The grammar authoring loop (issue 236). A set of .ngr files is compiled in-process into one
 /// collectible assembly per <see cref="Compile"/>. The helper sources' public static
 /// <see cref="ModuleDescriptor"/> and <see cref="SemanticModule"/> fields and properties supply the
-/// language's semantic modules, so its declarative typing and lowering run, and an
-/// <see cref="EvaluationProfile"/> among them says how an editor shows its values. Each compile yields a
+/// language's semantic modules, so its declarative typing and lowering run; an
+/// <see cref="EvaluationProfile"/> among them says how an editor shows its values, and a
+/// <see cref="DiagnosticFixes"/> how it fixes its errors. Each compile yields a
 /// <see cref="WorkspaceSnapshot"/> owned by the caller; <see cref="Current"/> is the latest one that
 /// compiled.
 /// </summary>
@@ -105,7 +107,8 @@ public sealed class GrammarWorkspace
                 return new WorkspaceSnapshot(version, diagnostics);
             }
             var evaluation = Evaluation(types, language!, diagnostics);
-            var snapshot = new WorkspaceSnapshot(version, diagnostics, language, context, modules, evaluation);
+            var fixes = Fixes(types, diagnostics);
+            var snapshot = new WorkspaceSnapshot(version, diagnostics, language, context, modules, evaluation, fixes);
             Current = snapshot;
             return snapshot;
         }
@@ -162,6 +165,16 @@ public sealed class GrammarWorkspace
                 $"the evaluation profile does not bind: {error.GetBaseException().Message}", IsError: false));
             return null;
         }
+    }
+
+    /// <summary>The one public static <see cref="DiagnosticFixes"/> of <paramref name="types"/>; two are a warning (NGR0004), and the language has none.</summary>
+    static DiagnosticFixes? Fixes(IEnumerable<Type> types, List<WorkspaceDiagnostic> diagnostics)
+    {
+        var found = StaticValues(types, t => t == typeof(DiagnosticFixes)).OfType<DiagnosticFixes>().Distinct().ToList();
+        if (found.Count <= 1) return found.FirstOrDefault();
+        diagnostics.Add(new WorkspaceDiagnostic("", 0, 0, "NGR0004",
+            $"{found.Count} quick fix providers; a language has at most one, so none is used", IsError: false));
+        return null;
     }
 
     /// <summary>The public static fields, then properties, of the public <paramref name="types"/> whose type is <paramref name="wanted"/>, ordered by type and member name.</summary>

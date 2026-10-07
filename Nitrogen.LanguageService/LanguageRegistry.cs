@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Nitrogen.Semantic;
+using Nitrogen.Semantics;
 
 namespace Nitrogen.LanguageService;
 
@@ -8,8 +9,9 @@ namespace Nitrogen.LanguageService;
 /// <param name="presentation">How its symbol kinds look in the editor; <see cref="Presentation.Default"/> when null.</param>
 /// <param name="assist">What its editor knows beyond its grammar; none when null.</param>
 /// <param name="evaluation">How its statements' values are shown; none when null.</param>
+/// <param name="fixes">Its quick fixes; none when null.</param>
 public sealed class LanguageEntry(string name, Language language, IReadOnlyDictionary<string, Rule> starts, Presentation? presentation = null,
-    ILanguageAssist? assist = null, BoundEvaluation? evaluation = null)
+    ILanguageAssist? assist = null, BoundEvaluation? evaluation = null, DiagnosticFixes? fixes = null)
 {
     public string Name { get; } = name;
 
@@ -22,6 +24,8 @@ public sealed class LanguageEntry(string name, Language language, IReadOnlyDicti
     public ILanguageAssist? Assist { get; } = assist;
 
     public BoundEvaluation? Evaluation { get; } = evaluation;
+
+    public DiagnosticFixes? Fixes { get; } = fixes;
 }
 
 /// <summary>File extensions → languages (issue 238). An extension belongs to one language.</summary>
