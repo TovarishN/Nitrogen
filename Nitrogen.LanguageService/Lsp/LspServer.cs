@@ -20,6 +20,9 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     string? _workspaceRoot;   // the client's folder: its files are indexed
     string? _configRoot;      // whose nitrogen.json configures the languages: --config's directory, else the workspace
     bool _watchDynamically;
+    bool _refreshInlayHints;  // the client takes workspace/inlayHint/refresh
+    int _languagesSeen;       // service.LanguagesVersion when the client last had current hints
+    int _refreshes;
 
     /// <returns>The process exit code: 0 after <c>shutdown</c> then <c>exit</c>; 1 for <c>exit</c> without shutdown, end of input or broken framing.</returns>
     public async Task<int> RunAsync(CancellationToken cancel)
@@ -51,7 +54,11 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 try
                 {
                     if (isRequest) await HandleRequestAsync(method, id, parameters, cancel);
-                    else await HandleNotificationAsync(method, parameters, cancel);
+                    else
+                    {
+                        await HandleNotificationAsync(method, parameters, cancel);
+                        await RefreshInlayHintsAsync(cancel);
+                    }
                 }
                 catch (Exception error) when (error is not OperationCanceledException)
                 {
@@ -73,6 +80,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     string? root = initialize?.RootUri ?? initialize?.WorkspaceFolders?.FirstOrDefault()?.Uri;
                     if (root is not null && System.Uri.TryCreate(root, UriKind.Absolute, out var uri) && uri.IsFile) _workspaceRoot = uri.LocalPath;
                     _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
+                    _refreshInlayHints = initialize?.Capabilities?.Workspace?.InlayHint?.RefreshSupport == true;
                     service.SkipEmbedded(initialize?.InitializationOptions?.SkipLanguages ?? []);
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
@@ -80,7 +88,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     new ServerCapabilities(1, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
-                        CompletionProvider: new CompletionOptions(["."])),
+                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true),
                     new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
@@ -152,6 +160,16 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 await RespondAsync(id, new WorkspaceEdit(changes), LspJson.Default.WorkspaceEdit, cancel);
                 break;
             }
+            case "textDocument/inlayHint":
+            {
+                var request = Params(parameters, LspJson.Default.InlayHintParams);
+                var range = new DocumentRange(Position(request.Range.Start), Position(request.Range.End));
+                var hints = service.ValueHints(request.TextDocument.Uri, range)
+                    .Select(h => new LspInlayHint(new LspPosition(h.At.Line, h.At.Character), h.Label, PaddingLeft: true, h.Tooltip))
+                    .ToArray();
+                await RespondAsync(id, hints, LspJson.Default.LspInlayHintArray, cancel);
+                break;
+            }
             default:
                 await RespondErrorAsync(id, MethodNotFound, $"'{method}' is not supported", cancel);
                 break;
@@ -187,6 +205,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             case "initialized":
                 if (_configRoot is not null) await PublishAsync(service.ConfigureWorkspace(_configRoot), cancel);
                 if (_workspaceRoot is not null) await PublishAsync(service.IndexWorkspace(_workspaceRoot), cancel);
+                _languagesSeen = service.LanguagesVersion; // the client has not asked for hints yet
                 if (_watchDynamically) await RegisterWatchersAsync(service.IndexedExtensions(), cancel);
                 break;
             case "workspace/didChangeWatchedFiles":
@@ -268,6 +287,22 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             w.WriteEndObject();
             w.WriteEndObject();
         }, cancel);
+
+    /// <summary>Asks the client to request inlay hints again once a language was recompiled, if it can (<c>workspace/inlayHint/refresh</c>).</summary>
+    Task RefreshInlayHintsAsync(CancellationToken cancel)
+    {
+        if (!_refreshInlayHints || service.LanguagesVersion == _languagesSeen) return Task.CompletedTask;
+        _languagesSeen = service.LanguagesVersion;
+        int number = ++_refreshes;
+        return connection.WriteAsync(w =>
+        {
+            w.WriteStartObject();
+            w.WriteString("jsonrpc", "2.0");
+            w.WriteString("id", $"nitrogen-inlay-refresh-{number}");
+            w.WriteString("method", "workspace/inlayHint/refresh");
+            w.WriteEndObject();
+        }, cancel);
+    }
 
     /// <summary>Asks the client to report changes to the indexed files and nitrogen.json (<c>workspace/didChangeWatchedFiles</c>).</summary>
     Task RegisterWatchersAsync(IReadOnlyList<string> extensions, CancellationToken cancel) =>
