@@ -46,6 +46,7 @@ public sealed class EmbeddedStringTests : IDisposable
         Assert.Equal(tag, found.Tag);
         Assert.Equal(value, found.Value);
         Assert.Equal(value.Length + 1, found.Map.Length);
+        Assert.Equal(source.LastIndexOf('"') + 1, found.End); // just past the closing quote
     }
 
     [Fact]
@@ -57,6 +58,7 @@ public sealed class EmbeddedStringTests : IDisposable
         Assert.Equal("let a = 1;\n  a;", found.Value);
         Assert.Equal(source.IndexOf("let", StringComparison.Ordinal), found.Map[0]);
         Assert.Equal(source.IndexOf("a;", StringComparison.Ordinal), found.Map[found.Value.IndexOf("a;", StringComparison.Ordinal)]);
+        Assert.Equal(source.LastIndexOf("\"\"\"", StringComparison.Ordinal) + 3, found.End);
     }
 
     [Theory]
