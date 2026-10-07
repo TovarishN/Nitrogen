@@ -156,7 +156,7 @@ tsconfig.json
     static string Readme(LanguagePluginModel model) => $$"""
 # {{model.DisplayName}}
 
-{{model.DisplayName}} support for `{{string.Join("`, `", model.Extensions)}}` files: diagnostics, go to definition, references, rename, and semantic colouring, served by the bundled Nitrogen language server. The same works inside C# string literals tagged with the language, such as `/*lang={{model.Extensions.FirstOrDefault()?.TrimStart('.')}}*/ "..."` or a `// language={{model.Extensions.FirstOrDefault()?.TrimStart('.')}}` comment before the statement.
+{{model.DisplayName}} support for `{{string.Join("`, `", model.Extensions)}}` files: diagnostics, go to definition, references, rename, and semantic colouring, served by the bundled Nitrogen language server. The same works inside C# string literals tagged with the language, such as `/*lang={{model.Extensions.FirstOrDefault()?.TrimStart('.')}}*/ "..."` or a `// language={{model.Extensions.FirstOrDefault()?.TrimStart('.')}}` comment before the statement. When the language's helper sources export an evaluation profile, its files also show each statement's value as an inlay hint.
 
 The server runs on the .NET 10 runtime. If `dotnet` is not found through `DOTNET_ROOT`, the standard install locations, or `PATH`, set `{{ExtensionName(model)}}.dotnetPath`.
 

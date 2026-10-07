@@ -95,6 +95,15 @@ public sealed class VsCodeGenerationTests : IDisposable
     }
 
     [Fact]
+    public void Readme_names_statement_values_as_a_feature()
+    {
+        var request = Request();
+        VsCodeRenderer.Render(request, CancellationToken.None);
+
+        Assert.Contains("each statement's value as an inlay hint", Read(request, "README.md"), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rendering_twice_is_byte_identical()
     {
         var request = Request();
