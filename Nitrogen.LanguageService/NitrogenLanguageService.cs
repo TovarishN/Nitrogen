@@ -67,6 +67,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     {
         if (_hosts.ContainsKey(uri)) return Visible([.. CloseHost(uri), .. GrammarHook(uri)]);
         _inspection.Remove(uri);
+        _hints.Remove(uri);
         _unserved.Remove(uri);
         var affected = new List<string>();
         if (_documents.Remove(uri, out var document))

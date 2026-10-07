@@ -16,6 +16,9 @@ public sealed partial class NitrogenLanguageService
     readonly List<GrammarLanguage> _grammarLanguages = new();
     string? _root;
 
+    /// <summary>Counts workspace languages served, replaced or dropped: the LSP server asks the editor for new inlay hints when it moves.</summary>
+    public int LanguagesVersion { get; private set; }
+
     sealed class GrammarLanguage(string name, string[] extensions, string start, string root, string[] patterns, string[] sources, string[] usings,
         string? generatedNamespace, Presentation presentation)
     {
@@ -152,7 +155,8 @@ public sealed partial class NitrogenLanguageService
             return affected;
         }
 
-        var entry = new LanguageEntry(language.Name, snapshot.Language!, language.Extensions.ToDictionary(e => e, _ => rule), language.Presentation);
+        var entry = new LanguageEntry(language.Name, snapshot.Language!, language.Extensions.ToDictionary(e => e, _ => rule), language.Presentation,
+            evaluation: snapshot.Evaluation);
         affected.AddRange(Reregister(language.Entry, entry));
         language.Entry = entry;
         language.Snapshot?.Dispose();
@@ -163,6 +167,7 @@ public sealed partial class NitrogenLanguageService
     /// <summary>Serves <paramref name="replacement"/> in place of <paramref name="old"/>: its documents and any unserved ones it now covers are re-parsed.</summary>
     IReadOnlyList<string> Reregister(LanguageEntry? old, LanguageEntry replacement)
     {
+        LanguagesVersion++;
         UnembedAll(); // tagged strings are served again below, by the languages registered then
         if (old is not null) Registry.Remove(old);
         Registry.Add(replacement);
@@ -199,6 +204,7 @@ public sealed partial class NitrogenLanguageService
     IReadOnlyList<string> Unregister(GrammarLanguage language)
     {
         if (language.Entry is not { } entry) return [];
+        LanguagesVersion++;
         UnembedAll();
         Registry.Remove(entry);
         var moved = _documents.Values.Where(d => d.Language == entry).ToList();

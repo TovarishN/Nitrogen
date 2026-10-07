@@ -61,3 +61,6 @@ public enum CompletionKind
 /// <summary>A completion: its label replaces <paramref name="Replace"/> (the typed prefix).</summary>
 /// <param name="SortText">The item's rank as text; editors order by it.</param>
 public sealed record CompletionItem(string Label, CompletionKind Kind, string Detail, DocumentRange Replace, string? SortText = null);
+
+/// <summary>A statement's value, shown after it: <paramref name="Label"/> at <paramref name="At"/>; a failure has a ⚠ label, the reason as its tooltip.</summary>
+public sealed record ValueHint(DocumentPosition At, string Label, string? Tooltip, bool IsError);
