@@ -1,3 +1,5 @@
+using Nitrogen.Semantic;
+
 namespace Nitrogen.Workspace;
 
 /// <summary>
@@ -11,11 +13,13 @@ public sealed class WorkspaceSnapshot : IDisposable
     SyntaxModule[] _modules;
 
     internal WorkspaceSnapshot(int version, IReadOnlyList<WorkspaceDiagnostic> diagnostics,
-        Language? language = null, WorkspaceLoadContext? context = null, SyntaxModule[]? modules = null)
+        Language? language = null, WorkspaceLoadContext? context = null, SyntaxModule[]? modules = null,
+        BoundEvaluation? evaluation = null)
     {
         Version = version;
         Diagnostics = diagnostics;
         Language = language;
+        Evaluation = evaluation;
         _context = context;
         _modules = modules ?? [];
     }
@@ -27,6 +31,9 @@ public sealed class WorkspaceSnapshot : IDisposable
 
     /// <summary>The compiled language; null when the compile failed or the snapshot is disposed.</summary>
     public Language? Language { get; private set; }
+
+    /// <summary>The helper sources' evaluation profile bound to <see cref="Language"/>'s catalog; null when there is none, or it did not bind.</summary>
+    public BoundEvaluation? Evaluation { get; private set; }
 
     public bool Succeeded => Language is not null;
 
@@ -54,6 +61,7 @@ public sealed class WorkspaceSnapshot : IDisposable
     public void Dispose()
     {
         Language = null;
+        Evaluation = null;
         _modules = [];
         var context = _context;
         _context = null;

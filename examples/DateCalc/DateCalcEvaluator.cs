@@ -9,34 +9,28 @@ namespace DateCalc.Syntax;
 /// <summary>One shown value, or one diagnostic, at a source line (1-based).</summary>
 public sealed record DateCalcLine(int Line, string Text, bool IsError = false);
 
-/// <summary>Runs DateCalc source: parse, bind, check, lower to typed HIR, then project each root through the handlers.</summary>
+/// <summary>
+/// Runs DateCalc source: parse, bind, check, lower to typed HIR, then project each statement through
+/// <see cref="Profile"/>'s handlers. The language server finds <see cref="Profile"/> too and shows each
+/// statement's value as an inlay hint.
+/// </summary>
 public static class DateCalcEvaluator
 {
-    public static readonly Language Language = new LanguageBuilder().Add(DateCalcModule.Instance)
-        .AddSemantic(MathModule.Semantics).AddSemantic(DateCalcLanguage.Semantics).Build();
+    static readonly Lazy<Language> s_language = new(() => new LanguageBuilder().Add(DateCalcModule.Instance)
+        .AddSemantic(MathModule.Semantics).AddSemantic(DateCalcLanguage.Semantics).Build());
 
-    static readonly IReadOnlySet<int> Statements = new HashSet<int> { DateCalcKinds.Let, DateCalcKinds.Show };
+    /// <summary>The language <see cref="Run"/> parses with, built on first use: reading <see cref="Profile"/> does not build it.</summary>
+    public static Language Language => s_language.Value;
 
-    static readonly ProjectionRegistry Handlers = new(Language.SemanticCatalog,
-    [
-        Handler(DateCalcLanguage.ParseDate, a => DateOnly.ParseExact((string)a[0], "yyyy-MM-dd", CultureInfo.InvariantCulture)),
-        Handler(DateCalcLanguage.Days, a => TimeSpan.FromDays((float)a[0])),
-        Handler(DateCalcLanguage.Weeks, a => TimeSpan.FromDays(7 * (float)a[0])),
-        Handler(DateCalcLanguage.InDays, a => (float)((TimeSpan)a[0]).TotalDays),
-        Handler(Op("DateCalc.Add"), a => (float)a[0] + (float)a[1]),
-        Handler(Op("DateCalc.Subtract"), a => (float)a[0] - (float)a[1]),
-        Handler(Op("DateCalc.Multiply"), a => (float)a[0] * (float)a[1]),
-        Handler(Op("DateCalc.Divide"), a => (float)a[0] / (float)a[1]),
-        Handler(Op("DateCalc.Later"), a => ((DateOnly)a[0]).AddDays((int)((TimeSpan)a[1]).TotalDays)),
-        Handler(Op("DateCalc.Earlier"), a => ((DateOnly)a[0]).AddDays(-(int)((TimeSpan)a[1]).TotalDays)),
-        Handler(Op("DateCalc.Between"), a => TimeSpan.FromDays(((DateOnly)a[0]).DayNumber - ((DateOnly)a[1]).DayNumber)),
-        Handler(Op("DateCalc.AddDurations"), a => (TimeSpan)a[0] + (TimeSpan)a[1]),
-        Handler(Op("DateCalc.SubtractDurations"), a => (TimeSpan)a[0] - (TimeSpan)a[1]),
-        Handler(Op("DateCalc.Scale"), a => (TimeSpan)a[0] * (float)a[1]),
-        Handler(Op("DateCalc.Times"), a => (float)a[0] * (TimeSpan)a[1]),
-        Handler(Op("DateCalc.Ratio"), a => (float)((TimeSpan)a[0] / (TimeSpan)a[1])),
-        .. DateCalcLanguage.AllFunctions.Select(f => Handler(f.Signature, f.Run)),
-    ]);
+    /// <summary>Lets and shown expressions, each projected to a number, date, duration or text.</summary>
+    public static readonly EvaluationProfile Profile = new(
+        new HashSet<int> { DateCalcKinds.Let, DateCalcKinds.Show },
+        Handlers,
+        symbol => MathModule.Constants.Where(c => c.Name == symbol.Name)
+            .Select(c => new ProjectedValue(DateCalcLanguage.Number, c.Value)).FirstOrDefault(),
+        value => Show(value.Value));
+
+    static readonly Lazy<BoundEvaluation> s_bound = new(() => Profile.Bind(Language.SemanticCatalog));
 
     /// <summary>The value of each statement, in order, or the diagnostics that stop it from running.</summary>
     public static IReadOnlyList<DateCalcLine> Run(string source)
@@ -51,22 +45,54 @@ public static class DateCalcEvaluator
         errors.AddRange(file.Diagnostics().Select(d => Error(source, d.Span, $"{d.Code}: {d.Message}")));
         if (errors.Count > 0) return errors;
 
-        var lowered = HirLowering.LowerSelected(file, Statements, Guid.NewGuid());
+        var lowered = HirLowering.LowerSelected(file, Profile.StatementKinds, Guid.NewGuid());
         if (lowered.Diagnostics.Count > 0)
             return lowered.Diagnostics.Select(d => Error(source, d.Origin.Span, $"{d.Code}: {d.Message}")).ToList();
+        var registry = s_bound.Value.Registry;
         return lowered.Roots.Select(root =>
         {
-            var result = HirProjector.Project(root, Handlers, Constants(root));
+            var result = HirProjector.Project(root, registry, Builtins(root));
             return result.Value is { } value
-                ? new DateCalcLine(LineOf(source, root.Origins[0].Span.Start), Show(value.Value))
+                ? new DateCalcLine(LineOf(source, root.Origins[0].Span.Start), Profile.Format(value))
                 : Error(source, root.Origins[0].Span, string.Join("; ", result.Diagnostics.Select(d => d.Message)));
         }).ToList();
     }
 
-    /// <summary>The values of the built-in constants the root refers to.</summary>
-    static Dictionary<Symbol, ProjectedValue> Constants(HirNode root) => HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
+    static IEnumerable<ProjectionHandler> Handlers(SemanticCatalog catalog)
+    {
+        ProjectionHandler Handler(string id, Func<object[], object> run)
+        {
+            var signature = catalog.Operations[id];
+            return new(signature, arguments => new ProjectedValue(signature.Result, run(arguments.Select(a => a.Value).ToArray())));
+        }
+
+        return
+        [
+            Handler(DateCalcLanguage.ParseDate.Id, a => DateOnly.ParseExact((string)a[0], "yyyy-MM-dd", CultureInfo.InvariantCulture)),
+            Handler(DateCalcLanguage.Days.Id, a => TimeSpan.FromDays((float)a[0])),
+            Handler(DateCalcLanguage.Weeks.Id, a => TimeSpan.FromDays(7 * (float)a[0])),
+            Handler(DateCalcLanguage.InDays.Id, a => (float)((TimeSpan)a[0]).TotalDays),
+            Handler("DateCalc.Add", a => (float)a[0] + (float)a[1]),
+            Handler("DateCalc.Subtract", a => (float)a[0] - (float)a[1]),
+            Handler("DateCalc.Multiply", a => (float)a[0] * (float)a[1]),
+            Handler("DateCalc.Divide", a => (float)a[0] / (float)a[1]),
+            Handler("DateCalc.Later", a => ((DateOnly)a[0]).AddDays((int)((TimeSpan)a[1]).TotalDays)),
+            Handler("DateCalc.Earlier", a => ((DateOnly)a[0]).AddDays(-(int)((TimeSpan)a[1]).TotalDays)),
+            Handler("DateCalc.Between", a => TimeSpan.FromDays(((DateOnly)a[0]).DayNumber - ((DateOnly)a[1]).DayNumber)),
+            Handler("DateCalc.AddDurations", a => (TimeSpan)a[0] + (TimeSpan)a[1]),
+            Handler("DateCalc.SubtractDurations", a => (TimeSpan)a[0] - (TimeSpan)a[1]),
+            Handler("DateCalc.Scale", a => (TimeSpan)a[0] * (float)a[1]),
+            Handler("DateCalc.Times", a => (float)a[0] * (TimeSpan)a[1]),
+            Handler("DateCalc.Ratio", a => (float)((TimeSpan)a[0] / (TimeSpan)a[1])),
+            .. DateCalcLanguage.AllFunctions.Select(f => Handler(f.Signature.Id, f.Run)),
+        ];
+    }
+
+    /// <summary>The values of the builtin constants the root refers to.</summary>
+    static Dictionary<Symbol, ProjectedValue> Builtins(HirNode root) => HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
         .Select(r => r.Symbol.Binding).Where(s => s.IsBuiltin).Distinct()
-        .ToDictionary(s => s, s => new ProjectedValue(DateCalcLanguage.Number, MathModule.Constants.Single(c => c.Name == s.Name).Value));
+        .Select(s => (Symbol: s, Value: Profile.Builtin(s))).Where(p => p.Value is not null)
+        .ToDictionary(p => p.Symbol, p => p.Value!);
 
     static string Show(object value) => value switch
     {
@@ -75,11 +101,6 @@ public static class DateCalcEvaluator
         TimeSpan span => $"{span.TotalDays.ToString(CultureInfo.InvariantCulture)} days",
         _ => value.ToString() ?? "",
     };
-
-    static OperationSignature Op(string id) => Language.SemanticCatalog.Operations[id];
-
-    static ProjectionHandler Handler(OperationSignature signature, Func<object[], object> run) =>
-        new(signature, arguments => new ProjectedValue(signature.Result, run(arguments.Select(a => a.Value).ToArray())));
 
     static DateCalcLine Error(string source, TextSpan span, string message) => new(LineOf(source, span.Start), message, true);
 

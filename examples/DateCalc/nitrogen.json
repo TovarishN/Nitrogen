@@ -6,7 +6,7 @@
       "grammars": ["DateCalc.ngr"],
       "start": "DateCalc.Program",
       "namespace": "DateCalc.Syntax",
-      "sources": ["DateCalcLanguage.cs", "MathModule.cs"],
+      "sources": ["DateCalcLanguage.cs", "MathModule.cs", "DateCalcEvaluator.cs"],
       "tokens": { "value": "variable", "function": "function" }
     }
   ]

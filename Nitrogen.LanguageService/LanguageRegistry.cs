@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Nitrogen.Semantic;
 
 namespace Nitrogen.LanguageService;
 
@@ -6,8 +7,9 @@ namespace Nitrogen.LanguageService;
 /// <param name="starts">File extension (with the dot) → the start rule its documents parse with.</param>
 /// <param name="presentation">How its symbol kinds look in the editor; <see cref="Presentation.Default"/> when null.</param>
 /// <param name="assist">What its editor knows beyond its grammar; none when null.</param>
+/// <param name="evaluation">How its statements' values are shown; none when null.</param>
 public sealed class LanguageEntry(string name, Language language, IReadOnlyDictionary<string, Rule> starts, Presentation? presentation = null,
-    ILanguageAssist? assist = null)
+    ILanguageAssist? assist = null, BoundEvaluation? evaluation = null)
 {
     public string Name { get; } = name;
 
@@ -18,6 +20,8 @@ public sealed class LanguageEntry(string name, Language language, IReadOnlyDicti
     public Presentation Presentation { get; } = presentation ?? Presentation.Default;
 
     public ILanguageAssist? Assist { get; } = assist;
+
+    public BoundEvaluation? Evaluation { get; } = evaluation;
 }
 
 /// <summary>File extensions → languages (issue 238). An extension belongs to one language.</summary>

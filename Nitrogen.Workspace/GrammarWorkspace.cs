@@ -11,7 +11,8 @@ namespace Nitrogen.Workspace;
 /// The grammar authoring loop (issue 236). A set of .ngr files is compiled in-process into one
 /// collectible assembly per <see cref="Compile"/>. The helper sources' public static
 /// <see cref="ModuleDescriptor"/> and <see cref="SemanticModule"/> fields and properties supply the
-/// language's semantic modules, so its declarative typing and lowering run. Each compile yields a
+/// language's semantic modules, so its declarative typing and lowering run, and an
+/// <see cref="EvaluationProfile"/> among them says how an editor shows its values. Each compile yields a
 /// <see cref="WorkspaceSnapshot"/> owned by the caller; <see cref="Current"/> is the latest one that
 /// compiled.
 /// </summary>
@@ -103,7 +104,8 @@ public sealed class GrammarWorkspace
                 diagnostics.AddRange(composition.Select(d => new WorkspaceDiagnostic("", 0, 0, d.Code, d.Message, IsError: true)));
                 return new WorkspaceSnapshot(version, diagnostics);
             }
-            var snapshot = new WorkspaceSnapshot(version, diagnostics, language, context, modules);
+            var evaluation = Evaluation(types, language!, diagnostics);
+            var snapshot = new WorkspaceSnapshot(version, diagnostics, language, context, modules, evaluation);
             Current = snapshot;
             return snapshot;
         }
@@ -129,22 +131,47 @@ public sealed class GrammarWorkspace
     static List<SemanticModule> SemanticModules(IEnumerable<Type> types)
     {
         var found = new List<SemanticModule>();
-        foreach (var type in types.Where(t => t.IsPublic || t.IsNestedPublic).OrderBy(t => t.FullName, StringComparer.Ordinal))
-        {
-            var values = type.GetFields(BindingFlags.Public | BindingFlags.Static)
-                .Where(f => f.FieldType == typeof(ModuleDescriptor) || f.FieldType == typeof(SemanticModule))
-                .OrderBy(f => f.Name, StringComparer.Ordinal).Select(f => f.GetValue(null))
-                .Concat(type.GetProperties(BindingFlags.Public | BindingFlags.Static)
-                    .Where(p => p.GetIndexParameters().Length == 0 &&
-                        (p.PropertyType == typeof(ModuleDescriptor) || p.PropertyType == typeof(SemanticModule)))
-                    .OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => p.GetValue(null)));
-            foreach (var value in values)
-                if ((value as SemanticModule ?? (value as ModuleDescriptor)?.Semantics) is { } module &&
-                    !found.Any(m => ReferenceEquals(m, module)))
-                    found.Add(module);
-        }
+        foreach (var value in StaticValues(types, t => t == typeof(ModuleDescriptor) || t == typeof(SemanticModule)))
+            if ((value as SemanticModule ?? (value as ModuleDescriptor)?.Semantics) is { } module &&
+                !found.Any(m => ReferenceEquals(m, module)))
+                found.Add(module);
         return found;
     }
+
+    /// <summary>
+    /// The one public static <see cref="EvaluationProfile"/> of <paramref name="types"/>, bound to the language's
+    /// catalog. Two profiles (NGR0003) or one that does not bind (NGR0002) are warnings, and the language has none.
+    /// </summary>
+    static BoundEvaluation? Evaluation(IEnumerable<Type> types, Language language, List<WorkspaceDiagnostic> diagnostics)
+    {
+        var profiles = StaticValues(types, t => t == typeof(EvaluationProfile)).OfType<EvaluationProfile>().Distinct().ToList();
+        if (profiles.Count == 0) return null;
+        if (profiles.Count > 1)
+        {
+            diagnostics.Add(new WorkspaceDiagnostic("", 0, 0, "NGR0003",
+                $"{profiles.Count} evaluation profiles; a language has at most one, so none is used", IsError: false));
+            return null;
+        }
+        try
+        {
+            return profiles[0].Bind(language.SemanticCatalog);
+        }
+        catch (Exception error)
+        {
+            diagnostics.Add(new WorkspaceDiagnostic("", 0, 0, "NGR0002",
+                $"the evaluation profile does not bind: {error.GetBaseException().Message}", IsError: false));
+            return null;
+        }
+    }
+
+    /// <summary>The public static fields, then properties, of the public <paramref name="types"/> whose type is <paramref name="wanted"/>, ordered by type and member name.</summary>
+    static IEnumerable<object?> StaticValues(IEnumerable<Type> types, Func<Type, bool> wanted) =>
+        types.Where(t => t.IsPublic || t.IsNestedPublic).OrderBy(t => t.FullName, StringComparer.Ordinal).SelectMany(type =>
+            type.GetFields(BindingFlags.Public | BindingFlags.Static).Where(f => wanted(f.FieldType))
+                .OrderBy(f => f.Name, StringComparer.Ordinal).Select(f => f.GetValue(null))
+                .Concat(type.GetProperties(BindingFlags.Public | BindingFlags.Static)
+                    .Where(p => p.GetIndexParameters().Length == 0 && wanted(p.PropertyType))
+                    .OrderBy(p => p.Name, StringComparer.Ordinal).Select(p => p.GetValue(null))));
 
     WorkspaceDiagnostic FromGrammar(CompiledDiagnostic compiled)
     {

@@ -36,7 +36,8 @@ public sealed record ServerCapabilities(
     bool? DocumentHighlightProvider = null,
     bool? HoverProvider = null,
     RenameOptions? RenameProvider = null,
-    CompletionOptions? CompletionProvider = null);
+    CompletionOptions? CompletionProvider = null,
+    bool? InlayHintProvider = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -44,7 +45,10 @@ public sealed record WorkspaceFolder(string Uri, string Name);
 
 public sealed record DidChangeWatchedFilesClientCapabilities(bool? DynamicRegistration);
 
-public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapabilities? DidChangeWatchedFiles);
+public sealed record InlayHintWorkspaceClientCapabilities(bool? RefreshSupport);
+
+public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapabilities? DidChangeWatchedFiles,
+    InlayHintWorkspaceClientCapabilities? InlayHint = null);
 
 public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
 
@@ -93,6 +97,11 @@ public sealed record SemanticTokensResult(int[] Data);
 
 public sealed record LspDocumentSymbol(string Name, string Detail, int Kind, LspRange Range, LspRange SelectionRange, LspDocumentSymbol[] Children);
 
+public sealed record InlayHintParams(TextDocumentIdentifier TextDocument, LspRange Range);
+
+/// <summary>An inlay hint with a plain-text label; no kind, since a value is neither a type nor a parameter name.</summary>
+public sealed record LspInlayHint(LspPosition Position, string Label, bool? PaddingLeft = null, string? Tooltip = null);
+
 public sealed record ServerInfo(string Name, string Version);
 
 public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInfo ServerInfo);
@@ -117,4 +126,6 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(InitializeParams))]
 [JsonSerializable(typeof(DidChangeWatchedFilesParams))]
 [JsonSerializable(typeof(LspCompletionItem[]))]
+[JsonSerializable(typeof(InlayHintParams))]
+[JsonSerializable(typeof(LspInlayHint[]))]
 internal sealed partial class LspJson : JsonSerializerContext;
