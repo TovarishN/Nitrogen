@@ -1,6 +1,6 @@
 # Value hints in tagged C# strings
 
-Status: approved design (2026-10-07). Builds on
+Status: implemented (2026-10-07). Builds on
 [inlay-hint evaluation](2026-10-07-inlay-hint-evaluation-design.md).
 
 ## Problem
