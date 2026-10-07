@@ -85,6 +85,16 @@ public sealed class DateCalcTests
     }
 
     [Fact]
+    public void The_profile_binds_to_the_language_and_selects_its_statements()
+    {
+        var bound = DateCalcEvaluator.Profile.Bind(DateCalcEvaluator.Language.SemanticCatalog);
+
+        Assert.Equal(new HashSet<int> { DateCalcKinds.Let, DateCalcKinds.Show }, bound.Profile.StatementKinds);
+        Assert.Equal("2026-10-05 Mon", DateCalcEvaluator.Profile.Format(
+            new Nitrogen.Semantic.ProjectedValue(DateCalcLanguage.Date, new DateOnly(2026, 10, 5))));
+    }
+
+    [Fact]
     public void Tagged_snippets_run()
     {
         Assert.Equal(["81", "Friday"], Snippets.Countdown().Skip(1).Select(l => l.Text));

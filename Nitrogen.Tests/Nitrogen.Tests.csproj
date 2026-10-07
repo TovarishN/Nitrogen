@@ -39,7 +39,7 @@
     <!-- Geometry as a nitrogen.json language: its grammar, helper sources and config, served by the workspace. -->
     <None Include="..\Nitrogen.Geometry\nitrogen.json;..\Nitrogen.Geometry\Geometry.ngr;..\Nitrogen.Geometry\BoxMeshModule.cs;..\Nitrogen.Geometry\GeometryValues.cs"
           Link="GeometryLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="..\examples\DateCalc\nitrogen.json;..\examples\DateCalc\DateCalc.ngr;..\examples\DateCalc\DateCalcLanguage.cs;..\examples\DateCalc\MathModule.cs;..\examples\DateCalc\sample.datecalc"
+    <None Include="..\examples\DateCalc\nitrogen.json;..\examples\DateCalc\DateCalc.ngr;..\examples\DateCalc\DateCalcLanguage.cs;..\examples\DateCalc\MathModule.cs;..\examples\DateCalc\DateCalcEvaluator.cs;..\examples\DateCalc\sample.datecalc"
           Link="DateCalcLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
