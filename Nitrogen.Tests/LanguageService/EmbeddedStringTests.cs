@@ -164,4 +164,82 @@ public sealed class EmbeddedStringTests : IDisposable
         Assert.False(service.IsOpen(uri));
         Assert.Empty(service.SemanticTokens(uri));
     }
+
+    static readonly DocumentRange Whole = new(new DocumentPosition(0, 0), new DocumentPosition(int.MaxValue, 0));
+
+    const string Snippets = """"
+        class C
+        {
+            object A = Run(/*lang=datecalc*/ """
+                let christmas = 2026-12-25;
+                weekday(christmas);
+                """);
+            const string D = /*lang=datecalc*/ "2026-10-05 + 6 weeks;";
+        }
+        """";
+
+    [Fact]
+    public void Values_show_inside_a_multiline_string_and_after_a_one_line_string()
+    {
+        using var service = Service();
+        string uri = Uri("Snippets.cs");
+        service.Open(uri, 1, Snippets);
+
+        var hints = service.ValueHints(uri, Whole);
+
+        Assert.Equal(["= 2026-12-25 Fri", "= Friday", "= 2026-11-16 Mon"], hints.Select(h => h.Label));
+        Assert.Equal(
+            [
+                At(Snippets, "2026-12-25;", "2026-12-25;".Length),
+                At(Snippets, "weekday(christmas);", "weekday(christmas);".Length),
+                At(Snippets, "6 weeks;\"", "6 weeks;\"".Length),
+            ],
+            hints.Select(h => h.At));
+    }
+
+    [Fact]
+    public void A_string_with_an_error_hides_only_its_own_values()
+    {
+        using var service = Service();
+        string uri = Uri("Mixed.cs");
+        service.Open(uri, 1, "class C\n{\n    const string A = /*lang=datecalc*/ \"2026-10-05 + 2026-10-06;\";\n    const string B = /*lang=datecalc*/ \"1 + 1;\";\n}\n");
+
+        Assert.Equal("= 2", Assert.Single(service.ValueHints(uri, Whole)).Label);
+    }
+
+    [Fact]
+    public void Host_values_are_filtered_by_host_range()
+    {
+        using var service = Service();
+        string uri = Uri("Snippets.cs");
+        service.Open(uri, 1, Snippets);
+        int line = At(Snippets, "const string D").Line;
+
+        var hint = Assert.Single(service.ValueHints(uri,
+            new DocumentRange(new DocumentPosition(line, 0), new DocumentPosition(line, int.MaxValue))));
+        Assert.Equal("= 2026-11-16 Mon", hint.Label);
+    }
+
+    [Fact]
+    public void An_edit_to_the_host_shows_the_new_values()
+    {
+        using var service = Service();
+        string uri = Uri("Edit.cs");
+        service.Open(uri, 1, "const string A = /*lang=datecalc*/ \"1 + 1;\";");
+        Assert.Equal("= 2", Assert.Single(service.ValueHints(uri, Whole)).Label);
+
+        service.Change(uri, 2, "const string A = /*lang=datecalc*/ \"2 + 2;\";");
+        Assert.Equal("= 4", Assert.Single(service.ValueHints(uri, Whole)).Label);
+    }
+
+    [Fact]
+    public void A_skipped_language_shows_no_values_in_strings()
+    {
+        using var service = Service();
+        service.SkipEmbedded(["datecalc"]);
+        string uri = Uri("Snippets.cs");
+        service.Open(uri, 1, Snippets);
+
+        Assert.Empty(service.ValueHints(uri, Whole));
+    }
 }

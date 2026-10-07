@@ -6,7 +6,8 @@ namespace Nitrogen.LanguageService;
 /// Languages inside C# (tagged strings): an open <c>.cs</c> document is a host, and each string literal
 /// tagged with a served language (<see cref="EmbeddedStrings"/>) is a virtual document of that language,
 /// bound in its project like a file. Requests on the host go to the virtual document under the position,
-/// and their ranges and locations are mapped back through the literal's source map. The tag names a
+/// and their ranges and locations are mapped back through the literal's source map. Diagnostics, tokens
+/// and values are gathered from every string and mapped back the same way. The tag names a
 /// language by name or by an extension without its dot, ignoring case.
 /// </summary>
 public sealed partial class NitrogenLanguageService
@@ -81,6 +82,7 @@ public sealed partial class NitrogenLanguageService
         foreach (string uri in host.Embedded)
         {
             _inspection.Remove(uri);
+            _hints.Remove(uri);
             _embedded.Remove(uri);
             if (!_documents.Remove(uri, out var document)) continue;
             if (_projects.TryGetValue(document.Language, out var project)) project.Remove(uri);
@@ -176,6 +178,24 @@ public sealed partial class NitrogenLanguageService
             }
         tokens.Sort((a, b) => a.Start.Line != b.Start.Line ? a.Start.Line.CompareTo(b.Start.Line) : a.Start.Character.CompareTo(b.Start.Character));
         return tokens;
+    }
+
+    /// <summary>
+    /// The values of the host's strings at host positions: every value of a literal on one line goes after
+    /// its closing quote, so it doesn't read as string content; in a multi-line literal, each goes at its
+    /// statement's end.
+    /// </summary>
+    IEnumerable<ValueHint> HostValueHints(Host host)
+    {
+        var whole = new DocumentRange(new DocumentPosition(0, 0), new DocumentPosition(int.MaxValue, 0));
+        foreach (string uri in host.Embedded)
+        {
+            var source = _embedded[uri].Source;
+            var end = host.Lines.PositionOf(source.End);
+            bool oneLine = host.Lines.PositionOf(source.Map[0]).Line == end.Line;
+            foreach (var hint in ValueHints(uri, whole))
+                yield return hint with { At = oneLine ? end : OutOf(uri, new DocumentRange(hint.At, hint.At)).Start };
+        }
     }
 
     void DisposeHosts()

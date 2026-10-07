@@ -17,9 +17,10 @@ public sealed partial class NitrogenLanguageService
     /// <summary>How long one document's statements may run; the first always runs, later ones start only within it.</summary>
     internal TimeSpan EvaluationBudget { get; set; } = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>The values of the document's statements within <paramref name="range"/>; empty when its language shows none.</summary>
+    /// <summary>The values of the document's statements within <paramref name="range"/>, or of a C# host's tagged strings at host positions; empty when its language shows none.</summary>
     public IReadOnlyList<ValueHint> ValueHints(string uri, DocumentRange range)
     {
+        if (_hosts.TryGetValue(uri, out var host)) return HostValueHints(host).Where(h => Within(h.At, range)).ToList();
         if (!_documents.TryGetValue(uri, out var document) || document.Language.Evaluation is not { } evaluation) return [];
         var project = _projects[document.Language];
         if (!_hints.TryGetValue(uri, out var hit) || hit.DocumentVersion != document.Version ||
