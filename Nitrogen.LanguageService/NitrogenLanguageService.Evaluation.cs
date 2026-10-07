@@ -77,6 +77,22 @@ public sealed partial class NitrogenLanguageService
         }
     }
 
+    /// <summary>
+    /// The value line of a hover: the outermost lowered node at the hovered node's span (a date literal's
+    /// operation, not its text), projected. Null without an evaluation, at a literal constant, or at a name
+    /// that didn't lower to a reference of its own (a let the language inlines: its value is its hint).
+    /// </summary>
+    static string? HoverValue(Document document, SemanticInspection inspection, bool atName)
+    {
+        if (document.Language.Evaluation is not { } evaluation) return null;
+        if (atName && inspection.Node is not HirSymbolRef) return null;
+        var node = HirTraversal.PreOrder(inspection.Root).FirstOrDefault(n =>
+            n.Origins.Any(o => o.Path == document.Uri && document.Lines.RangeOf(o.Span) == inspection.Range)) ?? inspection.Node;
+        if (node is HirConstant or HirText) return null;
+        var (value, failure) = Project(node, evaluation);
+        return value is not null ? "= " + value : "= ⚠ " + failure;
+    }
+
     static ValueHint Failure(DocumentPosition at, string reason) => new(at, "= ⚠", reason, true);
 
     /// <summary>The end of the statement the origin lies in, before its trailing whitespace: where its value is shown.</summary>
