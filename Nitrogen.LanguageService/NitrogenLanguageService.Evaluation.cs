@@ -5,12 +5,13 @@ namespace Nitrogen.LanguageService;
 
 /// <summary>
 /// Statement values as inlay hints: a language whose entry has an evaluation lowers its statements and
-/// projects each through the profile's handlers. Nothing is shown while the document has an error, and
-/// evaluation stops starting statements once its budget is spent.
+/// projects each through the profile's handlers. Nothing is shown while the document has an error;
+/// evaluation stops starting statements once its budget is spent; and a language whose values read the
+/// clock has its hints recomputed on a new day.
 /// </summary>
 public sealed partial class NitrogenLanguageService
 {
-    sealed record HintCacheEntry(int DocumentVersion, int ProjectVersion, LanguageEntry Language, IReadOnlyList<ValueHint> Hints);
+    sealed record HintCacheEntry(int DocumentVersion, int ProjectVersion, LanguageEntry Language, DateOnly? Day, IReadOnlyList<ValueHint> Hints);
 
     readonly Dictionary<string, HintCacheEntry> _hints = new(StringComparer.Ordinal);
 
@@ -22,16 +23,31 @@ public sealed partial class NitrogenLanguageService
 
     EvaluationContext Context() => new(Clock.GetLocalNow());
 
+    /// <summary>Whether a served language's values depend on the clock: the LSP server then refreshes hints when the day changes.</summary>
+    public bool ReadsClock => Registry.Entries.Any(entry => entry.Evaluation?.Profile.ReadsClock == true);
+
+    /// <summary>The next local midnight by <see cref="Clock"/>.</summary>
+    public DateTimeOffset NextDayChange
+    {
+        get
+        {
+            var midnight = Clock.GetLocalNow().Date.AddDays(1);
+            return new DateTimeOffset(midnight, Clock.LocalTimeZone.GetUtcOffset(midnight));
+        }
+    }
+
     /// <summary>The values of the document's statements within <paramref name="range"/>, or of a C# host's tagged strings at host positions; empty when its language shows none.</summary>
     public IReadOnlyList<ValueHint> ValueHints(string uri, DocumentRange range)
     {
         if (_hosts.TryGetValue(uri, out var host)) return HostValueHints(host).Where(h => Within(h.At, range)).ToList();
         if (!_documents.TryGetValue(uri, out var document) || document.Language.Evaluation is not { } evaluation) return [];
         var project = _projects[document.Language];
+        var context = Context();
+        DateOnly? day = evaluation.Profile.ReadsClock ? context.Today : null;
         if (!_hints.TryGetValue(uri, out var hit) || hit.DocumentVersion != document.Version ||
-            hit.ProjectVersion != project.Version || !ReferenceEquals(hit.Language, document.Language))
+            hit.ProjectVersion != project.Version || !ReferenceEquals(hit.Language, document.Language) || hit.Day != day)
         {
-            hit = new HintCacheEntry(document.Version, project.Version, document.Language, Evaluate(document, evaluation, Context()));
+            hit = new HintCacheEntry(document.Version, project.Version, document.Language, day, Evaluate(document, evaluation, context));
             _hints[uri] = hit;
         }
         return hit.Hints.Where(h => Within(h.At, range)).ToList();
