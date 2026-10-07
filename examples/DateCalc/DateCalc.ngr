@@ -13,7 +13,7 @@ syntax module DateCalc
   token Number     = Digit+ ("." Digit+)?;
   token Identifier = ['a'..'z' 'A'..'Z' '_'] ['a'..'z' 'A'..'Z' '0'..'9' '_']* except "let" "days" "weeks" "in";
 
-  builtin value { pi e tau }
+  builtin value { pi e tau today }
   builtin function
   {
     abs sign sqrt cbrt exp ln log10 log2 sin cos tan asin acos atan sinh cosh tanh
