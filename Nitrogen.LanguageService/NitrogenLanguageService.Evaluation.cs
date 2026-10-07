@@ -17,6 +17,11 @@ public sealed partial class NitrogenLanguageService
     /// <summary>How long one document's statements may run; the first always runs, later ones start only within it.</summary>
     internal TimeSpan EvaluationBudget { get; set; } = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>The clock evaluations read (<see cref="EvaluationContext.Now"/>); tests set it.</summary>
+    public TimeProvider Clock { get; set; } = TimeProvider.System;
+
+    EvaluationContext Context() => new(Clock.GetLocalNow());
+
     /// <summary>The values of the document's statements within <paramref name="range"/>, or of a C# host's tagged strings at host positions; empty when its language shows none.</summary>
     public IReadOnlyList<ValueHint> ValueHints(string uri, DocumentRange range)
     {
@@ -26,13 +31,13 @@ public sealed partial class NitrogenLanguageService
         if (!_hints.TryGetValue(uri, out var hit) || hit.DocumentVersion != document.Version ||
             hit.ProjectVersion != project.Version || !ReferenceEquals(hit.Language, document.Language))
         {
-            hit = new HintCacheEntry(document.Version, project.Version, document.Language, Evaluate(document, evaluation));
+            hit = new HintCacheEntry(document.Version, project.Version, document.Language, Evaluate(document, evaluation, Context()));
             _hints[uri] = hit;
         }
         return hit.Hints.Where(h => Within(h.At, range)).ToList();
     }
 
-    IReadOnlyList<ValueHint> Evaluate(Document document, BoundEvaluation evaluation)
+    IReadOnlyList<ValueHint> Evaluate(Document document, BoundEvaluation evaluation, EvaluationContext context)
     {
         if (Diagnostics(document.Uri).Any(d => d.Severity == ServiceSeverity.Error)) return [];
         var profile = evaluation.Profile;
@@ -46,25 +51,25 @@ public sealed partial class NitrogenLanguageService
         {
             if (hints.Count > 0 && clock.Elapsed >= EvaluationBudget) break;
             var at = document.Lines.PositionOf(StatementEnd(file.Tree, root.Origins[0], profile.StatementKinds, document.Text));
-            hints.Add(Hint(at, root, evaluation));
+            hints.Add(Hint(at, root, evaluation, context));
         }
         return hints;
     }
 
-    static ValueHint Hint(DocumentPosition at, HirNode root, BoundEvaluation evaluation)
+    static ValueHint Hint(DocumentPosition at, HirNode root, BoundEvaluation evaluation, EvaluationContext context)
     {
-        var (value, failure) = Project(root, evaluation);
+        var (value, failure) = Project(root, evaluation, context);
         return value is not null ? new ValueHint(at, "= " + value, null, false) : Failure(at, failure!);
     }
 
     /// <summary>A lowered node's value through the evaluation, formatted; or, when it has none, why.</summary>
-    static (string? Value, string? Failure) Project(HirNode node, BoundEvaluation evaluation)
+    static (string? Value, string? Failure) Project(HirNode node, BoundEvaluation evaluation, EvaluationContext context)
     {
         try
         {
             var inputs = HirTraversal.PreOrder(node).OfType<HirSymbolRef>()
                 .Select(r => r.Symbol.Binding).Where(s => s.IsBuiltin).Distinct()
-                .Select(s => (Symbol: s, Value: evaluation.Profile.Builtin(s))).Where(p => p.Value is not null)
+                .Select(s => (Symbol: s, Value: evaluation.Profile.Builtin(s, context))).Where(p => p.Value is not null)
                 .ToDictionary(p => p.Symbol, p => p.Value!);
             var result = HirProjector.Project(node, evaluation.Registry, inputs);
             return result.Value is { } value
@@ -82,14 +87,14 @@ public sealed partial class NitrogenLanguageService
     /// operation, not its text), projected. Null without an evaluation, at a literal constant, or at a name
     /// that didn't lower to a reference of its own (a let the language inlines: its value is its hint).
     /// </summary>
-    static string? HoverValue(Document document, SemanticInspection inspection, bool atName)
+    string? HoverValue(Document document, SemanticInspection inspection, bool atName)
     {
         if (document.Language.Evaluation is not { } evaluation) return null;
         if (atName && inspection.Node is not HirSymbolRef) return null;
         var node = HirTraversal.PreOrder(inspection.Root).FirstOrDefault(n =>
             n.Origins.Any(o => o.Path == document.Uri && document.Lines.RangeOf(o.Span) == inspection.Range)) ?? inspection.Node;
         if (node is HirConstant or HirText) return null;
-        var (value, failure) = Project(node, evaluation);
+        var (value, failure) = Project(node, evaluation, Context());
         return value is not null ? "= " + value : "= ⚠ " + failure;
     }
 

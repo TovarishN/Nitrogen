@@ -48,10 +48,11 @@ public static class DateCalcEvaluator
         var lowered = HirLowering.LowerSelected(file, Profile.StatementKinds, Guid.NewGuid());
         if (lowered.Diagnostics.Count > 0)
             return lowered.Diagnostics.Select(d => Error(source, d.Origin.Span, $"{d.Code}: {d.Message}")).ToList();
+        var context = new EvaluationContext(DateTimeOffset.Now);
         var registry = s_bound.Value.Registry;
         return lowered.Roots.Select(root =>
         {
-            var result = HirProjector.Project(root, registry, Builtins(root));
+            var result = HirProjector.Project(root, registry, Builtins(root, context));
             return result.Value is { } value
                 ? new DateCalcLine(LineOf(source, root.Origins[0].Span.Start), Profile.Format(value))
                 : Error(source, root.Origins[0].Span, string.Join("; ", result.Diagnostics.Select(d => d.Message)));
@@ -88,10 +89,10 @@ public static class DateCalcEvaluator
         ];
     }
 
-    /// <summary>The values of the builtin constants the root refers to.</summary>
-    static Dictionary<Symbol, ProjectedValue> Builtins(HirNode root) => HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
+    /// <summary>The values of the builtins the root refers to, in <paramref name="context"/>.</summary>
+    static Dictionary<Symbol, ProjectedValue> Builtins(HirNode root, EvaluationContext context) => HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
         .Select(r => r.Symbol.Binding).Where(s => s.IsBuiltin).Distinct()
-        .Select(s => (Symbol: s, Value: Profile.Builtin(s))).Where(p => p.Value is not null)
+        .Select(s => (Symbol: s, Value: Profile.Builtin(s, context))).Where(p => p.Value is not null)
         .ToDictionary(p => p.Symbol, p => p.Value!);
 
     static string Show(object value) => value switch
