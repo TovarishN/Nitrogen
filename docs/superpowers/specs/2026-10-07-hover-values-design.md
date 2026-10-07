@@ -1,6 +1,6 @@
 # Values on hover
 
-Status: approved design (2026-10-07). Builds on
+Status: implemented (2026-10-07). Builds on
 [inlay-hint evaluation](2026-10-07-inlay-hint-evaluation-design.md) and
 [value hints in tagged C# strings](2026-10-07-csharp-string-value-hints-design.md).
 
@@ -17,7 +17,7 @@ Hovering an expression in a language with an evaluation profile adds its value t
 language's own files and in tagged C# strings. Hovering `3 * sprint` in `sample.datecalc`:
 
 ```
-`DateCalc.Duration` · `DateCalc.Scale` · `DateCalc.Weekday`
+`DateCalc.Duration` · `DateCalc.Times` · `DateCalc.Weekday`
 = 42 days
 ```
 
@@ -28,11 +28,14 @@ formatting beyond the profile's own formatter.
 
 - The value is a new line under the existing summary: `= {profile.Format(value)}`. The hover range is
   unchanged (the hovered expression's range).
-- **Constant literals:** a `HirConstant` (a number such as `2`) already shows `= 2` in its summary, so
-  it gets no value line. A date literal lowers to an operation (`DateCalc.Date`), so it does:
-  `= 2026-10-05 Mon`.
-- **Names:** hovering a `let` name where it is used keeps the declaration hover and its summary, and
-  adds the value line, because the name lowers to a reference (`sprint` → `= 14 days`).
+- **Literals:** the value is that of the outermost lowered node at the hovered node's source span. A
+  date literal's inner text has the same span as its `DateCalc.Date` operation, so it shows
+  `= 2026-10-05 Mon`. A number literal (`HirConstant`) already shows `= 2` in its summary, so it gets
+  no value line, and neither does a text constant.
+- **Names:** a name gets a value line only when the hovered node is itself a reference
+  (`HirSymbolRef`), as for a builtin such as `pi`. DateCalc lowers a `let` reference by inlining its
+  initializer, whose origin is the declaration, so nothing lowered sits under such a name. It keeps
+  today's declaration hover with no value line; its value is the inlay hint on its declaration line.
 - **Failure:** when projection fails, the line is `= ⚠ {reason}`, where the reason is the same text an
   error hint's tooltip shows (`NP0005: …`; diagnostics joined by `; `).
 - **No line** when the document's language has no evaluation, or nothing lowers at the position.
@@ -69,7 +72,8 @@ On DateCalc, configured through its `nitrogen.json`:
 
 - `3 * sprint` in `sample.datecalc` → the hover contains `= 42 days`;
 - a date literal (`2026-10-05`) → `= 2026-10-05 Mon`;
-- a `let` reference (`sprint` in `start + sprint`) → keeps its declaration text and contains `= 14 days`;
+- a builtin (`pi`) → `= 3.1415927`;
+- a `let` reference (`sprint` in `start + sprint`) → keeps its declaration text, no value line;
 - a number literal (`3`) → no line starting `= ` other than the summary's own `= 3`;
 - `9999-12-31 + 1 days` hovered at `+` → `= ⚠ NP0005:`;
 - an error on another line (`2026-10-05 + 2026-10-06;` after a valid statement) → the valid
