@@ -53,20 +53,27 @@ public sealed partial class NitrogenLanguageService
 
     static ValueHint Hint(DocumentPosition at, HirNode root, BoundEvaluation evaluation)
     {
+        var (value, failure) = Project(root, evaluation);
+        return value is not null ? new ValueHint(at, "= " + value, null, false) : Failure(at, failure!);
+    }
+
+    /// <summary>A lowered node's value through the evaluation, formatted; or, when it has none, why.</summary>
+    static (string? Value, string? Failure) Project(HirNode node, BoundEvaluation evaluation)
+    {
         try
         {
-            var inputs = HirTraversal.PreOrder(root).OfType<HirSymbolRef>()
+            var inputs = HirTraversal.PreOrder(node).OfType<HirSymbolRef>()
                 .Select(r => r.Symbol.Binding).Where(s => s.IsBuiltin).Distinct()
                 .Select(s => (Symbol: s, Value: evaluation.Profile.Builtin(s))).Where(p => p.Value is not null)
                 .ToDictionary(p => p.Symbol, p => p.Value!);
-            var result = HirProjector.Project(root, evaluation.Registry, inputs);
+            var result = HirProjector.Project(node, evaluation.Registry, inputs);
             return result.Value is { } value
-                ? new ValueHint(at, "= " + evaluation.Profile.Format(value), null, false)
-                : Failure(at, string.Join("; ", result.Diagnostics.Select(d => $"{d.Code}: {d.Message}")));
+                ? (evaluation.Profile.Format(value), null)
+                : (null, string.Join("; ", result.Diagnostics.Select(d => $"{d.Code}: {d.Message}")));
         }
         catch (Exception error) // a profile's Builtin or Format threw; handlers' own exceptions are NP0005 diagnostics
         {
-            return Failure(at, $"{error.GetType().Name}: {error.Message}");
+            return (null, $"{error.GetType().Name}: {error.Message}");
         }
     }
 
