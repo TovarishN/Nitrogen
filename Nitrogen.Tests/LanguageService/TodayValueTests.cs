@@ -1,5 +1,7 @@
+using System.Text.Json;
 using Nitrogen.Cli;
 using Nitrogen.LanguageService;
+using Nitrogen.LanguageService.Lsp;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -69,5 +71,32 @@ public sealed class TodayValueTests : IDisposable
     {
         using var service = Service(new ManualClock(Evening));
         Assert.Equal(new DateTimeOffset(2026, 10, 8, 0, 0, 0, TimeSpan.FromHours(3)), service.NextDayChange);
+    }
+
+    [Theory]
+    [InlineData("""{"workspace":{"inlayHint":{"refreshSupport":true}}}""", 1)]
+    [InlineData("{}", 0)]
+    public async Task The_server_refreshes_hints_once_when_the_day_changes(string capabilities, int refreshes)
+    {
+        var clock = new ManualClock(new DateTimeOffset(2026, 10, 7, 23, 0, 0, TimeSpan.FromHours(3)));
+        using var service = new NitrogenLanguageService(LspCommand.Registry()) { Clock = clock };
+        string initialize = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new System.Uri(_root).AbsoluteUri
+            + "\",\"capabilities\":" + capabilities + "}}";
+        var input = new GrammarLoopTests.BlockingInput(
+            [initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}"""],
+            () => clock.Advance(TimeSpan.FromHours(2)), // past midnight, while the server waits for the next message
+            ["""{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}"""]);
+        var output = new MemoryStream();
+
+        int code = await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null).RunAsync(CancellationToken.None);
+
+        output.Position = 0;
+        var messages = new List<JsonElement>();
+        var reader = new JsonRpcConnection(output, Stream.Null);
+        while (await reader.ReadAsync(CancellationToken.None) is { } message)
+            using (message) messages.Add(message.RootElement.Clone());
+        Assert.Equal(0, code);
+        Assert.Equal(refreshes, messages.Count(m => m.TryGetProperty("method", out var method) && method.GetString() == "workspace/inlayHint/refresh"));
+        Assert.Contains(messages, m => m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt32() == 99);
     }
 }

@@ -176,7 +176,7 @@ public sealed class GrammarLoopTests : IDisposable
     }
 
     /// <summary>Framed messages in two batches, with an action run between them when the first batch is consumed.</summary>
-    sealed class BlockingInput(string[] first, Action between, string[] second) : Stream
+    internal sealed class BlockingInput(string[] first, Action between, string[] second) : Stream
     {
         readonly MemoryStream _first = new(first.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
         readonly MemoryStream _second = new(second.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());

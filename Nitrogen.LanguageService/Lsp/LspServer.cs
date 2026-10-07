@@ -6,7 +6,8 @@ namespace Nitrogen.LanguageService.Lsp;
 /// <summary>
 /// The LSP server loop (issue 238): one message at a time, in order. A request that fails gets an
 /// error response and the loop goes on; broken framing ends the session. Diagnostics are pushed
-/// after every document change, for every document the change may affect.
+/// after every document change, for every document the change may affect. When a served language's
+/// values read the clock, hints are refreshed at each local midnight.
 /// </summary>
 /// <param name="fixedRoot">The directory whose <c>nitrogen.json</c> configures the languages, whatever root the client sends (<c>nitrogen lsp --config</c>); null to use the client's root.</param>
 public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageService service, TextWriter log, string? fixedRoot = null)
@@ -27,12 +28,24 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     /// <returns>The process exit code: 0 after <c>shutdown</c> then <c>exit</c>; 1 for <c>exit</c> without shutdown, end of input or broken framing.</returns>
     public async Task<int> RunAsync(CancellationToken cancel)
     {
+        Task<JsonDocument?>? reading = null;
+        Task? dayChange = null;
         while (true)
         {
             JsonDocument? message;
             try
             {
-                message = await connection.ReadAsync(cancel);
+                // Armed before the read starts, and checked first, so a day change during the wait is never missed.
+                dayChange ??= DayChange(cancel);
+                reading ??= connection.ReadAsync(cancel);
+                if (dayChange is not null && await Task.WhenAny(dayChange, reading) == dayChange && dayChange.IsCompletedSuccessfully)
+                {
+                    dayChange = null;
+                    await SendInlayHintRefreshAsync(cancel);
+                    continue;
+                }
+                message = await reading;
+                reading = null;
             }
             catch (InvalidDataException error)
             {
@@ -288,11 +301,25 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             w.WriteEndObject();
         }, cancel);
 
-    /// <summary>Asks the client to request inlay hints again once a language was recompiled, if it can (<c>workspace/inlayHint/refresh</c>).</summary>
+    /// <summary>Asks the client to request inlay hints again once a language was recompiled, if it can.</summary>
     Task RefreshInlayHintsAsync(CancellationToken cancel)
     {
         if (!_refreshInlayHints || service.LanguagesVersion == _languagesSeen) return Task.CompletedTask;
         _languagesSeen = service.LanguagesVersion;
+        return SendInlayHintRefreshAsync(cancel);
+    }
+
+    /// <summary>The wait for the next local midnight, when the client takes refreshes and a served language reads the clock; null otherwise.</summary>
+    Task? DayChange(CancellationToken cancel)
+    {
+        if (!_refreshInlayHints || !service.ReadsClock) return null;
+        var wait = service.NextDayChange - service.Clock.GetUtcNow();
+        return Task.Delay(wait > TimeSpan.Zero ? wait : TimeSpan.Zero, service.Clock, cancel);
+    }
+
+    /// <summary>Asks the client to request inlay hints again (<c>workspace/inlayHint/refresh</c>).</summary>
+    Task SendInlayHintRefreshAsync(CancellationToken cancel)
+    {
         int number = ++_refreshes;
         return connection.WriteAsync(w =>
         {
