@@ -1,6 +1,6 @@
 # Inlay-hint evaluation: show each statement's value in the editor
 
-Status: approved design (2026-10-07). Proven with `examples/DateCalc`.
+Status: implemented (2026-10-07). Proven with `examples/DateCalc`.
 
 ## Problem
 
@@ -36,10 +36,12 @@ public sealed class EvaluationProfile(
     Func<ProjectedValue, string> format)
 {
     public IReadOnlySet<int> StatementKinds { get; }
-    public ProjectionRegistry Bind(SemanticCatalog catalog); // new ProjectionRegistry(catalog, handlers(catalog))
+    public BoundEvaluation Bind(SemanticCatalog catalog); // (this, new ProjectionRegistry(catalog, handlers(catalog)))
     public ProjectedValue? Builtin(Symbol symbol);
     public string Format(ProjectedValue value);
 }
+
+public sealed record BoundEvaluation(EvaluationProfile Profile, ProjectionRegistry Registry);
 ```
 
 - Handlers are built from the composed catalog (`catalog.Operations["DateCalc.Add"]`), not from
@@ -55,9 +57,9 @@ public sealed class EvaluationProfile(
   - With exactly one profile, it calls `profile.Bind(language.SemanticCatalog)`. A throwing `Bind` is a
     whole-language workspace diagnostic `NGR0002`, and the language compiles without a profile.
   - Two or more profiles are diagnostic `NGR0003`, and none is used.
-- `WorkspaceSnapshot` gains `EvaluationProfile? Evaluation` and `ProjectionRegistry? EvaluationRegistry`.
-  Both are cleared on `Dispose`.
-- `LanguageEntry` gains an optional `Evaluation` (profile plus bound registry), so a built-in C#
+  - Both diagnostics are warnings: the language still works without hints.
+- `WorkspaceSnapshot` gains `BoundEvaluation? Evaluation`, cleared on `Dispose`.
+- `LanguageEntry` gains an optional `BoundEvaluation? Evaluation`, so a built-in C#
   language can register one too. `NitrogenLanguageService.Compile` copies it from the snapshot.
 - Evaluation is on whenever a profile is found. Users turn hints off with the editors' own controls:
   `editor.inlayHints.enabled` (which can be set per language) in VS Code, and Settings › Editor ›
@@ -83,11 +85,13 @@ A new `NitrogenLanguageService.Evaluation.cs` partial:
    (`HirSymbolRef` with `Binding.IsBuiltin`), maps them through `profile.Builtin`, and calls
    `HirProjector.Project(root, registry, inputs)`.
    - **Value:** label `= {profile.Format(value)}`, at the end of the statement's source span (the
-     statement node of `root.Origins[0].Node`, so after DateCalc's `;`), no tooltip.
+     nearest statement-kind ancestor of `root.Origins[0].Node`, or the node itself, before trailing
+     whitespace, so after DateCalc's `;`), no tooltip.
    - **Projection diagnostics:** label `= ⚠`, with the tooltip set to the messages joined by `; ` and
      `IsError` set.
-   - **Handler exception:** caught and treated as one projection diagnostic with the exception
-     message. Later statements still evaluate.
+   - **Handler exception:** `HirProjector` reports it as `NP0005`, shown like any projection
+     diagnostic; the service catches only exceptions from the profile's `Builtin` and `Format`. Later
+     statements still evaluate.
    - A builtin with no value (`profile.Builtin` returns null) is reported by `Preflight` as a
      projection diagnostic, as above.
 4. **Budget.** It evaluates for at most 250 ms per document, checked between roots. Roots after the

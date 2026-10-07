@@ -19,8 +19,6 @@ public static class DateCalcEvaluator
     static readonly Lazy<Language> s_language = new(() => new LanguageBuilder().Add(DateCalcModule.Instance)
         .AddSemantic(MathModule.Semantics).AddSemantic(DateCalcLanguage.Semantics).Build());
 
-    static readonly Lazy<BoundEvaluation> s_bound = new(() => Profile.Bind(Language.SemanticCatalog));
-
     /// <summary>The language <see cref="Run"/> parses with, built on first use: reading <see cref="Profile"/> does not build it.</summary>
     public static Language Language => s_language.Value;
 
@@ -31,6 +29,8 @@ public static class DateCalcEvaluator
         symbol => MathModule.Constants.Where(c => c.Name == symbol.Name)
             .Select(c => new ProjectedValue(DateCalcLanguage.Number, c.Value)).FirstOrDefault(),
         value => Show(value.Value));
+
+    static readonly Lazy<BoundEvaluation> s_bound = new(() => Profile.Bind(Language.SemanticCatalog));
 
     /// <summary>The value of each statement, in order, or the diagnostics that stop it from running.</summary>
     public static IReadOnlyList<DateCalcLine> Run(string source)
