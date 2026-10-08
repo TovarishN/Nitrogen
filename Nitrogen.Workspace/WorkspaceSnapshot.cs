@@ -15,13 +15,14 @@ public sealed class WorkspaceSnapshot : IDisposable
 
     internal WorkspaceSnapshot(int version, IReadOnlyList<WorkspaceDiagnostic> diagnostics,
         Language? language = null, WorkspaceLoadContext? context = null, SyntaxModule[]? modules = null,
-        BoundEvaluation? evaluation = null, DiagnosticFixes? fixes = null)
+        BoundEvaluation? evaluation = null, DiagnosticFixes? fixes = null, CallSignatures? calls = null)
     {
         Version = version;
         Diagnostics = diagnostics;
         Language = language;
         Evaluation = evaluation;
         Fixes = fixes;
+        Calls = calls;
         _context = context;
         _modules = modules ?? [];
     }
@@ -39,6 +40,9 @@ public sealed class WorkspaceSnapshot : IDisposable
 
     /// <summary>The helper sources' quick fixes; null when there are none.</summary>
     public DiagnosticFixes? Fixes { get; private set; }
+
+    /// <summary>The helper sources' call signatures; null when there are none.</summary>
+    public CallSignatures? Calls { get; private set; }
 
     public bool Succeeded => Language is not null;
 
@@ -68,6 +72,7 @@ public sealed class WorkspaceSnapshot : IDisposable
         Language = null;
         Evaluation = null;
         Fixes = null;
+        Calls = null;
         _modules = [];
         var context = _context;
         _context = null;

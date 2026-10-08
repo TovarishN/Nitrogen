@@ -22,12 +22,12 @@ public static class DateCalcLanguage
     /// <summary>DateCalc's own functions, beside <see cref="MathModule.Functions"/>: overloads for dates and durations.</summary>
     public static readonly Function[] Functions =
     [
-        new("weekday", new("DateCalc.Weekday", Text, Date), a => ((DateOnly)a[0]).DayOfWeek.ToString()),
-        new("abs", new("DateCalc.AbsDuration", Duration, Duration), a => ((TimeSpan)a[0]).Duration()),
-        new("min", new("DateCalc.EarlierDate", Date, Date, Date), a => (DateOnly)a[0] < (DateOnly)a[1] ? a[0] : a[1]),
-        new("max", new("DateCalc.LaterDate", Date, Date, Date), a => (DateOnly)a[0] > (DateOnly)a[1] ? a[0] : a[1]),
-        new("min", new("DateCalc.ShorterDuration", Duration, Duration, Duration), a => (TimeSpan)a[0] < (TimeSpan)a[1] ? a[0] : a[1]),
-        new("max", new("DateCalc.LongerDuration", Duration, Duration, Duration), a => (TimeSpan)a[0] > (TimeSpan)a[1] ? a[0] : a[1]),
+        new("weekday", new("DateCalc.Weekday", Text, Date), a => ((DateOnly)a[0]).DayOfWeek.ToString(), ["date"]),
+        new("abs", new("DateCalc.AbsDuration", Duration, Duration), a => ((TimeSpan)a[0]).Duration(), ["duration"]),
+        new("min", new("DateCalc.EarlierDate", Date, Date, Date), a => (DateOnly)a[0] < (DateOnly)a[1] ? a[0] : a[1], ["a", "b"]),
+        new("max", new("DateCalc.LaterDate", Date, Date, Date), a => (DateOnly)a[0] > (DateOnly)a[1] ? a[0] : a[1], ["a", "b"]),
+        new("min", new("DateCalc.ShorterDuration", Duration, Duration, Duration), a => (TimeSpan)a[0] < (TimeSpan)a[1] ? a[0] : a[1], ["a", "b"]),
+        new("max", new("DateCalc.LongerDuration", Duration, Duration, Duration), a => (TimeSpan)a[0] > (TimeSpan)a[1] ? a[0] : a[1], ["a", "b"]),
     ];
 
     /// <summary>Every function a call can name, from both modules.</summary>
@@ -52,6 +52,11 @@ public static class DateCalcLanguage
 
     public static readonly SemanticModule Semantics = new("DateCalc", ["Core"], [Date, Duration],
         [ParseDate, Days, Weeks, InDays, .. Functions.Select(f => f.Signature), .. Operators.Select(o => o.Signature)]);
+
+    /// <summary>Every function's overloads with named parameters, for the editor's signature help.</summary>
+    public static readonly CallSignatures Calls = new(AllFunctions.GroupBy(f => f.Name).ToDictionary(group => group.Key,
+        group => (IReadOnlyList<CallSignature>)group.Select(f => new CallSignature(
+            f.Signature.Inputs.Select((type, i) => new CallParameter(f.Parameters[i], type)).ToArray(), f.Signature.Result)).ToArray()));
 
     /// <summary>The overload of <paramref name="op"/> for these operand types; null when there is none.</summary>
     public static OperationSignature? Select(string op, SemanticType? left, SemanticType? right) =>

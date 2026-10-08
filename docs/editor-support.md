@@ -12,6 +12,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | --- | --- | --- | --- |
 | Coloring | ✓ | ✓ (painted as decorations) | ✓ (added to Rider's) |
 | Completion | ✓ | ✓ | ✓ |
+| Signature help³ | ✓ | ✓ | — (left to Rider) |
 | Diagnostics | ✓ | ✓ | ✓ |
 | Go to definition, references | ✓ | ✓ | ✓ (find usages) |
 | Rename | ✓ | ✓ | — (left to Rider) |
@@ -22,6 +23,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 
 ¹ When the language's helper sources export an `EvaluationProfile` (see [Helper sources](#helper-sources)).
 ² When they export `DiagnosticFixes`.
+³ For `name(…)` calls, when the helper sources export `CallSignatures`, or for templates (`lowers template`).
 
 ## VS Code extension
 
@@ -131,6 +133,11 @@ has fewer errors overall. Because the check sees one document, a fix that relies
 language can be wrongly rejected. Fixes are served as LSP `quickfix` code actions. A language has at
 most one fix provider; two are warning `NGR0004`.
 [DateCalcFixes.cs](../examples/DateCalc/DateCalcFixes.cs) fixes invalid dates and `date + date`.
+
+A public static `CallSignatures` lists a language's callable names and their overloads, with named
+parameters, for signature help: inside a `name(…)` call the editor shows the callee's overloads and
+highlights the parameter the cursor is in. A template call needs none; its parameters come from the
+template's declaration. A language has at most one; two are warning `NGR0005`.
 
 ## Languages inside C# strings
 

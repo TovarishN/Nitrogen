@@ -101,7 +101,8 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     new ServerCapabilities(1, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
-                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"])),
+                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
+                        SignatureHelpProvider: new SignatureHelpOptions(["(", ","])),
                     new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
@@ -196,6 +197,18 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         })))
                     .ToArray();
                 await RespondAsync(id, actions, LspJson.Default.LspCodeActionArray, cancel);
+                break;
+            }
+            case "textDocument/signatureHelp":
+            {
+                var (uri, position) = At(parameters);
+                if (service.SignatureHelp(uri, position) is { } help)
+                    await RespondAsync(id, new LspSignatureHelp(
+                        help.Signatures.Select(s => new LspSignatureInformation(s.Label,
+                            s.Parameters.Select(p => new LspParameterInformation([p.Start, p.End])).ToArray(), s.Summary)).ToArray(),
+                        help.ActiveSignature, help.ActiveParameter), LspJson.Default.LspSignatureHelp, cancel);
+                else
+                    await RespondNullAsync(id, cancel);
                 break;
             }
             default:

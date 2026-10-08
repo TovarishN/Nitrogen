@@ -67,3 +67,9 @@ public sealed record ValueHint(DocumentPosition At, string Label, string? Toolti
 
 /// <summary>A quick fix the service checked: its title, the diagnostic it removes, and its edits to the document.</summary>
 public sealed record ServiceFix(string Title, ServiceDiagnostic Diagnostic, IReadOnlyList<DocumentEdit> Edits);
+
+/// <summary>One overload in signature help: its label, each parameter's [start, end) range in the label, and an optional summary.</summary>
+public sealed record ServiceSignature(string Label, IReadOnlyList<(int Start, int End)> Parameters, string? Summary);
+
+/// <summary>The overloads of the call around a position, the active one, and the parameter the cursor is in.</summary>
+public sealed record ServiceSignatureHelp(IReadOnlyList<ServiceSignature> Signatures, int ActiveSignature, int ActiveParameter);

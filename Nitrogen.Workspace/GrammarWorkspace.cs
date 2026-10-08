@@ -108,7 +108,8 @@ public sealed class GrammarWorkspace
             }
             var evaluation = Evaluation(types, language!, diagnostics);
             var fixes = Fixes(types, diagnostics);
-            var snapshot = new WorkspaceSnapshot(version, diagnostics, language, context, modules, evaluation, fixes);
+            var calls = Calls(types, diagnostics);
+            var snapshot = new WorkspaceSnapshot(version, diagnostics, language, context, modules, evaluation, fixes, calls);
             Current = snapshot;
             return snapshot;
         }
@@ -174,6 +175,16 @@ public sealed class GrammarWorkspace
         if (found.Count <= 1) return found.FirstOrDefault();
         diagnostics.Add(new WorkspaceDiagnostic("", 0, 0, "NGR0004",
             $"{found.Count} quick fix providers; a language has at most one, so none is used", IsError: false));
+        return null;
+    }
+
+    /// <summary>The one public static <see cref="CallSignatures"/> of <paramref name="types"/>; two are a warning (NGR0005), and the language has none.</summary>
+    static CallSignatures? Calls(IEnumerable<Type> types, List<WorkspaceDiagnostic> diagnostics)
+    {
+        var found = StaticValues(types, t => t == typeof(CallSignatures)).OfType<CallSignatures>().Distinct().ToList();
+        if (found.Count <= 1) return found.FirstOrDefault();
+        diagnostics.Add(new WorkspaceDiagnostic("", 0, 0, "NGR0005",
+            $"{found.Count} call signature providers; a language has at most one, so none is used", IsError: false));
         return null;
     }
 
