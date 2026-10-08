@@ -156,7 +156,7 @@ public sealed partial class NitrogenLanguageService
         }
 
         var entry = new LanguageEntry(language.Name, snapshot.Language!, language.Extensions.ToDictionary(e => e, _ => rule), language.Presentation,
-            evaluation: snapshot.Evaluation);
+            evaluation: snapshot.Evaluation, fixes: snapshot.Fixes);
         affected.AddRange(Reregister(language.Entry, entry));
         language.Entry = entry;
         language.Snapshot?.Dispose();

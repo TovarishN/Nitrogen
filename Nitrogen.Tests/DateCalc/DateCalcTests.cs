@@ -107,6 +107,15 @@ public sealed class DateCalcTests
         Assert.True(DateCalcEvaluator.Profile.ReadsClock);
     }
 
+    [Theory]
+    [InlineData("2026-02-30", "2026-02-28")]
+    [InlineData("2028-02-30", "2028-02-29")]
+    [InlineData("2026-13-05", "2026-12-05")]
+    [InlineData("2026-00-00", "2026-01-01")]
+    [InlineData("2026-04-31", "2026-04-30")]
+    public void The_nearest_date_clamps_the_month_then_the_day(string text, string expected) =>
+        Assert.Equal(expected, DateCalcFixes.Nearest(text)?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
+
     [Fact]
     public void Tagged_snippets_run()
     {

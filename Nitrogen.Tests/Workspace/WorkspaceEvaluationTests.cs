@@ -96,4 +96,38 @@ public class WorkspaceEvaluationTests
         Assert.False(warning.IsError);
         Assert.Contains("Sum.Missing", warning.Message, StringComparison.Ordinal);
     }
+
+    static string FixesSource(string type) => $$"""
+        using Nitrogen.Semantics;
+
+        public static class {{type}}
+        {
+            public static DiagnosticFixes Fixes { get; } = new(new Dictionary<string, Func<FixRequest, IEnumerable<QuickFix>>>());
+        }
+        """;
+
+    [Fact]
+    public void One_fix_provider_is_discovered()
+    {
+        using var snapshot = Compile(FixesSource("SumFixes"));
+        Assert.NotNull(snapshot.Fixes);
+        Assert.Empty(snapshot.Diagnostics);
+    }
+
+    [Fact]
+    public void Without_a_fix_provider_the_language_has_no_fixes()
+    {
+        using var snapshot = Compile();
+        Assert.Null(snapshot.Fixes);
+    }
+
+    [Fact]
+    public void Two_fix_providers_are_a_warning_and_neither_is_used()
+    {
+        using var snapshot = Compile(FixesSource("FirstFixes"), FixesSource("SecondFixes"));
+        Assert.Null(snapshot.Fixes);
+        var warning = Assert.Single(snapshot.Diagnostics);
+        Assert.Equal("NGR0004", warning.Code);
+        Assert.False(warning.IsError);
+    }
 }

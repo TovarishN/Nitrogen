@@ -64,3 +64,6 @@ public sealed record CompletionItem(string Label, CompletionKind Kind, string De
 
 /// <summary>A statement's value, shown after it: <paramref name="Label"/> at <paramref name="At"/>; a failure has a ⚠ label, the reason as its tooltip.</summary>
 public sealed record ValueHint(DocumentPosition At, string Label, string? Tooltip, bool IsError);
+
+/// <summary>A quick fix the service checked: its title, the diagnostic it removes, and its edits to the document.</summary>
+public sealed record ServiceFix(string Title, ServiceDiagnostic Diagnostic, IReadOnlyList<DocumentEdit> Edits);
