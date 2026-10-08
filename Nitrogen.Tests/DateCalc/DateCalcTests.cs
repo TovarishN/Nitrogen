@@ -117,6 +117,16 @@ public sealed class DateCalcTests
         Assert.Equal(expected, DateCalcFixes.Nearest(text)?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture));
 
     [Fact]
+    public void Every_function_has_named_parameters_in_its_signatures()
+    {
+        Assert.Equal(["x", "digits"], DateCalcLanguage.Calls.For("round")[1].Parameters.Select(p => p.Name));
+        Assert.Equal(["base", "exponent"], Assert.Single(DateCalcLanguage.Calls.For("pow")).Parameters.Select(p => p.Name));
+        Assert.Equal(["date"], Assert.Single(DateCalcLanguage.Calls.For("weekday")).Parameters.Select(p => p.Name));
+        Assert.Equal(3, DateCalcLanguage.Calls.For("min").Count);
+        Assert.All(DateCalcLanguage.AllFunctions, f => Assert.Equal(f.Signature.Inputs.Count, f.Parameters.Count));
+    }
+
+    [Fact]
     public void Tagged_snippets_run()
     {
         Assert.Equal(["81", "Friday"], Snippets.Countdown().Skip(1).Select(l => l.Text));
