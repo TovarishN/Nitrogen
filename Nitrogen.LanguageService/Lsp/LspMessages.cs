@@ -39,7 +39,9 @@ public sealed record ServerCapabilities(
     CompletionOptions? CompletionProvider = null,
     bool? InlayHintProvider = null,
     CodeActionOptions? CodeActionProvider = null,
-    SignatureHelpOptions? SignatureHelpProvider = null);
+    SignatureHelpOptions? SignatureHelpProvider = null,
+    bool? FoldingRangeProvider = null,
+    bool? SelectionRangeProvider = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -103,6 +105,13 @@ public sealed record CodeActionOptions(string[] CodeActionKinds);
 
 public sealed record SignatureHelpOptions(string[] TriggerCharacters);
 
+public sealed record LspFoldingRange(int StartLine, int EndLine, string? Kind = null);
+
+public sealed record SelectionRangeParams(TextDocumentIdentifier TextDocument, LspPosition[] Positions);
+
+/// <summary>A selection range, inside its <paramref name="Parent"/> (the next larger range), if any.</summary>
+public sealed record LspSelectionRange(LspRange Range, LspSelectionRange? Parent = null);
+
 /// <summary>A parameter by its [start, end) offsets in the signature's label.</summary>
 public sealed record LspParameterInformation(int[] Label);
 
@@ -149,4 +158,7 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(CodeActionParams))]
 [JsonSerializable(typeof(LspCodeAction[]))]
 [JsonSerializable(typeof(LspSignatureHelp))]
+[JsonSerializable(typeof(LspFoldingRange[]))]
+[JsonSerializable(typeof(SelectionRangeParams))]
+[JsonSerializable(typeof(LspSelectionRange[]))]
 internal sealed partial class LspJson : JsonSerializerContext;

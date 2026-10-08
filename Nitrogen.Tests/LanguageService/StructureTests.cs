@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nitrogen.Cli;
 using Nitrogen.LanguageService;
 using Xunit;
@@ -107,5 +108,35 @@ public sealed class StructureTests : IDisposable
         using var service = Service();
         service.Open(Uri("C.cs"), 1, "const string D = /*lang=datecalc*/ \"1 + 1;\";");
         Assert.All(service.SelectionRanges(Uri("C.cs"), [new DocumentPosition(0, 37)]), Assert.Empty);
+    }
+
+    [Fact]
+    public async Task The_server_answers_folding_and_selection_ranges()
+    {
+        string doc = Uri("a.datecalc");
+        string initialize = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new System.Uri(_root).AbsoluteUri + "\",\"capabilities\":{}}}";
+        string open = "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + doc
+            + "\",\"languageId\":\"datecalc\",\"version\":1,\"text\":" + JsonSerializer.Serialize("// one\n// two\nmax(2026-10-05,\n  2026-12-25);") + "}}}";
+        string folding = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/foldingRange\",\"params\":{\"textDocument\":{\"uri\":\"" + doc + "\"}}}";
+        string selection = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"textDocument/selectionRange\",\"params\":{\"textDocument\":{\"uri\":\"" + doc
+            + "\"},\"positions\":[{\"line\":2,\"character\":5}]}}";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+
+        var (_, messages, _) = await LspServerTests.Session(service, initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}""",
+            open, folding, selection, """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
+
+        var capabilities = messages[0].GetProperty("result").GetProperty("capabilities");
+        Assert.True(capabilities.GetProperty("foldingRangeProvider").GetBoolean());
+        Assert.True(capabilities.GetProperty("selectionRangeProvider").GetBoolean());
+        JsonElement Result(int id) => messages.Single(m => m.TryGetProperty("id", out var i) && i.ValueKind == JsonValueKind.Number && i.GetInt32() == id).GetProperty("result");
+
+        var folds = Result(5).EnumerateArray().ToList();
+        Assert.Contains(folds, f => f.GetProperty("startLine").GetInt32() == 0 && f.GetProperty("endLine").GetInt32() == 1 && f.GetProperty("kind").GetString() == "comment");
+        Assert.Contains(folds, f => f.GetProperty("startLine").GetInt32() == 2 && f.GetProperty("endLine").GetInt32() == 3 && !f.TryGetProperty("kind", out _));
+
+        var innermost = Assert.Single(Result(6).EnumerateArray());
+        Assert.Equal(4, innermost.GetProperty("range").GetProperty("start").GetProperty("character").GetInt32()); // the date token
+        Assert.True(innermost.TryGetProperty("parent", out var parent));
+        Assert.Equal(JsonValueKind.Object, parent.ValueKind);
     }
 }
