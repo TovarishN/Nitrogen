@@ -23,6 +23,9 @@ public readonly record struct SemanticToken(DocumentPosition Start, int Length, 
 public sealed record OutlineSymbol(string Name, string Kind, OutlineKind Outline, DocumentRange Range, DocumentRange SelectionRange,
     IReadOnlyList<OutlineSymbol> Children);
 
+/// <summary>A declaration found by workspace symbol search: its name's location, and the name of the declaration enclosing it.</summary>
+public sealed record WorkspaceSymbol(string Name, string Kind, OutlineKind Outline, DocumentLocation Location, string? Container);
+
 public sealed record DocumentLocation(string Uri, DocumentRange Range);
 
 /// <summary>LSP's DocumentHighlightKind values.</summary>
