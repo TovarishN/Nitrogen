@@ -2,8 +2,8 @@ namespace Nitrogen.LanguageService;
 
 /// <summary>
 /// Folding and expand-selection from the syntax tree, for every language. A node's extent runs from its
-/// first character to its last non-whitespace one. Every node spanning two or more lines folds (the
-/// outermost per start line), leaving a last line of only punctuation (a closing brace) visible, and so
+/// first character to its last non-whitespace one. Every node but a list spanning two or more lines
+/// folds (the outermost per start line), leaving a last line of only punctuation (a closing brace) visible, and so
 /// does a gap between tokens holding comments on two or more lines. Selection climbs from the innermost
 /// node at a position through its enclosing nodes, skipping repeated extents. C# hosts get neither.
 /// </summary>
@@ -25,7 +25,8 @@ public sealed partial class NitrogenLanguageService
 
         for (int node = 0; node < tree.NodeCount; node++)
         {
-            if (Extent(tree, text, node) is not { } extent) continue;
+            // A list runs from its first item to its last, so folding it would hide the rest under the first item.
+            if (tree.Kind(node) == SyntaxKinds.List || Extent(tree, text, node) is not { } extent) continue;
             int start = lines.PositionOf(extent.Start).Line, end = lines.PositionOf(extent.End).Line;
             if (end > start) Offer(new ServiceFoldingRange(start, end, false));
         }

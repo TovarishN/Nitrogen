@@ -53,6 +53,7 @@ public sealed class StructureTests : IDisposable
         int day = Array.FindIndex(lines, l => l.Contains("| Day ", StringComparison.Ordinal));
         Assert.Contains(new ServiceFoldingRange(day + 1, day + 3, false), folds);          // the { … } semantics block, its "}" visible
         Assert.Contains(new ServiceFoldingRange(0, 3, true), folds);                       // the four leading comment lines
+        Assert.DoesNotContain(folds, f => f.StartLine == module + 2);                     // the members list doesn't fold from its first, one-line member
         Assert.All(folds, f => Assert.True(f.EndLine > f.StartLine));
         Assert.Equal(folds.Count, folds.Select(f => f.StartLine).Distinct().Count());       // one fold per start line
     }
