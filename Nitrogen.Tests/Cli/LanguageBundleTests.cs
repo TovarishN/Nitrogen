@@ -57,6 +57,25 @@ public sealed class LanguageBundleTests : IDisposable
     }
 
     [Fact]
+    public void Only_the_server_itself_is_bundled_not_what_was_built_beside_it()
+    {
+        var (model, server) = Language();
+        Write("server/nitrogen.deps.json", "{}");
+        Write("server/osx-arm64/System.Private.CoreLib.dll", "a self-contained publish left in the build folder");
+        Write("server/publish/nitrogen.dll", "another publish");
+        Write("server/de/Microsoft.CodeAnalysis.resources.dll", "translated compiler messages");
+        string bundle = Path.Combine(_root, "bundle");
+
+        LanguageBundle.Stage(model, server, bundle);
+
+        Assert.Equal(
+            ["nitrogen.deps.json", "nitrogen.dll", "nitrogen.runtimeconfig.json", "runtimes/any/dep.dll"],
+            Directory.EnumerateFiles(Path.Combine(bundle, "server"), "*", SearchOption.AllDirectories)
+                .Select(path => Path.GetRelativePath(Path.Combine(bundle, "server"), path).Replace('\\', '/'))
+                .Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void Staging_twice_is_byte_identical()
     {
         var (model, server) = Language();

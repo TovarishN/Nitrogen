@@ -37,7 +37,7 @@ internal static class LanguageBundle
         Copy(grammars, Path.Combine(language, "grammars"));
         Copy(sources, Path.Combine(language, "sources"));
         File.WriteAllText(Path.Combine(destination, ConfigPath), Config(model, grammars, sources), s_utf8);
-        CopyDirectory(serverDirectory, Path.Combine(destination, "server"));
+        CopyServer(serverDirectory, Path.Combine(destination, "server"));
     }
 
     /// <summary>The files the patterns name, as the language service expands them; every pattern must match and names must be unique.</summary>
@@ -62,6 +62,21 @@ internal static class LanguageBundle
         if (files.Count == 0) return;
         Directory.CreateDirectory(directory);
         foreach (string file in files) File.Copy(file, Path.Combine(directory, Path.GetFileName(file)));
+    }
+
+    /// <summary>
+    /// The server as it runs: the files in its folder, and its <c>runtimes</c> folder (native and
+    /// platform-specific assets). Other folders are left out: the compiler's messages in other languages
+    /// (the server reports in English), and whatever a publish left beside the build, such as a
+    /// self-contained <c>osx-arm64</c> folder or <c>publish</c>.
+    /// </summary>
+    static void CopyServer(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+        foreach (string file in Directory.GetFiles(source).Order(StringComparer.Ordinal))
+            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
+        string runtimes = Path.Combine(source, "runtimes");
+        if (Directory.Exists(runtimes)) CopyDirectory(runtimes, Path.Combine(destination, "runtimes"));
     }
 
     static void CopyDirectory(string source, string destination)
