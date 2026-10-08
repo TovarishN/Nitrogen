@@ -10,8 +10,9 @@ namespace Nitrogen.LanguageService;
 /// <param name="assist">What its editor knows beyond its grammar; none when null.</param>
 /// <param name="evaluation">How its statements' values are shown; none when null.</param>
 /// <param name="fixes">Its quick fixes; none when null.</param>
+/// <param name="calls">Its callable names' signatures; none when null.</param>
 public sealed class LanguageEntry(string name, Language language, IReadOnlyDictionary<string, Rule> starts, Presentation? presentation = null,
-    ILanguageAssist? assist = null, BoundEvaluation? evaluation = null, DiagnosticFixes? fixes = null)
+    ILanguageAssist? assist = null, BoundEvaluation? evaluation = null, DiagnosticFixes? fixes = null, CallSignatures? calls = null)
 {
     public string Name { get; } = name;
 
@@ -26,6 +27,8 @@ public sealed class LanguageEntry(string name, Language language, IReadOnlyDicti
     public BoundEvaluation? Evaluation { get; } = evaluation;
 
     public DiagnosticFixes? Fixes { get; } = fixes;
+
+    public CallSignatures? Calls { get; } = calls;
 }
 
 /// <summary>File extensions → languages (issue 238). An extension belongs to one language.</summary>

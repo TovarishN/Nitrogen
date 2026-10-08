@@ -130,4 +130,31 @@ public class WorkspaceEvaluationTests
         Assert.Equal("NGR0004", warning.Code);
         Assert.False(warning.IsError);
     }
+
+    static string CallsSource(string type) => $$"""
+        using Nitrogen.Semantic;
+
+        public static class {{type}}
+        {
+            public static CallSignatures Calls { get; } = new(new Dictionary<string, IReadOnlyList<CallSignature>>());
+        }
+        """;
+
+    [Fact]
+    public void One_call_signature_provider_is_discovered()
+    {
+        using var snapshot = Compile(CallsSource("SumCalls"));
+        Assert.NotNull(snapshot.Calls);
+        Assert.Empty(snapshot.Diagnostics);
+    }
+
+    [Fact]
+    public void Two_call_signature_providers_are_a_warning_and_neither_is_used()
+    {
+        using var snapshot = Compile(CallsSource("FirstCalls"), CallsSource("SecondCalls"));
+        Assert.Null(snapshot.Calls);
+        var warning = Assert.Single(snapshot.Diagnostics);
+        Assert.Equal("NGR0005", warning.Code);
+        Assert.False(warning.IsError);
+    }
 }
