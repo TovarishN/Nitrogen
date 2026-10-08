@@ -17,6 +17,8 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | Go to definition, references | ✓ | ✓ | ✓ (find usages) |
 | Rename | ✓ | ✓ | — (left to Rider) |
 | Outline | ✓ | — (left to C#) | — (left to Rider) |
+| Folding | ✓ | — (left to C#) | — (left to Rider) |
+| Expand selection | ✓ | — (left to C#) | — (left to Rider) |
 | Hover, with the expression's value¹ | ✓ | ✓ | ✓ |
 | Each statement's value at its end¹ | ✓ | ✓ | ✓ |
 | Quick fixes² | ✓ | ✓ | — (Rider's C# client keeps code actions off, so its Alt+Enter menu holds only Rider's own) |

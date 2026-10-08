@@ -1,6 +1,6 @@
 # Folding and expand-selection
 
-Status: approved design (2026-10-08). Part of the goal of first-class language support.
+Status: implemented (2026-10-08). Part of the goal of first-class language support.
 
 ## Problem
 
@@ -27,18 +27,18 @@ public IReadOnlyList<ServiceFoldingRange> FoldingRanges(string uri);
 ```
 
 1. **Candidates.** Every syntax node whose extent spans 2 or more lines folds. The extent runs from the
-   node's first character to its last non-whitespace character. The root node, and any node with the
-   same extent as the root, never fold.
+   node's first character to its last non-whitespace character. The root folds like any other node, as JSON and XML
+   editors fold their root: excluding it would also exclude a construct that is the whole file, such as
+   a grammar's one `syntax module`, because a node's extent starts at its first token.
 2. **One fold per line.** Among candidates starting on the same line, only the outermost (the one
    ending on the latest line) is kept.
 3. **Closers stay visible.** If a fold's last line, trimmed, consists only of punctuation (no letters,
    digits or `_`), such as `}`, `)` or `];`, the fold ends one line earlier. A fold that then ends on its
    start line is dropped.
 4. **Comments.** For each gap between tokens (`SyntaxTree.Trivia`) that isn't skipped input
-   (`SyntaxTree.Skipped`), the lines holding non-whitespace text are its comment lines. If the first and
+   (`SyntaxTree.SkippedSpans`), the lines holding non-whitespace text are its comment lines. If the first and
    last of them differ, they form a fold with `IsComment`.
-5. **Order.** Folds are returned by start line. A comment fold and a node fold never start on the same
-   line, because a comment line holds no token's start.
+5. **Order.** Folds are returned by start line. Folds starting on the same line, of either kind, keep the one ending latest.
 6. **Tagged C# strings:** for a C# host, the result is empty; C# folds the file.
 
 ## 2. Expand-selection: `SelectionRanges(uri, positions)`
@@ -87,7 +87,7 @@ character.
   - a multi-line semantics block `{ … }` folds with its `}` visible;
   - two consecutive `//` lines → one comment fold; a single comment line → none;
   - no two folds start on the same line;
-  - the root doesn't fold;
+  - a file holding one multi-line statement folds it;
   - a C# host → none.
 - **Expand-selection:**
   - the cursor on `3` in `weekday(start + 3 * sprint);` → `3`, `3 * sprint`, `start + 3 * sprint`,
