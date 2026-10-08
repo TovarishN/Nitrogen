@@ -168,7 +168,8 @@ script on Linux.
 and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.7.1`. Reading the feed needs a
 GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>`
 (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from
-freshly packed packages; a `v*` tag publishes them.
+freshly packed packages; a `v*` tag publishes them and drafts the GitHub release, with the packages and editor
+plugins attached, for its notes to be written.
 
 **The CLI:**
 
