@@ -50,7 +50,7 @@ followed by its value:
 - **Coloring and completion** come from the grammar and the semantic modules: dates, durations,
   functions and constants are colored by kind, and completion offers names with their types.
 
-  ![Typing a call to weekday in sample.datecalc](docs/images/datecalc-completion.png)
+  ![Completing wee in sample.datecalc: Nitrogen's list offers weekday, a built-in function](docs/images/datecalc-completion.png)
 
 - **Hover** shows what an expression lowers to, and its value. Hovering `3 * sprint` shows
   `DateCalc.Duration · DateCalc.Times` and `= 42 days`.
