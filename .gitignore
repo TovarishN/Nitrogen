@@ -13,3 +13,4 @@ editors/rider/build/
 .idea/
 .vs/
 artifacts/
+dist/
