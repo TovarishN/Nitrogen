@@ -1,6 +1,6 @@
 # Signature help
 
-Status: approved design (2026-10-08). Part of the goal of first-class language support.
+Status: implemented (2026-10-08). Part of the goal of first-class language support.
 
 ## Problem
 
@@ -64,11 +64,13 @@ public sealed record ServiceSignatureHelp(IReadOnlyList<ServiceSignature> Signat
 public ServiceSignatureHelp? SignatureHelp(string uri, DocumentPosition position);
 ```
 
-1. **The call.** In the document's syntax tree, take the leaf tokens before the cursor and walk back
-   to the innermost `(` that isn't closed before the cursor. The token just before it must be a name;
-   that is the callee. The active parameter is the number of `,` tokens after that `(` and before the
-   cursor, at the same nesting depth (parentheses inside nested calls don't count). With no such `(`,
-   or no name before it, there's no help.
+1. **The call.** Error recovery can drop a half-typed call's commas from the syntax tree, so the
+   call is found in the text. Scanning back from the cursor, characters inside real leaf tokens other
+   than `(`, `)`, `,`, `;`, `{` and `}` are skipped. The innermost `(` not closed before the cursor,
+   with a name just before it, is the call, and the active parameter is the number of top-level `,`
+   after it. The scan stops with no help at a `;`, `{` or `}` at depth 0, so a broken earlier call
+   doesn't leak into later statements. A comment containing parentheses inside an unfinished call can
+   still confuse it.
 2. **Its signatures.**
    - **Hook:** the language's `CallSignatures.For(name)`.
    - **Templates:** otherwise, if the callee resolves to a symbol whose declaring rule lowers a
