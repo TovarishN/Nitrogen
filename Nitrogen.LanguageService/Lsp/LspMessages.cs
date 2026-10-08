@@ -38,7 +38,8 @@ public sealed record ServerCapabilities(
     RenameOptions? RenameProvider = null,
     CompletionOptions? CompletionProvider = null,
     bool? InlayHintProvider = null,
-    CodeActionOptions? CodeActionProvider = null);
+    CodeActionOptions? CodeActionProvider = null,
+    SignatureHelpOptions? SignatureHelpProvider = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -100,6 +101,15 @@ public sealed record LspDocumentSymbol(string Name, string Detail, int Kind, Lsp
 
 public sealed record CodeActionOptions(string[] CodeActionKinds);
 
+public sealed record SignatureHelpOptions(string[] TriggerCharacters);
+
+/// <summary>A parameter by its [start, end) offsets in the signature's label.</summary>
+public sealed record LspParameterInformation(int[] Label);
+
+public sealed record LspSignatureInformation(string Label, LspParameterInformation[] Parameters, string? Documentation = null);
+
+public sealed record LspSignatureHelp(LspSignatureInformation[] Signatures, int ActiveSignature, int ActiveParameter);
+
 /// <summary>The params of <c>textDocument/codeAction</c>; the client's diagnostics are not used: the server checks its own.</summary>
 public sealed record CodeActionParams(TextDocumentIdentifier TextDocument, LspRange Range);
 
@@ -138,4 +148,5 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(LspInlayHint[]))]
 [JsonSerializable(typeof(CodeActionParams))]
 [JsonSerializable(typeof(LspCodeAction[]))]
+[JsonSerializable(typeof(LspSignatureHelp))]
 internal sealed partial class LspJson : JsonSerializerContext;

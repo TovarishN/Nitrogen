@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nitrogen.Cli;
 using Nitrogen.LanguageService;
 using Xunit;
@@ -117,5 +118,33 @@ public sealed class SignatureHelpTests : IDisposable
         using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
         service.Open("file:///w/a.scopes", 1, "unit a { let y = f(");
         Assert.Null(service.SignatureHelp("file:///w/a.scopes", new DocumentPosition(0, 19)));
+    }
+
+    [Fact]
+    public async Task The_server_answers_signature_help()
+    {
+        string root = Directory.CreateDirectory(Path.Combine(_root, "DateCalcLanguage")).FullName;
+        foreach (string file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage")))
+            File.Copy(file, Path.Combine(root, Path.GetFileName(file)));
+        string doc = new Uri(Path.Combine(root, "a.datecalc")).AbsoluteUri;
+        string initialize = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new Uri(root).AbsoluteUri + "\",\"capabilities\":{}}}";
+        string open = "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + doc
+            + "\",\"languageId\":\"datecalc\",\"version\":1,\"text\":\"round(2.5, \"}}}";
+        string request = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/signatureHelp\",\"params\":{\"textDocument\":{\"uri\":\"" + doc
+            + "\"},\"position\":{\"line\":0,\"character\":11}}}";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+
+        var (_, messages, _) = await LspServerTests.Session(service, initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}""",
+            open, request, """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
+
+        var triggers = messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("signatureHelpProvider").GetProperty("triggerCharacters");
+        Assert.Equal(["(", ","], triggers.EnumerateArray().Select(t => t.GetString()));
+        var help = messages.Single(m => m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt32() == 5).GetProperty("result");
+        Assert.Equal(2, help.GetProperty("signatures").GetArrayLength());
+        Assert.Equal(1, help.GetProperty("activeParameter").GetInt32());
+        var active = help.GetProperty("signatures")[help.GetProperty("activeSignature").GetInt32()];
+        Assert.Equal("round(x: Core.Scalar, digits: Core.Scalar) → Core.Scalar", active.GetProperty("label").GetString());
+        var digits = active.GetProperty("parameters")[1].GetProperty("label");
+        Assert.Equal("digits: Core.Scalar", active.GetProperty("label").GetString()![digits[0].GetInt32()..digits[1].GetInt32()]);
     }
 }
