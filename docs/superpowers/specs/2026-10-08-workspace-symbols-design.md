@@ -1,6 +1,6 @@
 # Workspace symbols
 
-Status: approved (2026-10-08). Part of the goal of first-class language support.
+Status: implemented (2026-10-08). Part of the goal of first-class language support.
 
 ## Problem
 
@@ -57,7 +57,9 @@ public IReadOnlyList<WorkspaceSymbol> WorkspaceSymbols(string query);
 - **When:** they are reloaded whenever their language compiles (`Compile`), which runs when
   `nitrogen.json` is read, when a grammar changes on disk (`FileChanged`), and when a grammar is
   opened or closed. A grammar that is open is served from its open document instead. A grammar no
-  longer in `nitrogen.json`, or deleted, is dropped.
+  longer in `nitrogen.json`, or deleted, is dropped. Any `.ngr` change on disk also refreshes them, since a deleted grammar
+  no longer compiles. Clients that register file watchers dynamically (Rider) are asked to watch
+  `**/*.ngr` too.
 - **Limits:** the workspace index's limits apply: files over 1 MiB, and unreadable files, are skipped.
 
 ## 3. LSP

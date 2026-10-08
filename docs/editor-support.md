@@ -19,6 +19,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | Outline | ✓ | — (left to C#) | — (left to Rider) |
 | Folding | ✓ | — (left to C#) | — (left to Rider) |
 | Expand selection | ✓ | — (left to C#) | — (left to Rider) |
+| Workspace symbols | ✓ (open and closed files, and the `nitrogen.json` grammars) | ✓ (open C# files) | — (Rider's C# client keeps it off) |
 | Hover, with the expression's value¹ | ✓ | ✓ | ✓ |
 | Each statement's value at its end¹ | ✓ | ✓ | ✓ |
 | Quick fixes² | ✓ | ✓ | — (Rider's C# client keeps code actions off, so its Alt+Enter menu holds only Rider's own) |
