@@ -102,7 +102,8 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
-                        SignatureHelpProvider: new SignatureHelpOptions(["(", ","])),
+                        SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
+                        FoldingRangeProvider: true, SelectionRangeProvider: true),
                     new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
@@ -209,6 +210,28 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         help.ActiveSignature, help.ActiveParameter), LspJson.Default.LspSignatureHelp, cancel);
                 else
                     await RespondNullAsync(id, cancel);
+                break;
+            }
+            case "textDocument/foldingRange":
+            {
+                string uri = Params(parameters, LspJson.Default.TextDocumentParams).TextDocument.Uri;
+                var folds = service.FoldingRanges(uri).Select(f => new LspFoldingRange(f.StartLine, f.EndLine, f.IsComment ? "comment" : null)).ToArray();
+                await RespondAsync(id, folds, LspJson.Default.LspFoldingRangeArray, cancel);
+                break;
+            }
+            case "textDocument/selectionRange":
+            {
+                var request = Params(parameters, LspJson.Default.SelectionRangeParams);
+                var positions = request.Positions.Select(Position).ToArray();
+                var steps = service.SelectionRanges(request.TextDocument.Uri, positions);
+                var ranges = steps.Select((list, i) =>
+                {
+                    if (list.Count == 0) return new LspSelectionRange(Range(new DocumentRange(positions[i], positions[i])));
+                    LspSelectionRange? outer = null;
+                    for (int k = list.Count - 1; k >= 0; k--) outer = new LspSelectionRange(Range(list[k]), outer);
+                    return outer!;
+                }).ToArray();
+                await RespondAsync(id, ranges, LspJson.Default.LspSelectionRangeArray, cancel);
                 break;
             }
             default:
