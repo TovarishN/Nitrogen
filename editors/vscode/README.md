@@ -19,4 +19,4 @@ A workspace grammar language:
                    "start": "Calc.Program" } ] }
 ```
 
-For a single language, `nitrogen package` builds a self-contained extension instead; see the repository README.
+For a single language, `nitrogen package` builds a self-contained extension instead; see [installable plugins for a language](../../docs/editor-support.md#installable-plugins-for-a-language).

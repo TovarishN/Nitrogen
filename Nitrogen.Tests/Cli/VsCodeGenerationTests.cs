@@ -95,12 +95,15 @@ public sealed class VsCodeGenerationTests : IDisposable
     }
 
     [Fact]
-    public void Readme_names_statement_values_as_a_feature()
+    public void Readme_names_values_and_quick_fixes_as_features()
     {
         var request = Request();
         VsCodeRenderer.Render(request, CancellationToken.None);
+        string readme = Read(request, "README.md");
 
-        Assert.Contains("each statement's value as an inlay hint", Read(request, "README.md"), StringComparison.Ordinal);
+        Assert.Contains("each statement's value as an inlay hint", readme, StringComparison.Ordinal);
+        Assert.Contains("an expression's value on hover", readme, StringComparison.Ordinal);
+        Assert.Contains("quick fixes", readme, StringComparison.Ordinal);
     }
 
     [Fact]
