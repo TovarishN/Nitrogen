@@ -1,264 +1,165 @@
 # Nitrogen
 
-Nitrogen is a .NET language workbench for defining parsers and syntax trees with `.ngr` grammars. It includes incremental parsing, binding and semantics, grammar recompilation in a workspace, a command-line parser, a language server, and a VS Code client.
+Nitrogen is a .NET language workbench. Describe a language once, its syntax in an `.ngr` grammar and
+its types and operations in a little C#, and Nitrogen derives the rest: an incremental parser, binding
+and semantic checks, typed HIR, a language server, and installable VS Code and Rider plugins. It follows
+the language-workbench idea of [JetBrains' Nitra](https://github.com/JetBrains/Nitra).
 
-Nitrogen implements the language-workbench idea explored by [JetBrains' Nitra](https://github.com/JetBrains/Nitra): describe a language once, then derive parsers, syntax models, and editor support from its definition.
+## Build a language with an IDE
 
-## Why Nitrogen for agentic work
+[examples/DateCalc](examples/DateCalc) is a complete typed language: a calculator with dates.
 
-Nitrogen is aimed at agents that assemble small, domain-specific programs from capabilities offered by a host. The language workbench gives an agent a machine-checkable path from a task to a host operation:
+### The language
 
-- Semantic modules and module descriptors declare qualified types, operation signatures, imports, and required host bindings. A host can expose these contracts as a bounded set of capabilities for an agent to compose.
-- Parsing, binding, semantic and value checks, typed HIR, and source-located diagnostics let an agent repair an invalid program before it runs.
-- Domain types can carry units, reference frames, and entity categories when a language defines them, preserving those distinctions across composed capabilities.
-- Preflight or domain-specific checks verify the validated program and its inputs before a host handler is invoked.
-
-For example, Geometry accepts the syntax of `box 0 2 3;` but reports `GE0001` because a box dimension must be positive. An agent can use that diagnostic to correct the program before requesting a mesh. Nitrogen provides composition, validation, diagnostics, and typed HIR today; hosts supply execution for supported slices.
-
-### Agent skill and semantic catalog
-
-The [Nitrogen agent skill](.agents/skills/nitrogen/SKILL.md) applies this approach across projects. It frames a task as typed capability requirements, searches a separate semantic catalog for concepts and evidence, validates a solution before authorized execution, and proposes reusable observations through a reviewable pull request. A catalog concept may guide work in another language; it is not necessarily a runnable Nitrogen module.
-
-The private catalog is `TovarishN/Nitrogen.Concepts`. With access to that repository, clone it beside Nitrogen and point the skill at the checkout:
-
-```sh
-git clone git@github.com:TovarishN/Nitrogen.Concepts.git ../Nitrogen.Concepts
-export NITROGEN_CONCEPT_CATALOG="$(cd ../Nitrogen.Concepts && pwd)"
-```
-
-To make the maintained skill available to Codex from other projects, run the following from this Nitrogen repository after checking that the destination does not already contain another skill:
-
-```sh
-mkdir -p "$HOME/.codex/skills"
-cp -R .agents/skills/nitrogen "$HOME/.codex/skills/nitrogen"
-```
-
-After updating Nitrogen, copy the updated skill files into that installed directory so the personal installation stays current. This environment uses a regular directory because its filesystem sandbox does not support a symlinked skill root.
-
-The skill also checks for an existing sibling catalog checkout. If the private repository is unavailable, the agent can finish the main task and keep catalog findings as an unpublished local draft. Catalog publication does not grant permission to execute a module: a receiving host must validate its exact contract and admission requirements.
-
-## Example: a calculator with dates
-
-[examples/DateCalc](examples/DateCalc) is a complete typed language: an 84-line grammar, two semantic modules
-(DateCalc, 81 lines, and Math, 58 lines) and an 87-line evaluator. [DateCalc.ngr](examples/DateCalc/DateCalc.ngr) gives the syntax, and its `lowers` clauses map each
-construct to an operation of [DateCalcLanguage.cs](examples/DateCalc/DateCalcLanguage.cs), which declares
-the `DateCalc.Date` and `DateCalc.Duration` types and the operator overloads:
+[DateCalc.ngr](examples/DateCalc/DateCalc.ngr) (84 lines) gives the syntax. Each rule says what it
+lowers to, and `check` rules report source errors:
 
 ```text
-let start = 2026-10-05;
-let sprint = 2 weeks;
-start + sprint;                 // 2026-10-19 Mon
-weekday(start + 3 * sprint);    // Monday
-(2026-12-25 - start) in days;   // 81
-round(2 * pi, 2);               // 6.28
-max(start + 10 weeks, 2026-12-25);  // 2026-12-25 Fri
+token Date = Digit Digit Digit Digit "-" Digit Digit "-" Digit Digit;
+
+| Day = Value:Date  lowers DateCalc.Date(text Value)
+  {
+    Type = DateCalcLanguage.Date;
+    check DC0001 DateCalcLanguage.IsDate(Value.Text) : $"'{Value.Text}' is not a calendar date";
+  }
+| Add = Left:Expr "+" Right:Expr  precedence 10 left  lowers operation? Selected(Left, Right)
 ```
 
-[MathModule.cs](examples/DateCalc/MathModule.cs) is the standard math library as a separate semantic module:
-`abs sign sqrt cbrt exp ln log10 log2 sin cos tan asin acos atan sinh cosh tanh floor ceil trunc round`,
-`pow log atan2 min max mod round(x, digits)`, and the constants `pi`, `e` and `tau`. Each function is one
-table line: the name a call uses, its typed operation and its implementation. DateCalc adds `weekday`
-and `min`, `max` and `abs` overloads for dates and durations. The grammar declares the names as
-built-in symbols, so the editor colors and completes them, and a call such as `sqrt(x)` picks its
-overload by name and argument types. `sqrt(2026-10-05)` and `pow(2)` report `DC0003`; `sqrt(0 - 1)`
-stops at the call because its result is not finite.
+The rest is ordinary C#:
 
-`+`, `-`, `*` and `/` use `lowers operation? Selected(Left, Right)`, so the operand types choose the
-overload: date + duration, date − date, duration × number, and so on. Unsupported combinations are
-source diagnostics: `2026-10-05 + 2026-10-06` reports `DC0002`, `weekday(3)` reports `DC0003`, and
-`2026-02-30` reports `DC0001`. [DateCalcEvaluator.cs](examples/DateCalc/DateCalcEvaluator.cs)
-lowers each statement to typed HIR and runs it through one handler per operation. With
-[nitrogen.json](examples/DateCalc/nitrogen.json), the same grammar and module give the editor coloring,
-completion, hover types, diagnostics and rename in `.datecalc` files and in C# strings tagged
-`/*lang=datecalc*/` ([Snippets.cs](examples/DateCalc/Snippets.cs)). To open it in VS Code, open
-`examples/DateCalc` as the workspace folder; `nitrogen package --config examples/DateCalc/nitrogen.json --output dist`
-builds its plugins.
+- [DateCalcLanguage.cs](examples/DateCalc/DateCalcLanguage.cs) (81 lines) declares the `DateCalc.Date`
+  and `DateCalc.Duration` types and the operator overloads. So `date + duration`, `date - date` and
+  `duration * number` type-check, and `date + date` is error `DC0002`.
+  [MathModule.cs](examples/DateCalc/MathModule.cs) (58 lines) adds the math functions (`abs`, `sqrt`,
+  `ln`, `sin`, `round`, `pow`, `min`, `max`, `mod` and more) and the constants `pi`, `e` and `tau` as a
+  second semantic module. A call picks its overload by name and argument types, so `sqrt(2026-10-05)`
+  is error `DC0003`.
+- [DateCalcEvaluator.cs](examples/DateCalc/DateCalcEvaluator.cs) (112 lines) runs a program through one
+  handler per operation. Its evaluation profile tells the editor how to show values.
+- [DateCalcFixes.cs](examples/DateCalc/DateCalcFixes.cs) (54 lines) proposes quick fixes for DateCalc's
+  errors.
+- [nitrogen.json](examples/DateCalc/nitrogen.json) declares the language to the editor.
 
-## Requirements
+### What the editor gives you
 
-- .NET 10 SDK or newer
-- Node.js and npm only if building the VS Code extension
-- Gradle/JDK only if building the Rider plugin
+[sample.datecalc](examples/DateCalc/sample.datecalc), as the editor shows it, with each statement
+followed by its value:
 
-## Build and test
+```text
+let start = 2026-10-05;                 = 2026-10-05 Mon
+let sprint = 2 weeks;                   = 14 days
+start + sprint;                         = 2026-10-19 Mon
+weekday(start + 3 * sprint);            = Monday
+(2026-12-25 - start) in days;           = 81
+sprint / 1 days;                        = 14
+round(2 * pi, 2);                       = 6.28
+max(start + 10 weeks, 2026-12-25);      = 2026-12-25 Fri
+```
+
+<!-- media: docs/images/datecalc-hints.png -->
+
+- **Coloring and completion** come from the grammar and the semantic modules: dates, durations,
+  functions and constants are colored by kind, and completion offers names with their types.
+  <!-- media: docs/images/datecalc-completion.png -->
+- **Hover** shows what an expression lowers to, and its value. Hovering `3 * sprint` shows
+  `DateCalc.Duration · DateCalc.Times` and `= 42 days`.
+  <!-- media: docs/images/datecalc-hover.png -->
+- **Diagnostics and quick fixes:** `2026-02-30` reports `DC0001` and offers *Change to 2026-02-28*,
+  and `2026-12-25 + 2026-10-05` reports `DC0002` and offers *Use '-'*. The server offers a fix only
+  after checking that it removes the error, so `2 weeks + 2026-10-05` gets none.
+  <!-- media: docs/images/datecalc-quickfix.gif -->
+- **`today`:** [countdown.datecalc](examples/DateCalc/countdown.datecalc) counts down to Christmas.
+  Its values follow the clock and refresh at midnight.
+- **Go to definition, references and rename** work across the language's files.
+- **Inside C# strings:** a string tagged with the language gets the same support, values included.
+  This is [Snippets.cs](examples/DateCalc/Snippets.cs):
+
+```csharp
+public static IReadOnlyList<DateCalcLine> Countdown() => DateCalcEvaluator.Run(/*lang=datecalc*/ """
+    let christmas = 2026-12-25;          = 2026-12-25 Fri
+    (christmas - 2026-10-05) in days;    = 81
+    weekday(christmas);                  = Friday
+    """);
+
+// language=datecalc
+const string Deadline = "2026-10-05 + 6 weeks;"  = 2026-11-16 Mon
+```
+
+<!-- media: docs/images/csharp-strings.png -->
+
+The [feature matrix](docs/editor-support.md#feature-matrix) shows what works where in VS Code and Rider.
+
+### Try it
+
+- **In VS Code:** install the Nitrogen extension ([setup](docs/editor-support.md#vs-code-extension))
+  and open `examples/DateCalc` as the workspace folder.
+- **As installable plugins** for VS Code and Rider, carrying the language and a server:
+  `nitrogen package --config examples/DateCalc/nitrogen.json --output dist`
+  ([details](docs/editor-support.md#installable-plugins-for-a-language)).
+
+Your own language takes the same pieces: a grammar, a `nitrogen.json`, and as much C# as its semantics
+need. The [language guide](docs/language-guide.md) covers the grammar language.
+
+## Agentic direction
+
+Nitrogen is aimed at agents that assemble small, domain-specific programs from capabilities a host
+offers. It gives an agent a machine-checkable path from a task to a host operation:
+
+- Semantic modules and module descriptors declare qualified types, operation signatures, imports and
+  required host bindings. A host exposes these contracts as a bounded set of capabilities for an agent
+  to compose.
+- Parsing, binding, semantic and value checks, typed HIR and source-located diagnostics let an agent
+  repair an invalid program before it runs.
+- Domain types can carry units, reference frames and entity categories when a language defines them,
+  so those distinctions survive composition.
+- Preflight or domain checks verify the program and its inputs before a host handler is invoked.
+
+For example, Geometry accepts the syntax of `box 0 2 3;` but reports `GE0001`, because a box dimension
+must be positive. An agent can use that diagnostic to correct the program before requesting a mesh.
+Nitrogen provides composition, validation, diagnostics and typed HIR today; hosts supply execution for
+supported slices.
+
+The [Nitrogen agent skill](.agents/skills/nitrogen/SKILL.md) applies this across projects. It frames a
+task as typed capability requirements, looks for existing concepts before inventing new ones, validates
+a solution before authorized execution, and proposes what it learned as reviewable evidence. Setup is in
+[the agent-skill guide](docs/agent-skill.md).
+
+## Semantic direction
+
+Nitrogen separates what a program means from how it is written:
+
+- **Types and operations are semantic, not syntactic.** `SemanticType.Named(module, name)` gives
+  module-qualified type identity, and an `OperationSignature` fixes an operation's input and result
+  types. Semantic modules export types and operations, import others, and compose with conflict checks.
+- **Grammars lower to typed HIR.** `lowers` clauses map syntax to catalog operations, and the result is
+  typed HIR whose every node keeps its source origin. Errors, values and fixes all point back into the
+  source. The grammar language itself lowers to HIR this way.
+- **Execution goes through exact host handlers.** `HirProjector` runs HIR through handlers bound to
+  exact signatures. The editor uses the same path: a language's evaluation profile and quick-fix
+  provider are what show values and offer fixes.
+- **Concepts are gathered across projects.** A separate semantic catalog (`TovarishN/Nitrogen.Concepts`)
+  records concepts, capabilities, realizations, and evidence of reuse and of failure. The agent skill
+  consults it before inventing an abstraction. A catalog concept guides work; it isn't runnable code
+  until a host validates and admits it.
+
+The [roadmap](docs/roadmap.md) tracks where this is going.
+
+## Get started
+
+Requirements: the .NET 10 SDK; Node.js and npm to build the VS Code extension; Gradle and JDK 25 to
+build the Rider plugin.
 
 ```sh
 dotnet build Nitrogen.slnx
 dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj
+./build.sh        # also builds the editor plugins into artifacts/; add --config nitrogen.json [--language NAME] for a language's plugins
 ```
 
-The solution contains the Nitrogen projects listed below.
+The plugins use the release version in `Directory.Build.props`; `VERSION=1.2.3 ./build.sh` overrides
+it, and version tags supply theirs. The [Plugins workflow](.github/workflows/plugins.yml) runs the same
+script on Linux.
 
-### Build everything, including the editor plugins
-
-```sh
-./build.sh                                     # add --config nitrogen.json [--language NAME] for a language plugin
-```
-
-This builds and tests Nitrogen, then writes the plugins to `artifacts/`: the VS Code extension
-(`nitrogen-*.vsix`) and Rider plugins (`rider/*-rider.zip`) that bundle a single-file server for the
-current machine. It needs the .NET 10 SDK, Node.js with npm, Gradle, and a JDK 25 (Rider 2026.2's Java version). The
-[Plugins workflow](.github/workflows/plugins.yml) runs the same script on Linux and publishes the
-plugins as build artifacts. Both plugins use the release version in `Directory.Build.props`;
-`VERSION=1.2.3 ./build.sh` overrides it, and version tags supply their version automatically.
-Generated language plugins default to the CLI release version; an explicit language `"version"`
-in `nitrogen.json` takes precedence.
-
-The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
-
-## Use the CLI
-
-```sh
-dotnet run --project Nitrogen.Cli -- parse --grammar Nitrogen.Tests/Grammars/Calc.ngr --start Calc.Program path/to/sample.calc
-dotnet run --project Nitrogen.Cli -- lsp
-```
-
-`parse` and `watch` compile supplied grammars in-process. `lsp` serves `.ngr` files and languages declared by a workspace `nitrogen.json`.
-
-## VS Code and generated language support
-
-The [VS Code extension](editors/vscode/README.md) starts `nitrogen lsp`. The server serves `.ngr` files and compiles grammars declared in a workspace `nitrogen.json`, so a custom DSL can use the same extension. Available editor features include diagnostics, semantic coloring, outline, go to definition, references, rename, hover, completion, and, for a language whose helper sources export an `EvaluationProfile` (as `examples/DateCalc` does), each statement's value as an inlay hint; the results depend on the grammar and semantic rules supplied by the language.
-
-1. Build the language server from the repository root:
-
-   ```sh
-   dotnet build Nitrogen.slnx -c Release
-   ```
-
-2. Build and package the extension:
-
-   ```sh
-   cd editors/vscode
-   npm ci
-   npm run compile
-   npm run package
-   ```
-
-3. Install `editors/vscode/nitrogen-0.7.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.7.0.vsix` from `editors/vscode` if the `code` command is available.
-4. In VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, the default setting works.
-5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
-
-   ```json
-   {
-     "languages": [
-       {
-         "name": "calc",
-         "extensions": [".calc"],
-         "grammars": ["Nitrogen.Tests/Grammars/Calc.ngr"],
-         "start": "Calc.Program"
-       }
-     ]
-   }
-   ```
-
-Open a `.calc` file such as `sample.calc` containing `1 + 2;`. The server recompiles the declared grammar when it changes and updates diagnostics for its files. Adjust the grammar path and start rule for another language.
-
-## Rider and generated plugin support
-
-The generic Rider plugin is in `editors/rider` and uses the same `nitrogen lsp`
-server as VS Code. Build it with `gradle buildPlugin`, then install the ZIP in
-Rider. The default executable is `nitrogen` on `PATH`.
-
-To generate a grammar-specific plugin from a workspace configuration:
-
-```sh
-dotnet run --project Nitrogen.Cli -- generate rider \
-  --config nitrogen.json --output generated/rider
-```
-
-Use `--language NAME` for a configuration containing multiple languages, or
-use `--grammar FILE --start Module.Rule` when no `nitrogen.json` exists. The
-plugin runs the executable set in Rider's Settings | Tools page, else a bundled
-server for the current platform, else `nitrogen` (or `--nitrogen PATH`). To bundle
-a server, publish it as a self-contained single file and pass it per platform,
-for example `--bundle macos-aarch64=publish/nitrogen` after
-`dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o publish`.
-Bundles are copied from local files and never downloaded.
-
-## Declaration scopes
-
-A `scope` clause opens a local scope for a rule's children. A declaration normally belongs to its enclosing scope. Use `in file` to place selected declarations in the file scope:
-
-```text
-syntax Body = "body" Name:Identifier "{" Items:Item* "}" declares body Name scope;
-syntax Let = "let" Name:Identifier "=" Value:Expr declares value Name;
-syntax Part = "part" Name:Identifier declares part Name in file;
-```
-
-Here, values are local to each body, while parts are visible throughout the same file. `in file` also places dynamic-name openness and duplicate-name checks in the file scope. It does not export a symbol to other files; add `export` after `in file` when project visibility is required. The existing `type` clause can follow these modifiers.
-
-Use `declares value Name sequential` for ordered declarations: a concrete name becomes visible after its declaring node ends, and later declarations in the same scope replace it. Its initializer can therefore use the previous value or an enclosing value. Self and forward references without such a value are not visible. Lexical completion uses the same ordering. Repeated names are allowed when all declarations in the group are sequential; mixing ordinary and sequential declarations still reports duplicates. Use `sequential` before `in file`, `export`, and `type`. Exported sequential names expose the final declaration from each document; names exported by multiple documents remain ambiguous.
-
-## Inferred sequence arguments
-
-Operation arguments may use `sequence inferred Field` when their element type depends on the selected operation. For example, `lowers operation Selected(sequence inferred Args)` takes the exact element type from the corresponding `Core.Sequence<T>` input of `Selected`. Every item must lower as that type; no casts or unit conversions are inserted. Empty lists keep the signature's element type, and separated lists skip separator nodes. A fixed non-sequence input fails composition; a computed non-sequence input fails semantic checking. The field must still be a repeated or separated list. `inferred` is special in this argument position; a fixed type with that name can be qualified with its module.
-
-`optional text Field` passes an optional field's spelling as `Core.Optional<Core.Text>`: present, its tokens
-without trivia; absent, an empty optional. It suits bare optional keywords (`Export:"export"?`). After
-`optional`, `text` is reserved; a type of that name must be qualified with its module.
-
-## Derived declarations
-
-Names emitted by checked lowering can replace authored file-scope templates using `Project.SetDerivedDeclarations(path, kind, declarations)`. Each `DerivedDeclaration` carries the emitted name, a source node and name span in that document, and an optional export flag. The replacement is the complete index for that kind: it removes template declarations, seals dynamic file-scope openness, and retains local declarations and indexes for other kinds. An empty index means no names were emitted. Normal lookup, definition locations, completion, duplicate checks, and export visibility then use the emitted names.
-
-For staged expansion, clear the template index before lowering the relevant subtrees, collect declarations from successful typed projection, then publish the complete index and validate the whole file again. Do not publish a partial result after projection fails. Updating an index invalidates binding resolution and project semantic caches; replacing or removing the document discards its derived indexes. Invalid node/span metadata is rejected before any project change. This API does not run domain expansion itself or automatically connect a language's editor service to its projector.
-
-## Typed repetition
-
-`lowers repeat ElementType CountField IteratorField TemplateListField` lowers a checked count and a typed template list into `HirRepeat`. For example:
-
-```text
-syntax Repeat = Count:Expr "as" Iterator:Iterator "{" Items:(Expr; ",")* "}" scope
-                lowers repeat Core.Scalar Count Iterator Items;
-syntax Iterator = Name:Identifier declares value Name sequential type Core.Scalar;
-```
-
-The count and declared iterator must be `Core.Scalar`; every template item must have `ElementType`. The result is `Core.Sequence<Core.Sequence<ElementType>>`, retaining one group per iteration. Use this value inside a host operation through normal declarative lowering, or obtain it with `HirLowering.LowerNested`.
-
-`HirProjector` checks the template before running handlers, including for zero iterations. During projection, it binds the iterator to indices starting at zero, preserves enclosing bindings for nested loops, and restores them afterward. Positive fractional counts truncate toward zero, nonpositive counts yield no groups, and nonfinite counts or counts outside the supported signed 32-bit index range fail with source diagnostics. Host handlers receive typed projected groups and do not need to inspect source syntax. Numeric `HirEvaluator` is not the structured projection path.
-
-Floating-point projection inputs must be finite; `NP0001` is reported at the reference during preflight before handlers run. Floating-point operation results must also be finite; a nonfinite computed result reports `NP0001` at the producing operation and stops evaluation before downstream handlers. Result validation runs during projection because a handler's computed value is not available to structural preflight. Other domain constraints still require domain checks.
-
-### Selected declarative roots
-
-`HirLowering.LowerSelected(file, syntaxKinds, snapshotId)` lowers selected declarative syntax kinds in source order without collecting registered roots from other language regions. It performs the same recovery, binding, and semantic checks as nested lowering. A selected node with no supported lowering reports `NH0005` instead of disappearing. Consumers can select their language's domain roots without implementing a syntax traversal; callers decide whether any diagnostic invalidates the complete result.
-
-Whole-file semantic checking remains the default. An optional fourth argument, `SemanticCheckScope.SubtreeAndAncestors`, uses `FileSemantics.DiagnosticsForSubtree(node)`: checks in the subtree and its ancestors run once, including ancestor checks that report at a child. Property dependencies still evaluate lazily; missing syntax and unresolved bindings still prevent lowering. Unrelated checks remain pending for `Diagnostics()`, which completes validation without repeating checked nodes. Both modes keep the first reading of ambiguous syntax.
-
-Use scoped checking only when unrelated sibling checks cannot report errors at the selected subtree's source span. It is a partial validation API, not whole-file approval. Consumers must run complete diagnostics before admitting an output or invoking effects. Gravity uses scoped body preflight with pure rig projection, then publishes the generated-part index and checks the complete file before returning any rig.
-
-### Deferred projection arguments
-
-Use `ProjectionHandler.Deferred(signature, get => ...)` for synchronous operations that select which arguments to evaluate. `get(index)` evaluates that typed argument on demand and caches its result for the current invocation. It returns null after an argument failure; the operation cannot hide that failure by returning a value. Argument access expires when the handler returns. The registry requires exactly one eager or deferred implementation per handler, with the same exact catalog signature checks.
-
-Whole-tree preflight still checks all branches, including unselected ones, before any handler runs. Deferred evaluation skips unrequested computed results and their handlers; it does not bypass missing bindings, invalid constant/input values, or signature checks. The runtime supplies argument access, while the host implements its domain's condition and truth conventions. Returned types and finite numeric values use the same validation as eager handlers.
-
-The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
-
-## Templates
-
-A declaring rule with `lowers template Body(Params)` is a template, and a referencing rule with
-`lowers expand Name(Args)` expands the template its `Name` resolves to, in any file of the project:
-
-```text
-syntax Definition = "def" Name:Identifier "(" Params:(Parameter; ",")* ")" "=" Body:Shape
-                    declares shape Name export scope lowers template Body(Params);
-syntax Parameter  = Name:Identifier ":" Type:Identifier declares parameter Name type Type;
-syntax Make       = "make" Name:Identifier "(" Args:(Dimension; ",")* ")" ";"
-                    references shape Name lowers expand Name(Args);
-```
-
-A template body is never a lowering root. An expansion has its body's type; it lowers the body with
-each parameter (by position) replaced by the argument lowered at the call, keeping the parameter
-reference's origin, and its result's origins start with the call's. The call is checked for a template
-callee (`NT0007`), the argument count (`NT0008`, at the name) and each argument's type against its
-parameter's declared type (`NT0001`). An expansion is blocked by errors within the template, reported
-there (`NH0001`–`NH0003`), and a cycle reports `NH0007` at the name of the call that closes it.
-Geometry's `def`/`make` use these clauses; see the [design](docs/superpowers/specs/2026-10-02-declarative-templates-design.md).
-
-## Use Nitrogen as packages
-
-Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.com/TovarishN/index.json`):
+**Packages.** Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.com/TovarishN/index.json`):
 
 ```xml
 <PackageReference Include="Nitrogen.Runtime" Version="0.7.0" />
@@ -266,171 +167,33 @@ Releases publish three packages to GitHub Packages (`https://nuget.pkg.github.co
 <AdditionalFiles Include="MyLanguage.ngr" Namespace="My.Language.Syntax" />
 ```
 
-and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.7.0`. Reading the feed needs a GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>` (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from freshly packed packages; a `v*` tag publishes them.
+and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.7.0`. Reading the feed needs a
+GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>`
+(`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from
+freshly packed packages; a `v*` tag publishes them.
 
-## Use the CLI
-
-```sh
-dotnet run --project Nitrogen.Cli -- parse --grammar Nitrogen.Tests/Grammars/Calc.ngr --start Calc.Program path/to/sample.calc
-dotnet run --project Nitrogen.Cli -- lsp
-```
-
-`parse` and `watch` compile supplied grammars in-process. `lsp` serves `.ngr` files and languages declared by a workspace `nitrogen.json`.
-
-## VS Code and generated language support
-
-The [VS Code extension](editors/vscode/README.md) starts `nitrogen lsp`. The server serves `.ngr` files and compiles grammars declared in a workspace `nitrogen.json`, so a custom DSL can use the same extension. Available editor features include diagnostics, semantic coloring, outline, go to definition, references, rename, hover, completion, and, for a language whose helper sources export an `EvaluationProfile` (as `examples/DateCalc` does), each statement's value as an inlay hint; the results depend on the grammar and semantic rules supplied by the language.
-
-For a `nitrogen.json` language, the server also reads the language's files in the workspace folder that are not open (skipping `bin`, `obj`, `node_modules`, and hidden folders), so references into closed files resolve and rename edits them. Diagnostics are reported for open files. Clients that support dynamic registration are asked to report changes to those files.
-
-1. Build the language server from the repository root:
-
-   ```sh
-   dotnet build Nitrogen.slnx -c Release
-   ```
-
-2. Build and package the extension:
-
-   ```sh
-   cd editors/vscode
-   npm ci
-   npm run compile
-   npm run package
-   ```
-
-3. Install `editors/vscode/nitrogen-0.7.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.7.0.vsix` from `editors/vscode` if the `code` command is available.
-4. In VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, the default setting works.
-5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
-
-   ```json
-   {
-     "languages": [
-       {
-         "name": "calc",
-         "extensions": [".calc"],
-         "grammars": ["Nitrogen.Tests/Grammars/Calc.ngr"],
-         "start": "Calc.Program"
-       }
-     ]
-   }
-   ```
-
-Open a `.calc` file such as `sample.calc` containing `1 + 2;`. The server recompiles the declared grammar when it changes and updates diagnostics for its files. Adjust the grammar path and start rule for another language.
-
-## Rider and generated plugin support
-
-The generic Rider plugin is in `editors/rider` and uses the same `nitrogen lsp`
-server as VS Code. Build it with `gradle buildPlugin`, then install the ZIP in
-Rider. The default executable is `nitrogen` on `PATH`.
-
-To generate a grammar-specific plugin from a workspace configuration:
+**The CLI:**
 
 ```sh
-dotnet run --project Nitrogen.Cli -- generate rider \
-  --config nitrogen.json --output generated/rider
+nitrogen parse --grammar Nitrogen.Tests/Grammars/Calc.ngr --start Calc.Program path/to/sample.calc
+nitrogen lsp                                                    # the language server
+nitrogen package --config nitrogen.json --output dist           # installable plugins for a language
+nitrogen generate vscode|rider --config nitrogen.json --output generated
 ```
 
-Use `--language NAME` for a configuration containing multiple languages, or
-use `--grammar FILE --start Module.Rule` when no `nitrogen.json` exists. The
-plugin runs the executable set in Rider's Settings | Tools page, else a bundled
-server for the current platform, else `nitrogen` (or `--nitrogen PATH`). To bundle
-a server, publish it as a self-contained single file and pass it per platform,
-for example `--bundle macos-aarch64=publish/nitrogen` after
-`dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true -o publish`.
-Bundles are copied from local files and never downloaded.
+`parse` and `watch` compile the given grammars in-process. `lsp` serves `.ngr` files and the languages
+a workspace `nitrogen.json` declares. From a checkout, run any of these as
+`dotnet run --project Nitrogen.Cli -- <command>`.
 
-## Installable plugins for a language
+## Documentation
 
-A language project packages its `nitrogen.json` language as editor plugins:
-
-```sh
-nitrogen package --config nitrogen.json --output dist            # both
-nitrogen package --config nitrogen.json --output dist --vscode   # dist/<id>-<version>.vsix
-nitrogen package --config nitrogen.json --output dist --rider    # dist/<id>-<version>-rider.zip
-```
-
-Each plugin carries the grammar, helper sources, and a portable Nitrogen server, and runs it with the user's .NET 10 runtime (`dotnet`), so it works in any folder and on any OS. The server is started as `nitrogen lsp --config <bundled nitrogen.json>`, which ignores any `nitrogen.json` in the opened folder. Install the `.vsix` with **Extensions: Install from VSIX...**, and the ZIP with Rider's **Settings → Plugins → ⚙ → Install Plugin from Disk**. Packaging needs npm for VS Code, and Gradle with JDK 25 for Rider; the bundled server is the `nitrogen` that runs `package`, or `--server <directory>` for another framework-dependent build. `nitrogen generate vscode` and `nitrogen generate rider --self-contained` write the projects without building them. The optional `"version"` field of a language entry sets the plugin version (default: the Nitrogen CLI release version).
-
-A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or
-`SemanticModule` field or property in them is added to the language, so its declarative `lowers` and
-`declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and lowering errors
-(such as a cyclic template expansion, `NH0007`, or `NH0004` from a lowerer that throws) appear in the file
-they point into, even when found while lowering another open file. A lowering that is only blocked
-(`NH0001`–`NH0003`: by recovered syntax, an unresolved name, or invalid semantics) is not shown: its cause
-is reported on its own, or is no error at all, such as a name an open (`dynamic`) scope accepts. Composition errors such as `NC0001` or `NM0008` are reported on the
-first grammar file. Sources compile with the .NET SDK's implicit usings. The optional `"namespace"` field
-sets the C# namespace the grammars are generated into (default `Nitrogen.Workspace.Grammar`), so sources
-written against a project's generated syntax compile unchanged. [Nitrogen.Geometry/nitrogen.json](Nitrogen.Geometry/nitrogen.json)
-packages Geometry this way:
-
-```sh
-nitrogen package --config Nitrogen.Geometry/nitrogen.json --output dist --vscode
-```
-
-## Editor support for lowered languages
-
-The language server uses what a document lowers to as well as its syntax:
-
-- **In `.ngr` grammars**, the lowering clauses form a small language of their own. Operation names in
-  `lowers Op(...)` are colored as functions, semantic types (`Core.Scalar`, the type after `declares … type`)
-  as types, and the fields a clause passes as parameters, like the labels that declare them
-  (`Width:Dimension`). Completion after `lowers` offers the operations of the semantic catalog with their
-  signatures, after `literal`, `text`, `sequence`, `repeat` or `value` its types, and inside the
-  argument list the rule's fields. Hover shows an operation's signature. An operation or type missing
-  from the catalog (`NM0008`, `NM0009`), or a call with the wrong number of arguments (`NM0010`), is
-  reported at the clause. The catalog is the last good one of the `nitrogen.json` language the grammar
-  belongs to; other grammars see only the built-in types.
-  `Nitrogen.ngr` itself lowers every grammar to typed HIR over the `Grammar` semantic module
-  (`GrammarSemantics`): hover over a rule, expression or clause shows the `Grammar` operation it lowers
-  to. Its colours stay those of the grammar's syntax (`Presentation.ColorFromLowering` is off for `.ngr`).
-  `NgrParser.Parse` builds its `GrammarModel` from that HIR (`NgrProjector`), with no separate syntax walk.
-- **In a language's documents**, a word that spells an operation (`weekday`, `days`, `box`) is colored
-  as a function, and a token that lowers to a value is colored by its type: a number, or a string for
-  `Core.Text`. A language's `nitrogen.json` entry can map types to token types, for example
-  `"types": { "DateCalc.Date": "enumMember" }`. Completion details show each name's type, and the names
-  whose type the enclosing operation expects come first (`DeclarativeTypes.ExpectedTypeOf`). Hover shows
-  what the expression lowers to.
-
-`ILanguageAssist` is the hook behind the `.ngr` support: a `LanguageEntry` can add colors, completions,
-hovers and diagnostics for text that its binding and lowering do not describe.
-
-## Languages inside C# strings
-
-A C# string literal tagged with a language is served as a document of that language:
-
-```csharp
-var due = DateCalcEvaluator.Run(/*lang=datecalc*/ "2026-10-05 + 6 weeks;");
-
-// language=datecalc
-const string Deadline = "2026-10-05 + 6 weeks;";
-```
-
-A tag is a `/*lang=NAME*/` or `/* language=NAME */` comment right before the literal, or a
-`// language=NAME` line comment before the statement whose first literal it tags (the conventions of
-Rider and Visual Studio). `NAME` is a language's name or one of its extensions without the dot,
-ignoring case. Regular, verbatim and raw literals are supported, including escapes and the indentation
-of raw literals; interpolated literals are not. Coloring, diagnostics, completion, hover, go to
-definition, references and rename work inside the string, with positions mapped to the C# file. The
-strings of a language share its project with its files, so they can use names those files export.
-
-VS Code shows one semantic-token provider per document, so the extension keeps the C# extension's
-coloring and paints the server's tokens in C# files as decorations. Rename and outline in C# files stay
-with C# outside the tagged strings. Generated VS Code plugins (`nitrogen package`) include the same
-support and also activate for C# files; the generic extension leaves the strings of languages an
-installed generated extension carries to that extension (`skipLanguages`, see below). Other LSP clients
-get the server's results directly.
-
-In Rider, C# files get a second Nitrogen client of their own (the platform switches features per
-client, not per file). Its colors are added to Rider's, and diagnostics, completion, hover, go to
-definition and find usages work in the strings; rename, structure view, formatting and the rest stay
-with Rider. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
-always does, for its own language. A client whose server reads the workspace's `nitrogen.json` leaves
-the strings of languages that another installed Nitrogen plugin carries in its bundle to that plugin
-(it passes them as the `skipLanguages` initialization option, which any client can send), so they are
-not served twice. Each Rider plugin also gives its language a minimal parser
-definition, because Rider itself injects the language named by a `language=` comment, and asks the
-server for semantic tokens in every file it serves (the platform asks only in plain-text and TextMate
-files by default, so Rider showed no Nitrogen coloring before).
+- [The grammar language](docs/language-guide.md): scopes, typed arguments, repetition, templates, and
+  editor support for lowered languages.
+- [Editor support](docs/editor-support.md): the feature matrix, VS Code and Rider setup, installable
+  plugins, helper sources, and languages inside C# strings.
+- [The agent skill and semantic catalog](docs/agent-skill.md).
+- [Screenshots and videos](docs/media.md): how the README's captures are made.
+- The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
 
 ## Project map
 
@@ -443,8 +206,8 @@ files by default, so Rider showed no Nitrogen coloring before).
 | `Nitrogen.Workspace` | Dynamic grammar compilation and workspace state |
 | `Nitrogen.LanguageService` | Editor queries and LSP server |
 | `Nitrogen.Geometry` | Standalone geometry language example |
-| `examples/DateCalc` | A calculator with dates: typed overloads, editor support and C# strings |
-| `Nitrogen.Cli` | `parse`, `watch`, and `lsp` commands |
+| `examples/DateCalc` | A calculator with dates: typed overloads, values, quick fixes, and C# strings |
+| `Nitrogen.Cli` | `parse`, `watch`, `lsp`, `package` and `generate` commands |
 | `Nitrogen.Tests` | Standalone regression suite |
 
 ## License
