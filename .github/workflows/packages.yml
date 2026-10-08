@@ -26,3 +26,25 @@ jobs:
           done
       - run: eng/package-smoke.sh packages "${GITHUB_REF_NAME#v}"
       - run: dotnet nuget push "packages/*.nupkg" --source "https://nuget.pkg.github.com/TovarishN/index.json" --api-key "${{ secrets.GITHUB_TOKEN }}" --skip-duplicate
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nitrogen-packages
+          path: packages/*.nupkg
+          if-no-files-found: error
+
+  # Attaches the packages to the tag's GitHub release, drafting it if the Plugins workflow hasn't.
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release-${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: nitrogen-packages
+          path: release
+      - run: eng/release-draft.sh "$GITHUB_REF_NAME" release/*.nupkg
+        env:
+          GH_TOKEN: ${{ github.token }}

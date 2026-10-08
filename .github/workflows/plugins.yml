@@ -1,7 +1,8 @@
 name: Plugins
 
 # Builds Nitrogen and the VS Code and Rider plugins with ./build.sh and publishes them as
-# build artifacts. Separate from CI because it downloads the Rider SDK and takes minutes.
+# build artifacts, and, for a v* tag, attaches them to the tag's GitHub release. Separate from CI
+# because it downloads the Rider SDK and takes minutes.
 on:
   push:
     branches: [main]
@@ -48,3 +49,21 @@ jobs:
             artifacts/*.vsix
             artifacts/rider/*.zip
           if-no-files-found: error
+
+  # For a v* tag, attaches the plugins to the tag's GitHub release, drafting it if the Packages workflow hasn't.
+  release:
+    if: github.ref_type == 'tag'
+    needs: plugins
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency: release-${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v7
+        with:
+          name: nitrogen-plugins
+          path: release
+      - run: eng/release-draft.sh "$GITHUB_REF_NAME" $(find release -type f -name '*.vsix' -o -type f -name '*.zip' | sort)
+        env:
+          GH_TOKEN: ${{ github.token }}
