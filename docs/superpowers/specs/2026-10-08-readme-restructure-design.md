@@ -1,6 +1,6 @@
 # README restructure: a pitch, with the guides in `docs/`
 
-Status: approved design (2026-10-08).
+Status: implemented (2026-10-08).
 
 ## Problem
 
