@@ -26,7 +26,9 @@ public sealed record ServiceFoldingRange(int StartLine, int EndLine, bool IsComm
 public IReadOnlyList<ServiceFoldingRange> FoldingRanges(string uri);
 ```
 
-1. **Candidates.** Every syntax node whose extent spans 2 or more lines folds. The extent runs from the
+1. **Candidates.** Every syntax node whose extent spans 2 or more lines folds, except a list
+   (`SyntaxKinds.List`, from `X*` or `(X; S)*`): it runs from its first item to its last, so folding it
+   would hide the other items under the first; its items and the construct around it fold instead. The extent runs from the
    node's first character to its last non-whitespace character. The root folds like any other node, as JSON and XML
    editors fold their root: excluding it would also exclude a construct that is the whole file, such as
    a grammar's one `syntax module`, because a node's extent starts at its first token.
