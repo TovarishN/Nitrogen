@@ -142,8 +142,6 @@ Nitrogen separates what a program means from how it is written:
   consults it before inventing an abstraction. A catalog concept guides work; it isn't runnable code
   until a host validates and admits it.
 
-The [roadmap](docs/roadmap.md) tracks where this is going.
-
 ## Get started
 
 Requirements: the .NET 10 SDK; Node.js and npm to build the VS Code extension; Gradle and JDK 25 to
@@ -193,7 +191,6 @@ a workspace `nitrogen.json` declares. From a checkout, run any of these as
   plugins, helper sources, and languages inside C# strings.
 - [The agent skill and semantic catalog](docs/agent-skill.md).
 - [Screenshots and videos](docs/media.md): how the README's captures are made.
-- The [roadmap](docs/roadmap.md) and [milestone issue records](issues/) document Nitrogen's development.
 
 ## Project map
 
