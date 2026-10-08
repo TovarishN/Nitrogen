@@ -80,6 +80,7 @@ public sealed partial class NitrogenLanguageService
             var language = File.Exists(path) ? LoadClosed(path) : RemoveClosed(uri);
             return language is null ? [] : OpenDocuments(language);
         }
+        if (path.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase)) RefreshClosedGrammars();
         return _documents.ContainsKey(uri) ? [] : GrammarHookPath(path);
     }
 
@@ -92,6 +93,7 @@ public sealed partial class NitrogenLanguageService
             language.Snapshot?.Dispose();
         }
         _grammarLanguages.Clear();
+        RefreshClosedGrammars(); // none until the languages are read again
         string file = Path.Combine(_root!, "nitrogen.json");
         if (!File.Exists(file)) return affected;
 
@@ -132,6 +134,7 @@ public sealed partial class NitrogenLanguageService
 
     IReadOnlyList<string> Compile(GrammarLanguage language)
     {
+        RefreshClosedGrammars();
         var files = language.Files();
         foreach (string gone in language.Workspace.Paths.Except(files, StringComparer.Ordinal).ToList()) language.Workspace.RemoveGrammar(gone);
         foreach (string file in files)

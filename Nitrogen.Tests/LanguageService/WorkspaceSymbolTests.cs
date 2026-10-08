@@ -110,4 +110,47 @@ public sealed class WorkspaceSymbolTests : IDisposable
         Assert.Equal(["start"], names);
         Assert.DoesNotContain(service.WorkspaceSymbols("weekday"), s => s.Name == "weekday");
     }
+
+    [Fact]
+    public void A_closed_grammar_rule_is_found_with_its_module_as_container()
+    {
+        using var service = Service();
+
+        var decl = Assert.Single(service.WorkspaceSymbols("Decl"), s => s.Name == "Decl");
+        Assert.Equal(("rule", OutlineKind.Class, "Links", Uri("links.ngr")), (decl.Kind, decl.Outline, decl.Container, decl.Location.Uri));
+        var module = Assert.Single(service.WorkspaceSymbols("Links"), s => s.Name == "Links");
+        Assert.Equal(("module", (string?)null), (module.Kind, module.Container));
+    }
+
+    [Fact]
+    public void An_open_grammar_is_found_once_and_again_after_closing()
+    {
+        using var service = Service();
+        service.Open(Uri("links.ngr"), 1, WorkspaceIndexTests.Grammar);
+        Assert.Single(service.WorkspaceSymbols("Decl"), s => s.Name == "Decl");
+        service.Close(Uri("links.ngr"));
+        Assert.Single(service.WorkspaceSymbols("Decl"), s => s.Name == "Decl");
+    }
+
+    [Fact]
+    public void A_grammar_changed_on_disk_updates_its_symbols_and_a_deleted_one_drops_them()
+    {
+        using var service = Service();
+        string path = Write("links.ngr", WorkspaceIndexTests.Grammar.Replace("Decl", "Define"));
+        service.FileChanged(path);
+        Assert.Contains(service.WorkspaceSymbols("Define"), s => s.Name == "Define");
+        Assert.DoesNotContain(service.WorkspaceSymbols("Decl"), s => s.Name == "Decl");
+
+        File.Delete(path);
+        service.FileChanged(path);
+        Assert.DoesNotContain(service.WorkspaceSymbols(""), s => s.Location.Uri == Uri("links.ngr"));
+    }
+
+    [Fact]
+    public void A_closed_grammar_adds_no_diagnostics_to_an_open_one()
+    {
+        using var service = Service();
+        service.Open(Uri("other.ngr"), 1, WorkspaceIndexTests.Grammar); // the same module, not in nitrogen.json
+        Assert.DoesNotContain(service.Diagnostics(Uri("other.ngr")), d => d.Code.StartsWith("NB", StringComparison.Ordinal));
+    }
 }

@@ -11,10 +11,53 @@ public sealed partial class NitrogenLanguageService
 {
     const int MaxWorkspaceSymbols = 1_000;
 
+    /// <summary>The workspace languages' grammars that aren't open, each bound in a project of its own: search only, so two grammars exporting one module don't clash.</summary>
+    readonly Dictionary<string, (Document Document, Project Project)> _closedGrammars = new(StringComparer.Ordinal);
+
+    /// <summary>Reads the grammars of the workspace languages that aren't open; one whose text hasn't changed is kept.</summary>
+    void RefreshClosedGrammars()
+    {
+        var texts = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var language in _grammarLanguages)
+            foreach (string path in language.Files())
+            {
+                string uri = new Uri(path).AbsoluteUri;
+                if (_documents.ContainsKey(uri) || texts.ContainsKey(uri)) continue;
+                try
+                {
+                    if (new FileInfo(path).Length <= MaxIndexedFileBytes) texts[uri] = File.ReadAllText(path);
+                }
+                catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+                {
+                }
+            }
+        foreach (var (uri, kept) in _closedGrammars.ToList())
+            if (!texts.TryGetValue(uri, out string? text) || text != kept.Document.Text)
+            {
+                _closedGrammars.Remove(uri);
+                kept.Document.Dispose();
+            }
+        foreach (var (uri, text) in texts)
+        {
+            if (_closedGrammars.ContainsKey(uri) || !Registry.TryFind(uri, out var language, out var start)) continue;
+            var document = new Document(uri, 0, text, language, start);
+            var project = new Project(language.Language);
+            project.Set(uri, document.Parsed.Tree);
+            _closedGrammars[uri] = (document, project);
+        }
+    }
+
+    void DisposeClosedGrammars()
+    {
+        foreach (var (document, _) in _closedGrammars.Values) document.Dispose();
+        _closedGrammars.Clear();
+    }
+
     public IReadOnlyList<WorkspaceSymbol> WorkspaceSymbols(string query)
     {
         var symbols = new List<WorkspaceSymbol>();
         foreach (var document in _documents.Values.Concat(_closed.Values)) symbols.AddRange(SymbolsOf(document, _projects[document.Language]));
+        foreach (var (document, project) in _closedGrammars.Values) symbols.AddRange(SymbolsOf(document, project));
         return symbols.Where(s => Matches(query, s.Name))
             .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
             .ThenBy(s => s.Location.Uri, StringComparer.Ordinal)

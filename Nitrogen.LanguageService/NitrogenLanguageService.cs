@@ -399,5 +399,6 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         _documents.Clear();
         DisposeClosed();
         DisposeGrammars();
+        DisposeClosedGrammars();
     }
 }
