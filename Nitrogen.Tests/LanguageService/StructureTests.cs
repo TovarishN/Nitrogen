@@ -70,4 +70,42 @@ public sealed class StructureTests : IDisposable
         using var service = Service();
         Assert.Empty(Folds(service, "C.cs", "class C\n{\n    const string D = /*lang=datecalc*/ \"\"\"\n        1 + 1;\n        2 + 2;\n        \"\"\";\n}\n"));
     }
+
+    [Fact]
+    public void Selection_grows_through_the_enclosing_syntax()
+    {
+        using var service = Service();
+        const string text = "let sprint = 2 weeks;\nweekday(2026-10-05 + 3 * sprint);";
+        service.Open(Uri("a.datecalc"), 1, text);
+        var lines = new LineMap(text);
+
+        var steps = Assert.Single(service.SelectionRanges(Uri("a.datecalc"), [lines.PositionOf(text.IndexOf('3'))]));
+        string[] texts = steps.Select(r => text[lines.OffsetOf(r.Start)..lines.OffsetOf(r.End)]).ToArray();
+
+        Assert.Equal(["3", "3 * sprint", "2026-10-05 + 3 * sprint", "weekday(2026-10-05 + 3 * sprint)", "weekday(2026-10-05 + 3 * sprint);"], texts[..5]);
+        Assert.Equal(text, texts[^1]);
+        Assert.All(texts.Zip(texts.Skip(1)), pair => Assert.NotEqual(pair.First, pair.Second));
+    }
+
+    [Fact]
+    public void Each_position_gets_its_own_steps()
+    {
+        using var service = Service();
+        const string text = "1 + 2;\nmax(3, 4);";
+        service.Open(Uri("a.datecalc"), 1, text);
+
+        var result = service.SelectionRanges(Uri("a.datecalc"), [new DocumentPosition(0, 0), new DocumentPosition(1, 4)]);
+
+        Assert.Equal(2, result.Count);
+        Assert.Equal(new DocumentRange(new DocumentPosition(0, 0), new DocumentPosition(0, 1)), result[0][0]);
+        Assert.Equal(new DocumentRange(new DocumentPosition(1, 4), new DocumentPosition(1, 5)), result[1][0]);
+    }
+
+    [Fact]
+    public void A_csharp_file_gets_no_selection_steps_from_nitrogen()
+    {
+        using var service = Service();
+        service.Open(Uri("C.cs"), 1, "const string D = /*lang=datecalc*/ \"1 + 1;\";");
+        Assert.All(service.SelectionRanges(Uri("C.cs"), [new DocumentPosition(0, 37)]), Assert.Empty);
+    }
 }
