@@ -18,6 +18,6 @@ GIF (or MP4 under 5 MB) for the quick fix.
 | `datecalc-completion.png` | `sample.datecalc` | On a new line, type `wee` and wait for completion | The completion list with `weekday` and `weeks`, and the details showing types. |
 | `datecalc-hover.png` | `sample.datecalc` | Hover the `*` in `3 * sprint` | The hover with `DateCalc.Duration · DateCalc.Times · DateCalc.Weekday` and `= 42 days`. |
 | `datecalc-quickfix.gif` | a new `fix.datecalc` with `let d = 2026-02-30;` | Put the cursor on the date, open quick fixes (Cmd+. / Ctrl+.), apply *Change to 2026-02-28* | The squiggle and DC0001 message, the menu, and the corrected line with its value appearing. |
-| `csharp-strings.png` | `Snippets.cs` | none | The tagged raw string with `= 2026-12-25 Fri`, `= 81` and `= Friday`, and `= 2026-11-16 Mon` after the `Deadline` string, with DateCalc's coloring inside the strings. |
+| `datecalc-strings.png` | `Snippets.cs` | none | The tagged raw string with `= 2026-12-25 Fri`, `= 81` and `= Friday`, and `= 2026-11-16 Mon` after the `Deadline` string, with DateCalc's coloring inside the strings. |
 
 Rider captures are welcome too: name them with a `-rider` suffix (`datecalc-hints-rider.png`) and add them beside the VS Code ones.
