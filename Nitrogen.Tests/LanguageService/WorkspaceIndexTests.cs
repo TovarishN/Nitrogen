@@ -194,7 +194,7 @@ public sealed class WorkspaceIndexTests : IDisposable
         var request = Assert.Single(messages, m => m.TryGetProperty("method", out var method) && method.GetString() == "client/registerCapability");
         var registration = request.GetProperty("params").GetProperty("registrations")[0];
         Assert.Equal("workspace/didChangeWatchedFiles", registration.GetProperty("method").GetString());
-        Assert.Equal(new[] { "**/*.links", "**/nitrogen.json" },
+        Assert.Equal(new[] { "**/*.links", "**/*.ngr", "**/nitrogen.json" },
             registration.GetProperty("registerOptions").GetProperty("watchers").EnumerateArray().Select(w => w.GetProperty("globPattern").GetString()));
     }
 

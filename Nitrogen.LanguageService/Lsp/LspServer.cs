@@ -103,7 +103,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
                         SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
-                        FoldingRangeProvider: true, SelectionRangeProvider: true),
+                        FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true),
                     new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
@@ -232,6 +232,14 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     return outer!;
                 }).ToArray();
                 await RespondAsync(id, ranges, LspJson.Default.LspSelectionRangeArray, cancel);
+                break;
+            }
+            case "workspace/symbol":
+            {
+                string query = Params(parameters, LspJson.Default.WorkspaceSymbolParams).Query ?? "";
+                var symbols = service.WorkspaceSymbols(query)
+                    .Select(s => new LspSymbolInformation(s.Name, (int)s.Outline, Location(s.Location), s.Container)).ToArray();
+                await RespondAsync(id, symbols, LspJson.Default.LspSymbolInformationArray, cancel);
                 break;
             }
             default:
@@ -382,7 +390,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         }, cancel);
     }
 
-    /// <summary>Asks the client to report changes to the indexed files and nitrogen.json (<c>workspace/didChangeWatchedFiles</c>).</summary>
+    /// <summary>Asks the client to report changes to the indexed files, grammars and nitrogen.json (<c>workspace/didChangeWatchedFiles</c>).</summary>
     Task RegisterWatchersAsync(IReadOnlyList<string> extensions, CancellationToken cancel) =>
         connection.WriteAsync(w =>
         {
@@ -397,7 +405,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             w.WriteString("method", "workspace/didChangeWatchedFiles");
             w.WriteStartObject("registerOptions");
             w.WriteStartArray("watchers");
-            foreach (string pattern in extensions.Select(e => "**/*" + e).Append("**/nitrogen.json"))
+            foreach (string pattern in extensions.Select(e => "**/*" + e).Append("**/*.ngr").Append("**/nitrogen.json"))
             {
                 w.WriteStartObject();
                 w.WriteString("globPattern", pattern);

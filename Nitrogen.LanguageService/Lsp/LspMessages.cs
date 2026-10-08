@@ -41,7 +41,8 @@ public sealed record ServerCapabilities(
     CodeActionOptions? CodeActionProvider = null,
     SignatureHelpOptions? SignatureHelpProvider = null,
     bool? FoldingRangeProvider = null,
-    bool? SelectionRangeProvider = null);
+    bool? SelectionRangeProvider = null,
+    bool? WorkspaceSymbolProvider = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -112,6 +113,11 @@ public sealed record SelectionRangeParams(TextDocumentIdentifier TextDocument, L
 /// <summary>A selection range, inside its <paramref name="Parent"/> (the next larger range), if any.</summary>
 public sealed record LspSelectionRange(LspRange Range, LspSelectionRange? Parent = null);
 
+public sealed record WorkspaceSymbolParams(string? Query);
+
+/// <summary>A symbol found by <c>workspace/symbol</c>; <paramref name="Kind"/> is LSP's SymbolKind.</summary>
+public sealed record LspSymbolInformation(string Name, int Kind, LspLocation Location, string? ContainerName = null);
+
 /// <summary>A parameter by its [start, end) offsets in the signature's label.</summary>
 public sealed record LspParameterInformation(int[] Label);
 
@@ -161,4 +167,6 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(LspFoldingRange[]))]
 [JsonSerializable(typeof(SelectionRangeParams))]
 [JsonSerializable(typeof(LspSelectionRange[]))]
+[JsonSerializable(typeof(WorkspaceSymbolParams))]
+[JsonSerializable(typeof(LspSymbolInformation[]))]
 internal sealed partial class LspJson : JsonSerializerContext;

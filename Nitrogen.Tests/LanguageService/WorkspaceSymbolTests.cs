@@ -153,4 +153,24 @@ public sealed class WorkspaceSymbolTests : IDisposable
         service.Open(Uri("other.ngr"), 1, WorkspaceIndexTests.Grammar); // the same module, not in nitrogen.json
         Assert.DoesNotContain(service.Diagnostics(Uri("other.ngr")), d => d.Code.StartsWith("NB", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task The_server_answers_workspace_symbol()
+    {
+        Write("nitrogen.json", WorkspaceIndexTests.Config);
+        Write("links.ngr", WorkspaceIndexTests.Grammar);
+        string initialize = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new System.Uri(_root).AbsoluteUri + "\",\"capabilities\":{}}}";
+        const string symbols = """{"jsonrpc":"2.0","id":5,"method":"workspace/symbol","params":{"query":"decl"}}""";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+
+        var (_, messages, _) = await LspServerTests.Session(service, initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}""",
+            symbols, """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
+
+        Assert.True(messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("workspaceSymbolProvider").GetBoolean());
+        var result = messages.Single(m => m.TryGetProperty("id", out var i) && i.ValueKind == JsonValueKind.Number && i.GetInt32() == 5).GetProperty("result");
+        var decl = Assert.Single(result.EnumerateArray(), s => s.GetProperty("name").GetString() == "Decl");
+        Assert.Equal((int)OutlineKind.Class, decl.GetProperty("kind").GetInt32());
+        Assert.Equal("Links", decl.GetProperty("containerName").GetString());
+        Assert.Equal(Uri("links.ngr"), decl.GetProperty("location").GetProperty("uri").GetString());
+    }
 }
