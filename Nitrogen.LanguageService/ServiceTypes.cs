@@ -73,3 +73,6 @@ public sealed record ServiceSignature(string Label, IReadOnlyList<(int Start, in
 
 /// <summary>The overloads of the call around a position, the active one, and the parameter the cursor is in.</summary>
 public sealed record ServiceSignatureHelp(IReadOnlyList<ServiceSignature> Signatures, int ActiveSignature, int ActiveParameter);
+
+/// <summary>A foldable region by lines (0-based, both inclusive): a syntax node, or a block of comments.</summary>
+public sealed record ServiceFoldingRange(int StartLine, int EndLine, bool IsComment);
