@@ -45,47 +45,42 @@ The rest is ordinary C#:
 [sample.datecalc](examples/DateCalc/sample.datecalc), as the editor shows it, with each statement
 followed by its value:
 
-```text
-let start = 2026-10-05;                 = 2026-10-05 Mon
-let sprint = 2 weeks;                   = 14 days
-start + sprint;                         = 2026-10-19 Mon
-weekday(start + 3 * sprint);            = Monday
-(2026-12-25 - start) in days;           = 81
-sprint / 1 days;                        = 14
-round(2 * pi, 2);                       = 6.28
-max(start + 10 weeks, 2026-12-25);      = 2026-12-25 Fri
-```
-
-<!-- media: docs/images/datecalc-hints.png -->
+![sample.datecalc in VS Code: each statement followed by its value, such as start + sprint = 2026-10-19 Mon](docs/images/datecalc-hints.png)
 
 - **Coloring and completion** come from the grammar and the semantic modules: dates, durations,
   functions and constants are colored by kind, and completion offers names with their types.
-  <!-- media: docs/images/datecalc-completion.png -->
+
+  ![Completing wee in sample.datecalc: Nitrogen's list offers weekday, a built-in function](docs/images/datecalc-completion.png)
+
 - **Hover** shows what an expression lowers to, and its value. Hovering `3 * sprint` shows
   `DateCalc.Duration · DateCalc.Times` and `= 42 days`.
-  <!-- media: docs/images/datecalc-hover.png -->
+
+  ![Hovering 3 * sprint: DateCalc.Duration · DateCalc.Times, and = 42 days](docs/images/datecalc-hover.png)
+
 - **Diagnostics and quick fixes:** `2026-02-30` reports `DC0001` and offers *Change to 2026-02-28*,
   and `2026-12-25 + 2026-10-05` reports `DC0002` and offers *Use '-'*. The server offers a fix only
   after checking that it removes the error, so `2 weeks + 2026-10-05` gets none.
-  <!-- media: docs/images/datecalc-quickfix.gif -->
+
+  ![Applying the quick fix that changes 2026-02-30 to 2026-02-28](docs/images/datecalc-quickfix.gif)
+
 - **`today`:** [countdown.datecalc](examples/DateCalc/countdown.datecalc) counts down to Christmas.
   Its values follow the clock and refresh at midnight.
 - **Go to definition, references and rename** work across the language's files.
 - **Inside C# strings:** a string tagged with the language gets the same support, values included.
   This is [Snippets.cs](examples/DateCalc/Snippets.cs):
 
-```csharp
-public static IReadOnlyList<DateCalcLine> Countdown() => DateCalcEvaluator.Run(/*lang=datecalc*/ """
-    let christmas = 2026-12-25;          = 2026-12-25 Fri
-    (christmas - 2026-10-05) in days;    = 81
-    weekday(christmas);                  = Friday
-    """);
+  ```csharp
+  public static IReadOnlyList<DateCalcLine> Countdown() => DateCalcEvaluator.Run(/*lang=datecalc*/ """
+      let christmas = 2026-12-25;          = 2026-12-25 Fri
+      (christmas - 2026-10-05) in days;    = 81
+      weekday(christmas);                  = Friday
+      """);
 
-// language=datecalc
-const string Deadline = "2026-10-05 + 6 weeks;"  = 2026-11-16 Mon
-```
+  // language=datecalc
+  const string Deadline = "2026-10-05 + 6 weeks;"  = 2026-11-16 Mon
+  ```
 
-<!-- media: docs/images/csharp-strings.png -->
+  ![Snippets.cs in VS Code: DateCalc's coloring and values inside tagged C# strings](docs/images/datecalc-strings.png)
 
 The [feature matrix](docs/editor-support.md#feature-matrix) shows what works where in VS Code and Rider.
 
