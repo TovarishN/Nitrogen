@@ -449,6 +449,23 @@ public sealed class DeclarativeTypes
             types.SequenceItems(tree.Child(symbol.Node, rule.Arguments[1]), rule.SequenceStride).ToArray());
     }
 
+    /// <summary>
+    /// The signature of the template <paramref name="symbol"/> declares, read from its declaration: each
+    /// parameter's name and declared type, in order, and the type of its body. Null when the symbol's
+    /// declaring rule doesn't lower a template.
+    /// </summary>
+    public (IReadOnlyList<(string Name, SemanticType? Type)> Parameters, SemanticType? Result)? TemplateSignature(Symbol symbol)
+    {
+        if (symbol is not { IsBuiltin: false, Path: { } path }) return null;
+        var types = path == _file.Path ? this : _file.RelatedFile(path).DeclarativeTypes;
+        var tree = types._file.Tree;
+        if (types._lowering.RuleFor(tree.Kind(symbol.Node)) is not { Rule: { Form: DeclarativeForm.Template } rule }) return null;
+        var parameters = types.SequenceItems(tree.Child(symbol.Node, rule.Arguments[1]), rule.SequenceStride)
+            .Select(types.ParameterAt).OfType<Symbol>()
+            .Select(parameter => (parameter.Name, types.TypeOfSymbol(parameter))).ToArray();
+        return (parameters, types.TypeOf(tree.Child(symbol.Node, rule.Arguments[0])));
+    }
+
     /// <summary>The parameter a template's parameter item declares; null when it declares none.</summary>
     Symbol? ParameterAt(int item) => _file.Binding.Declarations.FirstOrDefault(declaration => declaration.Node == item);
 
