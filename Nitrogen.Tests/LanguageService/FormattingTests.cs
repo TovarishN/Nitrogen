@@ -207,4 +207,51 @@ public class FormattingTests
         service.Open("file:///w/C.cs", 1, "class C\n{\nint x;\n}\n");
         Assert.Empty(service.Format("file:///w/C.cs", TwoSpaces));
     }
+
+    static string RepositoryRoot([System.Runtime.CompilerServices.CallerFilePath] string path = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(path)!, "..", ".."));
+
+    [Theory]
+    [InlineData("Nitrogen.Ngr/Nitrogen.ngr")]
+    [InlineData("examples/DateCalc/DateCalc.ngr")]
+    [InlineData("Nitrogen.Tests/Grammars/Calc.ngr")]
+    [InlineData("Nitrogen.Geometry/Geometry.ngr")]
+    public void The_repository_grammars_are_already_formatted(string relative)
+    {
+        string text = File.ReadAllText(Path.Combine(RepositoryRoot(), relative));
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open("file:///w/" + Path.GetFileName(relative), 1, text);
+        var edits = service.Format("file:///w/" + Path.GetFileName(relative), TwoSpaces);
+        Assert.True(edits.Count == 0, string.Join("\n", edits.Select(e => $"line {e.Range.Start.Line + 1}: '{e.NewText}'")));
+
+        // Not vacuous: the file parses, and with every line shifted one space right, formatting gives it back.
+        string shifted = string.Join("\n", text.Split('\n').Select(line => line.Length == 0 ? line : " " + line));
+        service.Change("file:///w/" + Path.GetFileName(relative), 2, shifted);
+        Assert.Equal(text, Apply(shifted, service.Format("file:///w/" + Path.GetFileName(relative), TwoSpaces)));
+    }
+
+    [Fact]
+    public void The_datecalc_sample_is_already_formatted()
+    {
+        string root = Directory.CreateTempSubdirectory("nitrogen-format-").FullName;
+        try
+        {
+            foreach (string file in Directory.GetFiles(Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage")))
+                File.Copy(file, Path.Combine(root, Path.GetFileName(file)));
+            using var service = new NitrogenLanguageService(LspCommand.Registry());
+            service.ConfigureWorkspace(root);
+            string uri = new System.Uri(Path.Combine(root, "sample.datecalc")).AbsoluteUri;
+            string text = File.ReadAllText(Path.Combine(root, "sample.datecalc"));
+            service.Open(uri, 1, text);
+            Assert.Empty(service.Format(uri, TwoSpaces));
+
+            string shifted = string.Join("\n", text.Split('\n').Select(line => line.Length == 0 ? line : " " + line));
+            service.Change(uri, 2, shifted);
+            Assert.Equal(text, Apply(shifted, service.Format(uri, TwoSpaces)));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 }
