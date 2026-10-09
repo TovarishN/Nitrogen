@@ -1,6 +1,6 @@
 # Diagnostics for closed files
 
-Status: approved (2026-10-09). Part of the goal of first-class language support.
+Status: implemented (2026-10-09). Part of the goal of first-class language support.
 
 ## Problem
 
