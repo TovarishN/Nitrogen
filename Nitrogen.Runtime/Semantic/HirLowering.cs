@@ -85,22 +85,21 @@ public static class HirLowering
         }
         if (context.Admission == LoweringAdmission.SyntaxOnly) return true;
         var span = origin.Span;
-        var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
-            !reference.IsOptional && file.SymbolOf(reference.Node) is null);
+        var unresolved = FirstWithin(file.UnresolvedReferences(), reference => reference.NameSpan, span);
         if (unresolved is not null)
         {
             context.Report("NH0002", new SourceOrigin(file.Path, context.SnapshotId,
                 unresolved.Node, unresolved.NameSpan), "An unresolved symbol prevents lowering.");
             return false;
         }
-        var bindingError = file.Binding.Diagnostics.FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
-        var semanticError = (context.CheckScope == SemanticCheckScope.SubtreeAndAncestors
-            ? file.DiagnosticsForSubtree(node) : file.Diagnostics()).FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
+        var bindingError = FirstWithin(file.BindingDiagnosticsByStart(), diagnostic => diagnostic.Span, span);
+        var semanticError = context.CheckScope == SemanticCheckScope.SubtreeAndAncestors
+            ? file.DiagnosticsForSubtree(node).FirstOrDefault(diagnostic => Contains(span, diagnostic.Span))
+            : FirstWithin(file.Diagnostics(), diagnostic => diagnostic.Span, span);
         if (bindingError is not null || semanticError is not null)
         {
             var site = bindingError?.Span ?? semanticError!.Span;
-            int sourceNode = Enumerable.Range(0, tree.NodeCount)
-                .FirstOrDefault(candidate => tree.Span(candidate) == site, node);
+            int sourceNode = file.NodeAt(site) ?? node;
             context.Report("NH0003", new SourceOrigin(file.Path, context.SnapshotId, sourceNode, site),
                 "Invalid semantics prevents lowering.");
             return false;
@@ -166,8 +165,7 @@ public static class HirLowering
                 }
                 if (admission == LoweringAdmission.Full)
                 {
-                    var unresolved = file.Binding.References.FirstOrDefault(reference => Contains(span, reference.NameSpan) &&
-                        !reference.IsOptional && file.SymbolOf(reference.Node) is null);
+                    var unresolved = FirstWithin(file.UnresolvedReferences(), reference => reference.NameSpan, span);
                     if (unresolved is not null && !registration.HandlesUnresolvedReferences)
                     {
                         diagnostics.Add(new LoweringDiagnostic("NH0002",
@@ -175,13 +173,12 @@ public static class HirLowering
                             "An unresolved symbol prevents lowering."));
                         continue;
                     }
-                    var bindingError = file.Binding.Diagnostics.FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
-                    var semanticError = file.Diagnostics().FirstOrDefault(diagnostic => Contains(span, diagnostic.Span));
+                    var bindingError = FirstWithin(file.BindingDiagnosticsByStart(), diagnostic => diagnostic.Span, span);
+                    var semanticError = FirstWithin(file.Diagnostics(), diagnostic => diagnostic.Span, span);
                     if (bindingError is not null || semanticError is not null)
                     {
                         var site = bindingError?.Span ?? semanticError!.Span;
-                        int sourceNode = Enumerable.Range(0, tree.NodeCount)
-                            .FirstOrDefault(candidate => tree.Span(candidate) == site, node);
+                        int sourceNode = file.NodeAt(site) ?? node;
                         diagnostics.Add(new LoweringDiagnostic("NH0003",
                             new SourceOrigin(file.Path, context.SnapshotId, sourceNode, site),
                             "Invalid semantics prevents lowering."));
@@ -221,6 +218,24 @@ public static class HirLowering
 
     static bool Contains(TextSpan outer, TextSpan inner) =>
         inner.Start >= outer.Start && inner.End <= outer.End;
+
+    /// <summary>
+    /// The first item of <paramref name="byStart"/> (sorted by span start) whose span lies within
+    /// <paramref name="outer"/>: a binary search to the first start inside it, then a walk while starts stay inside.
+    /// </summary>
+    static T? FirstWithin<T>(IReadOnlyList<T> byStart, Func<T, TextSpan> spanOf, TextSpan outer) where T : class
+    {
+        int low = 0, high = byStart.Count;
+        while (low < high)
+        {
+            int middle = (low + high) >>> 1;
+            if (spanOf(byStart[middle]).Start < outer.Start) low = middle + 1;
+            else high = middle;
+        }
+        for (int i = low; i < byStart.Count && spanOf(byStart[i]).Start <= outer.End; i++)
+            if (spanOf(byStart[i]).End <= outer.End) return byStart[i];
+        return null;
+    }
 
     static bool HasRecovery(SyntaxTree tree, int node)
     {

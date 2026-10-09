@@ -205,10 +205,44 @@ public sealed class FileSemantics
     public IReadOnlyList<SemanticDiagnostic> Diagnostics()
     {
         if (!_allChecked) { CheckNodes(Tree.Root, ancestors: false); _allChecked = true; }
-        return _checks.Concat(_evaluation).Concat(DeclarativeTypes.Diagnostics())
-            .OrderBy(d => d.Span.Start)
-            .ThenBy(d => d.Code, StringComparer.Ordinal)
-            .ToList();
+        var declarative = DeclarativeTypes.Diagnostics();
+        // The lists only grow, so their counts tell whether the sorted copy is still current.
+        var counts = (_checks.Count, _evaluation.Count, declarative.Count);
+        if (_sorted is null || _sortedCounts != counts)
+        {
+            _sorted = _checks.Concat(_evaluation).Concat(declarative)
+                .OrderBy(d => d.Span.Start)
+                .ThenBy(d => d.Code, StringComparer.Ordinal)
+                .ToList();
+            _sortedCounts = counts;
+        }
+        return _sorted;
+    }
+
+    List<SemanticDiagnostic>? _sorted;
+    (int Checks, int Evaluation, int Declarative) _sortedCounts;
+    IReadOnlyList<Reference>? _unresolvedByStart;
+    IReadOnlyList<BindingDiagnostic>? _bindingErrorsByStart;
+    Dictionary<TextSpan, int>? _nodeBySpan;
+
+    /// <summary>The file's required references that resolve to nothing, by name start (text order).</summary>
+    internal IReadOnlyList<Reference> UnresolvedReferences() =>
+        _unresolvedByStart ??= Binding.References.Where(reference => !reference.IsOptional && SymbolOf(reference.Node) is null)
+            .OrderBy(reference => reference.NameSpan.Start).ToList();
+
+    /// <summary>The file's binding diagnostics, by span start (stable).</summary>
+    internal IReadOnlyList<BindingDiagnostic> BindingDiagnosticsByStart() =>
+        _bindingErrorsByStart ??= Binding.Diagnostics.OrderBy(diagnostic => diagnostic.Span.Start).ToList();
+
+    /// <summary>The first node (in node order) whose span is <paramref name="span"/>; null when none.</summary>
+    internal int? NodeAt(TextSpan span)
+    {
+        if (_nodeBySpan is null)
+        {
+            _nodeBySpan = new Dictionary<TextSpan, int>();
+            for (int node = 0; node < Tree.NodeCount; node++) _nodeBySpan.TryAdd(Tree.Span(node), node);
+        }
+        return _nodeBySpan.TryGetValue(span, out int found) ? found : null;
     }
 
     /// <summary>Check a subtree and its ancestors, returning diagnostics inside its span.
