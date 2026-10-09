@@ -75,7 +75,8 @@ are not run.
 
 - The documents whose diagnostics the batch's changes, opens, closes and watched-file events affect
   are collected and published once each at the end of the batch. A closed document still gets its
-  empty diagnostics when its `didClose` step runs, as today.
+  empty diagnostics when its `didClose` step runs, as today. A batch that reaches `exit` ends the session there, without
+  publishing.
 - Requests are answered at their place in the batch, after the steps before them.
 - The inlay-hint refresh check (`workspace/inlayHint/refresh` when the languages change) runs once at
   the end of the batch, instead of after each notification.

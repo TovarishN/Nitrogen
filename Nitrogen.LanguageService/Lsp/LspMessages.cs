@@ -27,7 +27,7 @@ public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, st
 
 public sealed record PublishDiagnosticsParams(string Uri, int? Version, LspDiagnostic[] Diagnostics);
 
-/// <param name="TextDocumentSync">1: full text on every change.</param>
+/// <param name="TextDocumentSync">2: incremental, each change carrying the range it replaces.</param>
 public sealed record ServerCapabilities(
     int TextDocumentSync,
     SemanticTokensOptions? SemanticTokensProvider = null,

@@ -8,7 +8,7 @@ namespace Nitrogen.LanguageService.Lsp;
 /// The LSP server loop (issue 238): a reader task queues messages as they arrive, and the loop handles
 /// everything queued as a batch, in order. A request that fails gets an error response and the loop
 /// goes on; broken framing ends the session. Diagnostics are pushed
-/// after every document change, for every document the change may affect. When a served language's
+/// once per batch, for every open document its changes may affect. When a served language's
 /// values read the clock, hints are refreshed at each local midnight.
 /// </summary>
 /// <param name="fixedRoot">The directory whose <c>nitrogen.json</c> configures the languages, whatever root the client sends (<c>nitrogen lsp --config</c>); null to use the client's root.</param>
@@ -18,6 +18,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     public const int InvalidParams = -32602;
     public const int InternalError = -32603;
     public const int RequestFailed = -32803;
+    public const int RequestCancelled = -32800;
 
     bool _shutdown;
     string? _workspaceRoot;   // the client's folder: its files are indexed
@@ -99,39 +100,76 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         }
     }
 
+    /// <summary>
+    /// Runs a batch's planned steps in order; the documents their changes affect get their diagnostics
+    /// once, at the end, and the hint refresh check runs once.
+    /// </summary>
     /// <returns>The exit code when the batch ends the session; null to go on.</returns>
     async Task<int?> RunBatchAsync(IReadOnlyList<JsonDocument> batch, CancellationToken cancel)
     {
-        foreach (var message in batch)
-            if (await HandleMessageAsync(message.RootElement, cancel) is int code) return code;
+        var affected = new List<string>();
+        foreach (var step in LspBatch.Plan(batch.Select(m => m.RootElement).ToList()))
+        {
+            switch (step)
+            {
+                case LspBatch.Change change:
+                    try
+                    {
+                        affected.AddRange(ApplyChanges(change.Uri, change.Version, change.Changes));
+                    }
+                    catch (Exception error) when (error is not OperationCanceledException)
+                    {
+                        log.WriteLine($"nitrogen lsp: textDocument/didChange: {error.Message}");
+                    }
+                    break;
+                case LspBatch.Cancelled cancelled:
+                    await RespondErrorAsync(cancelled.Id, RequestCancelled, "cancelled", cancel);
+                    break;
+                case LspBatch.Message message:
+                    var (exit, changed) = await HandleMessageAsync(message.Element, cancel);
+                    if (exit is int code) return code;
+                    affected.AddRange(changed);
+                    break;
+            }
+        }
+        await PublishAsync(affected.Distinct().Where(service.IsOpen).ToList(), cancel);
+        await RefreshInlayHintsAsync(cancel);
         return null;
     }
 
-    /// <returns>The exit code for <c>exit</c>; null otherwise.</returns>
-    async Task<int?> HandleMessageAsync(JsonElement root, CancellationToken cancel)
+    /// <returns>The exit code for <c>exit</c> (null otherwise), and the documents whose diagnostics may have changed.</returns>
+    async Task<(int? Exit, IReadOnlyList<string> Affected)> HandleMessageAsync(JsonElement root, CancellationToken cancel)
     {
         string method = root.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
         bool isRequest = root.TryGetProperty("id", out var idElement);
         var id = isRequest ? idElement.Clone() : default;
         var parameters = root.TryGetProperty("params", out var p) ? p : default;
-        if (isRequest && method.Length == 0) return null; // a response to our own request (client/registerCapability)
-        if (method == "exit") return _shutdown ? 0 : 1;
+        if (isRequest && method.Length == 0) return (null, []); // a response to our own request (client/registerCapability)
+        if (method == "exit") return (_shutdown ? 0 : 1, []);
 
         try
         {
-            if (isRequest) await HandleRequestAsync(method, id, parameters, cancel);
-            else
-            {
-                await HandleNotificationAsync(method, parameters, cancel);
-                await RefreshInlayHintsAsync(cancel);
-            }
+            if (!isRequest) return (null, await HandleNotificationAsync(method, parameters, cancel));
+            await HandleRequestAsync(method, id, parameters, cancel);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
             if (isRequest) await RespondErrorAsync(id, error switch { RenameRefusedException => RequestFailed, JsonException => InvalidParams, _ => InternalError }, error.Message, cancel);
             else log.WriteLine($"nitrogen lsp: {method}: {error.Message}");
         }
-        return null;
+        return (null, []);
+    }
+
+    /// <summary>Applies a document's content changes, in order, to its current text; the documents whose diagnostics may have changed.</summary>
+    IReadOnlyList<string> ApplyChanges(string uri, int version, IReadOnlyList<TextDocumentContentChangeEvent> changes)
+    {
+        if (service.TextOf(uri) is not { } text)
+        {
+            log.WriteLine($"nitrogen lsp: textDocument/didChange: '{uri}' is not open");
+            return [];
+        }
+        var edits = changes.Select(c => new TextChange(c.Range is { } r ? new DocumentRange(Position(r.Start), Position(r.End)) : null, c.Text)).ToList();
+        return service.Change(uri, version, TextEdits.Apply(text, edits));
     }
 
     async Task HandleRequestAsync(string method, JsonElement id, JsonElement parameters, CancellationToken cancel)
@@ -150,7 +188,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(
-                    new ServerCapabilities(1, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
+                    new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
@@ -300,22 +338,21 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         }
     }
 
-    async Task HandleNotificationAsync(string method, JsonElement parameters, CancellationToken cancel)
+    /// <returns>The documents whose diagnostics may have changed; they are published at the end of the batch.</returns>
+    async Task<IReadOnlyList<string>> HandleNotificationAsync(string method, JsonElement parameters, CancellationToken cancel)
     {
         switch (method)
         {
             case "textDocument/didOpen":
             {
                 var item = Params(parameters, LspJson.Default.DidOpenTextDocumentParams).TextDocument;
-                await PublishAsync(service.Open(item.Uri, item.Version, item.Text), cancel);
-                break;
+                return service.Open(item.Uri, item.Version, item.Text);
             }
             case "textDocument/didChange":
             {
+                // Reached only when the batch plan could not read the change: reading it here reports why.
                 var change = Params(parameters, LspJson.Default.DidChangeTextDocumentParams);
-                // Full sync: the last change carries the whole text.
-                await PublishAsync(service.Change(change.TextDocument.Uri, change.TextDocument.Version, change.ContentChanges[^1].Text), cancel);
-                break;
+                return ApplyChanges(change.TextDocument.Uri, change.TextDocument.Version, change.ContentChanges);
             }
             case "textDocument/didClose":
             {
@@ -323,21 +360,28 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 var others = service.Close(uri);
                 await NotifyAsync("textDocument/publishDiagnostics", new PublishDiagnosticsParams(uri, null, []),
                     LspJson.Default.PublishDiagnosticsParams, cancel);
-                await PublishAsync(others, cancel);
-                break;
+                return others;
             }
             case "initialized":
-                if (_configRoot is not null) await PublishAsync(service.ConfigureWorkspace(_configRoot), cancel);
-                if (_workspaceRoot is not null) await PublishAsync(service.IndexWorkspace(_workspaceRoot), cancel);
+            {
+                var affected = new List<string>();
+                if (_configRoot is not null) affected.AddRange(service.ConfigureWorkspace(_configRoot));
+                if (_workspaceRoot is not null) affected.AddRange(service.IndexWorkspace(_workspaceRoot));
                 _languagesSeen = service.LanguagesVersion; // the client has not asked for hints yet
                 if (_watchDynamically) await RegisterWatchersAsync(service.IndexedExtensions(), cancel);
-                break;
+                return affected;
+            }
             case "workspace/didChangeWatchedFiles":
+            {
+                var affected = new List<string>();
                 foreach (var change in Params(parameters, LspJson.Default.DidChangeWatchedFilesParams).Changes)
                     if (System.Uri.TryCreate(change.Uri, UriKind.Absolute, out var uri) && uri.IsFile)
-                        await PublishAsync(service.FileChanged(uri.LocalPath), cancel);
-                break;
-            // $/cancelRequest, $/setTrace and the rest: nothing to do.
+                        affected.AddRange(service.FileChanged(uri.LocalPath));
+                return affected;
+            }
+            // $/cancelRequest (planned with its batch), $/setTrace and the rest: nothing to do.
+            default:
+                return [];
         }
     }
 

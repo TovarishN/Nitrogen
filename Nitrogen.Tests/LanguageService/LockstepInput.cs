@@ -2,8 +2,9 @@ namespace Nitrogen.Tests;
 
 /// <summary>
 /// Framed messages handed to the server one at a time, each only when the server is idle (it has
-/// handled everything before and waits), as a client typing slowly sends them. An <see cref="Action"/>
-/// among the items runs at such a moment, before the next message. Set <see cref="Idle"/> to the
+/// handled everything before and waits), as a client typing slowly sends them. A string array is
+/// released at once, as a burst. An <see cref="Action"/> among the items runs at such a moment, before
+/// the next message. Set <see cref="Idle"/> to the
 /// server's before it runs.
 /// </summary>
 internal sealed class LockstepInput(params object[] items) : Stream
@@ -34,6 +35,9 @@ internal sealed class LockstepInput(params object[] items) : Stream
                     break;
                 case string body:
                     _current = new MemoryStream(JsonRpcConnectionTests.Frame(body));
+                    break;
+                case string[] bodies: // released together, so the server may take them in batches of any size
+                    _current = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
                     break;
             }
         }

@@ -45,7 +45,7 @@ public class LspServerTests
         Assert.Equal(0, code);
         Assert.Equal(3, messages.Count);
         Assert.Equal(1, messages[0].GetProperty("id").GetInt32());
-        Assert.Equal(1, messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("textDocumentSync").GetInt32());
+        Assert.Equal(2, messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("textDocumentSync").GetInt32());
 
         var publish = messages[1];
         Assert.Equal("textDocument/publishDiagnostics", publish.GetProperty("method").GetString());
