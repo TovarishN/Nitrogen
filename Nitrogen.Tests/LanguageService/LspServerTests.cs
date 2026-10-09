@@ -11,10 +11,12 @@ public class LspServerTests
 {
     internal static async Task<(int Code, List<JsonElement> Messages, string Log)> Session(NitrogenLanguageService service, params string[] bodies)
     {
-        var input = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
+        var input = new LockstepInput(bodies);
         var output = new MemoryStream();
         var log = new StringWriter();
-        int code = await new LspServer(new JsonRpcConnection(input, output), service, log).RunAsync(CancellationToken.None);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, log);
+        input.Idle = server.Idle;
+        int code = await server.RunAsync(CancellationToken.None);
 
         output.Position = 0;
         var messages = new List<JsonElement>();
@@ -43,7 +45,7 @@ public class LspServerTests
         Assert.Equal(0, code);
         Assert.Equal(3, messages.Count);
         Assert.Equal(1, messages[0].GetProperty("id").GetInt32());
-        Assert.Equal(1, messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("textDocumentSync").GetInt32());
+        Assert.Equal(2, messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("textDocumentSync").GetInt32());
 
         var publish = messages[1];
         Assert.Equal("textDocument/publishDiagnostics", publish.GetProperty("method").GetString());

@@ -1,12 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using System.Threading.Channels;
 
 namespace Nitrogen.LanguageService.Lsp;
 
 /// <summary>
-/// The LSP server loop (issue 238): one message at a time, in order. A request that fails gets an
-/// error response and the loop goes on; broken framing ends the session. Diagnostics are pushed
-/// after every document change, for every document the change may affect. When a served language's
+/// The LSP server loop (issue 238): a reader task queues messages as they arrive, and the loop handles
+/// everything queued as a batch, in order. A request that fails gets an error response and the loop
+/// goes on; broken framing ends the session. Diagnostics are pushed
+/// once per batch, for every open document its changes may affect. When a served language's
 /// values read the clock, hints are refreshed at each local midnight.
 /// </summary>
 /// <param name="fixedRoot">The directory whose <c>nitrogen.json</c> configures the languages, whatever root the client sends (<c>nitrogen lsp --config</c>); null to use the client's root.</param>
@@ -16,6 +18,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     public const int InvalidParams = -32602;
     public const int InternalError = -32603;
     public const int RequestFailed = -32803;
+    public const int RequestCancelled = -32800;
 
     bool _shutdown;
     string? _workspaceRoot;   // the client's folder: its files are indexed
@@ -24,62 +27,149 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     bool _refreshInlayHints;  // the client takes workspace/inlayHint/refresh
     int _languagesSeen;       // service.LanguagesVersion when the client last had current hints
     int _refreshes;
+    readonly object _gate = new();            // orders the reader's enqueue against the loop's idle check
+    readonly ManualResetEventSlim _idle = new(false);
+    volatile Exception? _readError;           // why reading stopped early: logged when the loop reaches it
+
+    /// <summary>Set while the loop waits with nothing queued, so every message read so far is handled; tests feed input in lockstep with it.</summary>
+    internal WaitHandle Idle => _idle.WaitHandle;
 
     /// <returns>The process exit code: 0 after <c>shutdown</c> then <c>exit</c>; 1 for <c>exit</c> without shutdown, end of input or broken framing.</returns>
     public async Task<int> RunAsync(CancellationToken cancel)
     {
-        Task<JsonDocument?>? reading = null;
+        var queue = Channel.CreateUnbounded<JsonDocument>(); // not single-reader: that kind cannot count its items
+        _ = Task.Run(() => ReadAllAsync(queue.Writer, cancel), CancellationToken.None);
         Task? dayChange = null;
-        while (true)
+        try
         {
-            JsonDocument? message;
-            try
+            while (true)
             {
-                // Armed before the read starts, and checked first, so a day change during the wait is never missed.
+                // Armed before the wait starts, and checked first, so a day change during the wait is never missed.
                 dayChange ??= DayChange(cancel);
-                reading ??= connection.ReadAsync(cancel);
-                if (dayChange is not null && await Task.WhenAny(dayChange, reading) == dayChange && dayChange.IsCompletedSuccessfully)
+                lock (_gate)
+                    if (queue.Reader.Count == 0) _idle.Set();
+                var waiting = queue.Reader.WaitToReadAsync(cancel).AsTask();
+                if (dayChange is not null && await Task.WhenAny(dayChange, waiting) == dayChange && dayChange.IsCompletedSuccessfully)
                 {
                     dayChange = null;
                     await SendInlayHintRefreshAsync(cancel);
                     continue;
                 }
-                message = await reading;
-                reading = null;
-            }
-            catch (InvalidDataException error)
-            {
-                log.WriteLine($"nitrogen lsp: {error.Message}");
-                return 1;
-            }
-            if (message is null) return 1;
-
-            using (message)
-            {
-                var root = message.RootElement;
-                string method = root.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
-                bool isRequest = root.TryGetProperty("id", out var idElement);
-                var id = isRequest ? idElement.Clone() : default;
-                var parameters = root.TryGetProperty("params", out var p) ? p : default;
-                if (isRequest && method.Length == 0) continue; // a response to our own request (client/registerCapability)
-                if (method == "exit") return _shutdown ? 0 : 1;
-
+                if (!await waiting)
+                {
+                    if (_readError is { } error) log.WriteLine($"nitrogen lsp: {error.Message}");
+                    return 1;
+                }
+                var batch = new List<JsonDocument>();
+                while (queue.Reader.TryRead(out var message)) batch.Add(message);
                 try
                 {
-                    if (isRequest) await HandleRequestAsync(method, id, parameters, cancel);
-                    else
-                    {
-                        await HandleNotificationAsync(method, parameters, cancel);
-                        await RefreshInlayHintsAsync(cancel);
-                    }
+                    if (await RunBatchAsync(batch, cancel) is int code) return code;
                 }
-                catch (Exception error) when (error is not OperationCanceledException)
+                finally
                 {
-                    if (isRequest) await RespondErrorAsync(id, error switch { RenameRefusedException => RequestFailed, JsonException => InvalidParams, _ => InternalError }, error.Message, cancel);
-                    else log.WriteLine($"nitrogen lsp: {method}: {error.Message}");
+                    foreach (var message in batch) message.Dispose();
                 }
             }
         }
+        finally
+        {
+            _idle.Set(); // a lockstep reader waiting for the loop reads on to the end of its input
+        }
+    }
+
+    /// <summary>Reads messages into the queue as they arrive; completes it at the end of input or when reading fails.</summary>
+    async Task ReadAllAsync(ChannelWriter<JsonDocument> queue, CancellationToken cancel)
+    {
+        try
+        {
+            while (await connection.ReadAsync(cancel) is { } message)
+                lock (_gate)
+                {
+                    _idle.Reset();
+                    queue.TryWrite(message);
+                }
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            _readError = error;
+        }
+        finally
+        {
+            queue.TryComplete();
+        }
+    }
+
+    /// <summary>
+    /// Runs a batch's planned steps in order; the documents their changes affect get their diagnostics
+    /// once, at the end, and the hint refresh check runs once.
+    /// </summary>
+    /// <returns>The exit code when the batch ends the session; null to go on.</returns>
+    async Task<int?> RunBatchAsync(IReadOnlyList<JsonDocument> batch, CancellationToken cancel)
+    {
+        var affected = new List<string>();
+        foreach (var step in LspBatch.Plan(batch.Select(m => m.RootElement).ToList()))
+        {
+            switch (step)
+            {
+                case LspBatch.Change change:
+                    try
+                    {
+                        affected.AddRange(ApplyChanges(change.Uri, change.Version, change.Changes));
+                    }
+                    catch (Exception error) when (error is not OperationCanceledException)
+                    {
+                        log.WriteLine($"nitrogen lsp: textDocument/didChange: {error.Message}");
+                    }
+                    break;
+                case LspBatch.Cancelled cancelled:
+                    await RespondErrorAsync(cancelled.Id, RequestCancelled, "cancelled", cancel);
+                    break;
+                case LspBatch.Message message:
+                    var (exit, changed) = await HandleMessageAsync(message.Element, cancel);
+                    if (exit is int code) return code;
+                    affected.AddRange(changed);
+                    break;
+            }
+        }
+        await PublishAsync(affected.Distinct().Where(service.IsOpen).ToList(), cancel);
+        await RefreshInlayHintsAsync(cancel);
+        return null;
+    }
+
+    /// <returns>The exit code for <c>exit</c> (null otherwise), and the documents whose diagnostics may have changed.</returns>
+    async Task<(int? Exit, IReadOnlyList<string> Affected)> HandleMessageAsync(JsonElement root, CancellationToken cancel)
+    {
+        string method = root.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
+        bool isRequest = root.TryGetProperty("id", out var idElement);
+        var id = isRequest ? idElement.Clone() : default;
+        var parameters = root.TryGetProperty("params", out var p) ? p : default;
+        if (isRequest && method.Length == 0) return (null, []); // a response to our own request (client/registerCapability)
+        if (method == "exit") return (_shutdown ? 0 : 1, []);
+
+        try
+        {
+            if (!isRequest) return (null, await HandleNotificationAsync(method, parameters, cancel));
+            await HandleRequestAsync(method, id, parameters, cancel);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            if (isRequest) await RespondErrorAsync(id, error switch { RenameRefusedException => RequestFailed, JsonException => InvalidParams, _ => InternalError }, error.Message, cancel);
+            else log.WriteLine($"nitrogen lsp: {method}: {error.Message}");
+        }
+        return (null, []);
+    }
+
+    /// <summary>Applies a document's content changes, in order, to its current text; the documents whose diagnostics may have changed.</summary>
+    IReadOnlyList<string> ApplyChanges(string uri, int version, IReadOnlyList<TextDocumentContentChangeEvent> changes)
+    {
+        if (service.TextOf(uri) is not { } text)
+        {
+            log.WriteLine($"nitrogen lsp: textDocument/didChange: '{uri}' is not open");
+            return [];
+        }
+        var edits = changes.Select(c => new TextChange(c.Range is { } r ? new DocumentRange(Position(r.Start), Position(r.End)) : null, c.Text)).ToList();
+        return service.Change(uri, version, TextEdits.Apply(text, edits));
     }
 
     async Task HandleRequestAsync(string method, JsonElement id, JsonElement parameters, CancellationToken cancel)
@@ -98,7 +188,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(
-                    new ServerCapabilities(1, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
+                    new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
@@ -248,22 +338,21 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         }
     }
 
-    async Task HandleNotificationAsync(string method, JsonElement parameters, CancellationToken cancel)
+    /// <returns>The documents whose diagnostics may have changed; they are published at the end of the batch.</returns>
+    async Task<IReadOnlyList<string>> HandleNotificationAsync(string method, JsonElement parameters, CancellationToken cancel)
     {
         switch (method)
         {
             case "textDocument/didOpen":
             {
                 var item = Params(parameters, LspJson.Default.DidOpenTextDocumentParams).TextDocument;
-                await PublishAsync(service.Open(item.Uri, item.Version, item.Text), cancel);
-                break;
+                return service.Open(item.Uri, item.Version, item.Text);
             }
             case "textDocument/didChange":
             {
+                // Reached only when the batch plan could not read the change: reading it here reports why.
                 var change = Params(parameters, LspJson.Default.DidChangeTextDocumentParams);
-                // Full sync: the last change carries the whole text.
-                await PublishAsync(service.Change(change.TextDocument.Uri, change.TextDocument.Version, change.ContentChanges[^1].Text), cancel);
-                break;
+                return ApplyChanges(change.TextDocument.Uri, change.TextDocument.Version, change.ContentChanges);
             }
             case "textDocument/didClose":
             {
@@ -271,21 +360,28 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 var others = service.Close(uri);
                 await NotifyAsync("textDocument/publishDiagnostics", new PublishDiagnosticsParams(uri, null, []),
                     LspJson.Default.PublishDiagnosticsParams, cancel);
-                await PublishAsync(others, cancel);
-                break;
+                return others;
             }
             case "initialized":
-                if (_configRoot is not null) await PublishAsync(service.ConfigureWorkspace(_configRoot), cancel);
-                if (_workspaceRoot is not null) await PublishAsync(service.IndexWorkspace(_workspaceRoot), cancel);
+            {
+                var affected = new List<string>();
+                if (_configRoot is not null) affected.AddRange(service.ConfigureWorkspace(_configRoot));
+                if (_workspaceRoot is not null) affected.AddRange(service.IndexWorkspace(_workspaceRoot));
                 _languagesSeen = service.LanguagesVersion; // the client has not asked for hints yet
                 if (_watchDynamically) await RegisterWatchersAsync(service.IndexedExtensions(), cancel);
-                break;
+                return affected;
+            }
             case "workspace/didChangeWatchedFiles":
+            {
+                var affected = new List<string>();
                 foreach (var change in Params(parameters, LspJson.Default.DidChangeWatchedFilesParams).Changes)
                     if (System.Uri.TryCreate(change.Uri, UriKind.Absolute, out var uri) && uri.IsFile)
-                        await PublishAsync(service.FileChanged(uri.LocalPath), cancel);
-                break;
-            // $/cancelRequest, $/setTrace and the rest: nothing to do.
+                        affected.AddRange(service.FileChanged(uri.LocalPath));
+                return affected;
+            }
+            // $/cancelRequest (planned with its batch), $/setTrace and the rest: nothing to do.
+            default:
+                return [];
         }
     }
 

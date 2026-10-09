@@ -156,9 +156,11 @@ public sealed class WorkspaceIndexTests : IDisposable
             "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
         ];
         using var service = new NitrogenLanguageService(LspCommand.Registry());
-        var input = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
+        var input = new LockstepInput(bodies);
         var output = new MemoryStream();
-        await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, fixedRoot).RunAsync(CancellationToken.None);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, fixedRoot);
+        input.Idle = server.Idle;
+        await server.RunAsync(CancellationToken.None);
         output.Position = 0;
         var messages = new List<JsonElement>();
         var reader = new JsonRpcConnection(output, Stream.Null);

@@ -16,7 +16,8 @@ public sealed record TextDocumentItem(string Uri, string LanguageId, int Version
 
 public sealed record DidOpenTextDocumentParams(TextDocumentItem TextDocument);
 
-public sealed record TextDocumentContentChangeEvent(string Text);
+/// <summary>A content change: <paramref name="Text"/> replaces <paramref name="Range"/>, or the whole text when there is no range.</summary>
+public sealed record TextDocumentContentChangeEvent(string Text, LspRange? Range = null);
 
 public sealed record DidChangeTextDocumentParams(VersionedTextDocumentIdentifier TextDocument, TextDocumentContentChangeEvent[] ContentChanges);
 
@@ -26,7 +27,7 @@ public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, st
 
 public sealed record PublishDiagnosticsParams(string Uri, int? Version, LspDiagnostic[] Diagnostics);
 
-/// <param name="TextDocumentSync">1: full text on every change.</param>
+/// <param name="TextDocumentSync">2: incremental, each change carrying the range it replaces.</param>
 public sealed record ServerCapabilities(
     int TextDocumentSync,
     SemanticTokensOptions? SemanticTokensProvider = null,

@@ -82,13 +82,14 @@ public sealed class TodayValueTests : IDisposable
         using var service = new NitrogenLanguageService(LspCommand.Registry()) { Clock = clock };
         string initialize = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"rootUri\":\"" + new System.Uri(_root).AbsoluteUri
             + "\",\"capabilities\":" + capabilities + "}}";
-        var input = new GrammarLoopTests.BlockingInput(
-            [initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}"""],
-            () => clock.Advance(TimeSpan.FromHours(2)), // past midnight, while the server waits for the next message
-            ["""{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}"""]);
+        var input = new LockstepInput(
+            initialize, """{"jsonrpc":"2.0","method":"initialized","params":{}}""",
+            (Action)(() => clock.Advance(TimeSpan.FromHours(2))), // past midnight, while the server waits for the next message
+            """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
         var output = new MemoryStream();
-
-        int code = await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null).RunAsync(CancellationToken.None);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null);
+        input.Idle = server.Idle;
+        int code = await server.RunAsync(CancellationToken.None);
 
         output.Position = 0;
         var messages = new List<JsonElement>();
