@@ -1,6 +1,6 @@
 # Incremental sync, coalescing and cancellation
 
-Status: approved (2026-10-09). Part of the goal of first-class language support.
+Status: implemented (2026-10-09). Part of the goal of first-class language support.
 
 ## Problem
 
@@ -12,6 +12,10 @@ published. Measured with the Release server over stdio on a DateCalc file:
 | --- | --- | --- |
 | 2,000 lines | 5 ms | answered after 0.8 s |
 | 10,000 lines | 7 ms | answered after 6.5 s |
+
+After: the same 20 changes, sent as ranged edits, then `semanticTokens/full`, answered after 0.2 s
+(2,000 lines) and 1.0 s (10,000 lines). The first change arrives alone and is re-checked while the
+other 19 queue; they then cost one re-check, before the request itself.
 
 Requests are cheap. A change costs about 325 ms on 10,000 lines, and a burst of keystrokes makes the
 next request wait for every intermediate re-check, though only the last text matters. The server
