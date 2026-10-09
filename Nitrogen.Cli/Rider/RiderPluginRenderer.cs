@@ -495,7 +495,7 @@ object NitrogenLanguageBundle {
     static string Readme(RiderPluginRequest request) => $$"""
 # {{request.Model.DisplayName}} for Rider
 
-This plugin starts `nitrogen lsp` for `{{string.Join("`, `", request.Model.Extensions)}}` files, and a second server for C# files, which serves {{request.Model.DisplayName}} in string literals tagged `/*lang={{request.Model.Extensions.First().TrimStart('.')}}*/` (or preceded by a `// language={{request.Model.Extensions.First().TrimStart('.')}}` line): colours added to Rider's, diagnostics, completion, hover, go to definition and find usages. Rename and the rest of C# editing stay with Rider.
+This plugin starts `nitrogen lsp` for `{{string.Join("`, `", request.Model.Extensions)}}` files, and a second server for C# files, which serves {{request.Model.DisplayName}} in string literals tagged `/*lang={{request.Model.Extensions.First().TrimStart('.')}}*/` (or preceded by a `// language={{request.Model.Extensions.First().TrimStart('.')}}` line): colours added to Rider's, diagnostics, completion, hover, go to definition, find usages, quick fixes and signature help. Rename and the rest of C# editing stay with Rider.
 
 The server runs the first of: the executable set in Settings | Tools | {{request.Model.DisplayName}}; the bundled server for this machine, if the plugin was generated with `--bundle`; `{{request.NitrogenPath}}`. The plugin expects the grammar start rule `{{request.Model.StartRule}}`.
 

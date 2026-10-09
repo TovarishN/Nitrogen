@@ -113,6 +113,14 @@ public sealed class SignatureHelpTests : IDisposable
     }
 
     [Fact]
+    public void An_ordinary_csharp_call_gets_no_help()
+    {
+        using var service = Service("DateCalcLanguage");
+        const string host = "class C { const string D = /*lang=datecalc*/ \"round(2.5, 1);\"; int M() => Math.Max(1, ";
+        Assert.Null(HelpAtEnd(service, "DateCalcLanguage", "C.cs", host));
+    }
+
+    [Fact]
     public void A_language_without_signatures_gives_no_help()
     {
         using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());

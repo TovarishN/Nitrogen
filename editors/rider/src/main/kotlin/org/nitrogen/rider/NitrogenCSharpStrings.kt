@@ -7,8 +7,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 import com.intellij.platform.lsp.api.customization.LspCallHierarchyDisabled
 import com.intellij.platform.lsp.api.customization.LspCallHierarchyCustomizer
-import com.intellij.platform.lsp.api.customization.LspCodeActionsCustomizer
-import com.intellij.platform.lsp.api.customization.LspCodeActionsDisabled
 import com.intellij.platform.lsp.api.customization.LspCodeLensCustomizer
 import com.intellij.platform.lsp.api.customization.LspCodeLensDisabled
 import com.intellij.platform.lsp.api.customization.LspCommandsCustomizer
@@ -37,8 +35,6 @@ import com.intellij.platform.lsp.api.customization.LspRenameCustomizer
 import com.intellij.platform.lsp.api.customization.LspRenameDisabled
 import com.intellij.platform.lsp.api.customization.LspSelectionRangeCustomizer
 import com.intellij.platform.lsp.api.customization.LspSelectionRangeDisabled
-import com.intellij.platform.lsp.api.customization.LspSignatureHelpCustomizer
-import com.intellij.platform.lsp.api.customization.LspSignatureHelpDisabled
 import com.intellij.platform.lsp.api.customization.LspTypeHierarchyCustomizer
 import com.intellij.platform.lsp.api.customization.LspTypeHierarchyDisabled
 import com.intellij.platform.lsp.api.customization.LspWorkspaceSymbolCustomizer
@@ -50,8 +46,10 @@ import java.nio.file.Files
  * statement). C# files get a Nitrogen client of their own, separate from the one for the language's
  * files, because the platform switches features per client rather than per file. The server answers it
  * only inside tagged strings: its colours are added to Rider's, and diagnostics, completion, hover, go to
- * definition, find usages and statement values work in the strings. Everything that would compete with
- * Rider's C# support (rename, structure view, formatting, code actions, highlighting usages) is left to Rider.
+ * definition, find usages, statement values, quick fixes and signature help work in the strings. Quick fixes
+ * and signature help stay on because the server gives none outside a tagged string, so Rider's Alt+Enter and
+ * parameter info for ordinary C# are its own. Everything that would compete with Rider's C# support (rename,
+ * structure view, formatting, highlighting usages) is left to Rider.
  *
  * [skipLanguages] names the languages (by name or extension) this client's server leaves alone: a client
  * whose server reads the workspace's nitrogen.json skips those another installed plugin carries itself,
@@ -75,7 +73,6 @@ class NitrogenCSharpClient(
         override val documentSymbolCustomizer: LspDocumentSymbolCustomizer = LspDocumentSymbolDisabled
         override val formattingCustomizer: LspFormattingCustomizer = LspFormattingDisabled
         override val onTypeFormattingCustomizer: LspOnTypeFormattingCustomizer = LspOnTypeFormattingDisabled
-        override val codeActionsCustomizer: LspCodeActionsCustomizer = LspCodeActionsDisabled
         override val commandsCustomizer: LspCommandsCustomizer = LspCommandsDisabled
         override val optimizeImportsCustomizer: LspOptimizeImportsCustomizer = LspOptimizeImportsDisabled
         override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer = LspDocumentHighlightsDisabled
@@ -85,7 +82,6 @@ class NitrogenCSharpClient(
         override val inlayHintCustomizer: LspInlayHintCustomizer = NitrogenInlayHints
         override val codeLensCustomizer: LspCodeLensCustomizer = LspCodeLensDisabled
         override val selectionRangeCustomizer: LspSelectionRangeCustomizer = LspSelectionRangeDisabled
-        override val signatureHelpCustomizer: LspSignatureHelpCustomizer = LspSignatureHelpDisabled
         override val goToTypeDefinitionCustomizer: LspGoToTypeDefinitionCustomizer = LspGoToTypeDefinitionDisabled
         override val callHierarchyCustomizer: LspCallHierarchyCustomizer = LspCallHierarchyDisabled
         override val typeHierarchyCustomizer: LspTypeHierarchyCustomizer = LspTypeHierarchyDisabled
