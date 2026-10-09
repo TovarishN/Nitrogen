@@ -78,7 +78,7 @@ public class LspServerTests
     {
         using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
         var (code, messages, log) = await Session(service,
-            """{"jsonrpc":"2.0","id":7,"method":"textDocument/formatting","params":{}}""",
+            """{"jsonrpc":"2.0","id":7,"method":"textDocument/linkedEditingRange","params":{}}""",
             """{"jsonrpc":"2.0","method":"textDocument/didOpen","params":{}}""",
             Exit);
 
