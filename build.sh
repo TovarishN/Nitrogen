@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds and tests Nitrogen, then produces the editor plugins:
 #   artifacts/nitrogen-*.vsix         the VS Code extension
-#   artifacts/rider/*-rider.zip       Rider plugins, each bundling a server for this machine
-#   artifacts/server/<target>/        the bundled single-file server
+#   artifacts/rider/*-rider.zip       Rider plugins
+#   Both carry the portable (framework-dependent) server and run it with dotnet (.NET 10) on any OS.
 #
 # Usage: ./build.sh [--config nitrogen.json [--language NAME]]
 #   Always builds the Rider plugin for .ngr grammars; --config also builds one for that language.
@@ -28,15 +28,6 @@ if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; th
     exit 2
 fi
 
-# The .NET runtime identifier and Rider bundle target of this machine.
-case "$(uname -s)-$(uname -m)" in
-    Darwin-arm64) rid=osx-arm64; target=macos-aarch64 ;;
-    Darwin-x86_64) rid=osx-x64; target=macos-x64 ;;
-    Linux-x86_64) rid=linux-x64; target=linux-x64 ;;
-    MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) rid=win-x64; target=windows-x64 ;;
-    *) rid=""; target="" ;;
-esac
-
 step() { printf '\n==> %s\n' "$*"; }
 
 rm -rf "$artifacts"
@@ -47,17 +38,24 @@ dotnet build "$root/Nitrogen.slnx" -c Release -warnaserror -p:Version="$version"
 dotnet test "$root/Nitrogen.Tests/Nitrogen.Tests.csproj" -c Release --no-build
 nitrogen=(dotnet "$root/Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll")
 
-bundle=()
-if [[ -n "$rid" ]]; then
-    step "Publish a single-file server for $target"
-    dotnet publish "$root/Nitrogen.Cli/Nitrogen.Cli.csproj" -c Release -r "$rid" --self-contained \
-        -p:Version="$version" -p:PublishSingleFile=true -o "$artifacts/server/$target"
-    server="$artifacts/server/$target/nitrogen"
-    if [[ "$rid" == win-x64 ]]; then server="$server.exe"; fi
-    bundle=(--bundle "$target=$server")
-else
-    echo "warning: no Rider bundle target for $(uname -s) $(uname -m); plugins will use the Nitrogen setting or PATH" >&2
-fi
+# The portable server the plugins carry: the Release build of Nitrogen.Cli.
+server_build="$root/Nitrogen.Cli/bin/Release/net10.0"
+
+# Copies the portable server as LanguageBundle.CopyServer does: the build folder's files and its runtimes folder.
+copy_server() {
+    mkdir -p "$2"
+    find "$1" -maxdepth 1 -type f -exec cp {} "$2/" \;
+    if [[ -d "$1/runtimes" ]]; then cp -R "$1/runtimes" "$2/"; fi
+}
+
+# Starts a carried server as an editor would and fails unless it answers initialize and shuts down cleanly.
+smoke_server() {
+    frame() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
+    { frame '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}'
+      frame '{"jsonrpc":"2.0","id":2,"method":"shutdown"}'
+      frame '{"jsonrpc":"2.0","method":"exit"}'; } | dotnet "$1/nitrogen.dll" lsp > /dev/null
+    echo "the server in $1 started and shut down"
+}
 
 step "Package the VS Code extension"
 vscode="$artifacts/vscode-src"
@@ -75,8 +73,10 @@ for (const name of ['package.json', 'package-lock.json']) {
     fs.writeFileSync(file, JSON.stringify(manifest, null, 2) + '\n');
 }
 JS
+copy_server "$server_build" "$vscode/server"
 (cd "$vscode" && npm ci && npm run compile && npm run package)
 mv "$vscode"/*.vsix "$artifacts/"
+smoke_server "$vscode/server"
 
 step "Test the shared Rider plugin code"
 (cd "$root/editors/rider" && gradle test --console=plain)
@@ -85,9 +85,10 @@ step "Test the shared Rider plugin code"
 rider_plugin() {
     local out="$artifacts/rider-src/$1"
     shift
-    "${nitrogen[@]}" generate rider "$@" ${bundle[@]+"${bundle[@]}"} --output "$out"
+    "${nitrogen[@]}" generate rider "$@" --self-contained --server "$server_build" --output "$out"
     (cd "$out" && gradle buildPlugin --console=plain)
     cp "$out"/build/distributions/*.zip "$artifacts/rider/"
+    smoke_server "$out/bundle/server"
 }
 
 step "Build the Rider plugin for .ngr grammars"
