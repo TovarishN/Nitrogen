@@ -5,18 +5,24 @@ namespace Nitrogen.LanguageService;
 
 /// <summary>
 /// Statement values as inlay hints: a language whose entry has an evaluation lowers its statements and
-/// projects each through the profile's handlers. Nothing is shown while the document has an error;
-/// evaluation stops starting statements once its budget is spent; and a language whose values read the
-/// clock has its hints recomputed on a new day.
+/// projects each through the profile's handlers. Nothing is shown while the document has an error. A
+/// request evaluates only the statements whose value shows within its range, and stops starting them once
+/// its budget is spent; each value is kept for the document's version, so a later request goes on where it
+/// stopped. A language whose values read the clock has its hints recomputed on a new day.
 /// </summary>
 public sealed partial class NitrogenLanguageService
 {
-    sealed record HintCacheEntry(int DocumentVersion, int ProjectVersion, LanguageEntry Language, DateOnly? Day, IReadOnlyList<ValueHint> Hints);
+    /// <summary>A version's lowered statements, where each one's value shows, and the values evaluated so far (null: not yet).</summary>
+    sealed record HintCacheEntry(int DocumentVersion, int ProjectVersion, LanguageEntry Language, DateOnly? Day,
+        IReadOnlyList<HirNode> Statements, IReadOnlyList<DocumentPosition> At, ValueHint?[] Hints);
 
     readonly Dictionary<string, HintCacheEntry> _hints = new(StringComparer.Ordinal);
 
-    /// <summary>How long one document's statements may run; the first always runs, later ones start only within it.</summary>
+    /// <summary>How long one request's statements may run; the first always runs, later ones start only within it.</summary>
     internal TimeSpan EvaluationBudget { get; set; } = TimeSpan.FromMilliseconds(250);
+
+    /// <summary>How many statements have been evaluated for hints; tests read it.</summary>
+    internal int EvaluatedStatements { get; private set; }
 
     /// <summary>The clock evaluations read (<see cref="EvaluationContext.Now"/>); tests set it.</summary>
     public TimeProvider Clock { get; set; } = TimeProvider.System;
@@ -47,29 +53,41 @@ public sealed partial class NitrogenLanguageService
         if (!_hints.TryGetValue(uri, out var hit) || hit.DocumentVersion != document.Version ||
             hit.ProjectVersion != project.Version || !ReferenceEquals(hit.Language, document.Language) || hit.Day != day)
         {
-            hit = new HintCacheEntry(document.Version, project.Version, document.Language, day, Evaluate(document, evaluation, context));
+            var (statements, at) = Statements(document, evaluation);
+            hit = new HintCacheEntry(document.Version, project.Version, document.Language, day, statements, at, new ValueHint?[statements.Count]);
             _hints[uri] = hit;
         }
-        return hit.Hints.Where(h => Within(h.At, range)).ToList();
-    }
-
-    IReadOnlyList<ValueHint> Evaluate(Document document, BoundEvaluation evaluation, EvaluationContext context)
-    {
-        if (Diagnostics(document.Uri).Any(d => d.Severity == ServiceSeverity.Error)) return [];
-        var profile = evaluation.Profile;
-        var file = SemanticsOf(document.Language)[document.Uri];
-        var lowered = HirLowering.LowerSelected(file, profile.StatementKinds, Guid.NewGuid());
-        if (lowered.Diagnostics.Count > 0) return [];
 
         var hints = new List<ValueHint>();
         var clock = Stopwatch.StartNew();
-        foreach (var root in lowered.Roots)
+        bool evaluated = false;
+        for (int i = 0; i < hit.Statements.Count; i++)
         {
-            if (hints.Count > 0 && clock.Elapsed >= EvaluationBudget) break;
-            var at = document.Lines.PositionOf(StatementEnd(file.Tree, root.Origins[0], profile.StatementKinds, document.Text));
-            hints.Add(Hint(at, root, evaluation, context));
+            if (!Within(hit.At[i], range)) continue;
+            if (hit.Hints[i] is null)
+            {
+                if (evaluated && clock.Elapsed >= EvaluationBudget) continue; // spent: later ones wait for the next request
+                hit.Hints[i] = Hint(hit.At[i], hit.Statements[i], evaluation, context);
+                EvaluatedStatements++;
+                evaluated = true;
+            }
+            hints.Add(hit.Hints[i]!);
         }
         return hints;
+    }
+
+    /// <summary>The document's lowered statements and where each one's value shows; none while it has an error.</summary>
+    (IReadOnlyList<HirNode> Statements, IReadOnlyList<DocumentPosition> At) Statements(Document document, BoundEvaluation evaluation)
+    {
+        if (Diagnostics(document.Uri).Any(d => d.Severity == ServiceSeverity.Error)) return ([], []);
+        var profile = evaluation.Profile;
+        var file = SemanticsOf(document.Language)[document.Uri];
+        var lowered = HirLowering.LowerSelected(file, profile.StatementKinds, Guid.NewGuid());
+        if (lowered.Diagnostics.Count > 0) return ([], []);
+        var at = lowered.Roots
+            .Select(root => document.Lines.PositionOf(StatementEnd(file.Tree, root.Origins[0], profile.StatementKinds, document.Text)))
+            .ToList();
+        return (lowered.Roots, at);
     }
 
     static ValueHint Hint(DocumentPosition at, HirNode root, BoundEvaluation evaluation, EvaluationContext context)
