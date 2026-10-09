@@ -14,6 +14,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | Completion | ✓ | ✓ | ✓ |
 | Signature help³ | ✓ | ✓ | — (left to Rider) |
 | Diagnostics | ✓ | ✓ | ✓ |
+| Diagnostics in closed files | ✓ (Problems panel) | — (closed C# files aren't read) | — |
 | Go to definition, references | ✓ | ✓ | ✓ (find usages) |
 | Rename | ✓ | ✓ | — (left to Rider) |
 | Outline | ✓ | — (left to C#) | — (left to Rider) |
@@ -32,7 +33,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 
 The [VS Code extension](../editors/vscode/README.md) starts `nitrogen lsp`. The server serves `.ngr` files and compiles grammars declared in a workspace `nitrogen.json`, so a custom DSL can use the same extension. What a language gets is in the [feature matrix](#feature-matrix); it depends on the grammar, semantic rules and helper sources the language supplies.
 
-For a `nitrogen.json` language, the server also reads the language's files in the workspace folder that are not open (skipping `bin`, `obj`, `node_modules`, and hidden folders), so references into closed files resolve and rename edits them. Diagnostics are reported for open files. Clients that support dynamic registration are asked to report changes to those files.
+For a `nitrogen.json` language, the server also reads the language's files in the workspace folder that are not open (skipping `bin`, `obj`, `node_modules`, and hidden folders), so references into closed files resolve and rename edits them. Their diagnostics, and those of the language's grammars, are reported too: checked while the server is idle, and published when they change. Clients that support dynamic registration are asked to report changes to those files.
 
 1. Build the language server from the repository root:
 

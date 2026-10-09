@@ -7,9 +7,10 @@ namespace Nitrogen.LanguageService.Lsp;
 /// <summary>
 /// The LSP server loop (issue 238): a reader task queues messages as they arrive, and the loop handles
 /// everything queued as a batch, in order. A request that fails gets an error response and the loop
-/// goes on; broken framing ends the session. Diagnostics are pushed
-/// once per batch, for every open document its changes may affect. When a served language's
-/// values read the clock, hints are refreshed at each local midnight.
+/// goes on; broken framing ends the session. Diagnostics are pushed once per batch, for every open
+/// document its changes may affect. Between batches, while nothing is queued, closed workspace files
+/// and grammars are checked one at a time and published when their diagnostics change. When a served
+/// language's values read the clock, hints are refreshed at each local midnight.
 /// </summary>
 /// <param name="fixedRoot">The directory whose <c>nitrogen.json</c> configures the languages, whatever root the client sends (<c>nitrogen lsp --config</c>); null to use the client's root.</param>
 public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageService service, TextWriter log, string? fixedRoot = null)
@@ -31,6 +32,18 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     readonly ManualResetEventSlim _idle = new(false);
     volatile Exception? _readError;           // why reading stopped early: logged when the loop reaches it
 
+    // The idle pass over closed files (spec: closed-file diagnostics).
+    List<string> _closedFiles = [];
+    int _closedNext;
+    bool _closedStale;
+    readonly Dictionary<string, IReadOnlyList<ServiceDiagnostic>> _closedPublished = new(StringComparer.Ordinal);
+
+    /// <summary>Notifications that may change any document's diagnostics: a batch holding one restarts the pass.</summary>
+    static readonly HashSet<string> s_affecting = new(StringComparer.Ordinal)
+    {
+        "initialized", "textDocument/didOpen", "textDocument/didChange", "textDocument/didClose", "workspace/didChangeWatchedFiles",
+    };
+
     /// <summary>Set while the loop waits with nothing queued, so every message read so far is handled; tests feed input in lockstep with it.</summary>
     internal WaitHandle Idle => _idle.WaitHandle;
 
@@ -46,8 +59,9 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             {
                 // Armed before the wait starts, and checked first, so a day change during the wait is never missed.
                 dayChange ??= DayChange(cancel);
+                await CheckClosedFilesAsync(queue.Reader, cancel);
                 lock (_gate)
-                    if (queue.Reader.Count == 0) _idle.Set();
+                    if (queue.Reader.Count == 0 && _closedNext >= _closedFiles.Count) _idle.Set();
                 var waiting = queue.Reader.WaitToReadAsync(cancel).AsTask();
                 if (dayChange is not null && await Task.WhenAny(dayChange, waiting) == dayChange && dayChange.IsCompletedSuccessfully)
                 {
@@ -113,6 +127,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             switch (step)
             {
                 case LspBatch.Change change:
+                    _closedStale = true;
                     try
                     {
                         affected.AddRange(ApplyChanges(change.Uri, change.Version, change.Changes));
@@ -126,6 +141,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     await RespondErrorAsync(cancelled.Id, RequestCancelled, "cancelled", cancel);
                     break;
                 case LspBatch.Message message:
+                    if (message.Element.TryGetProperty("method", out var method) && s_affecting.Contains(method.GetString() ?? "")) _closedStale = true;
                     var (exit, changed) = await HandleMessageAsync(message.Element, cancel);
                     if (exit is int code) return code;
                     affected.AddRange(changed);
@@ -358,6 +374,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             {
                 string uri = Params(parameters, LspJson.Default.DidCloseTextDocumentParams).TextDocument.Uri;
                 var others = service.Close(uri);
+                _closedPublished.Remove(uri); // cleared below; the idle pass publishes it again if it has errors
                 await NotifyAsync("textDocument/publishDiagnostics", new PublishDiagnosticsParams(uri, null, []),
                     LspJson.Default.PublishDiagnosticsParams, cancel);
                 return others;
@@ -389,10 +406,56 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     {
         foreach (string uri in uris)
         {
-            var diagnostics = service.Diagnostics(uri)
-                .Select(d => new LspDiagnostic(Range(d.Range), (int)d.Severity, d.Code, "nitrogen", d.Message))
-                .ToArray();
+            var diagnostics = Lsp(service.Diagnostics(uri));
             await NotifyAsync("textDocument/publishDiagnostics", new PublishDiagnosticsParams(uri, service.VersionOf(uri), diagnostics),
+                LspJson.Default.PublishDiagnosticsParams, cancel);
+        }
+    }
+
+    static LspDiagnostic[] Lsp(IEnumerable<ServiceDiagnostic> diagnostics) => diagnostics
+        .Select(d => new LspDiagnostic(Range(d.Range), (int)d.Severity, d.Code, "nitrogen", d.Message))
+        .ToArray();
+
+    /// <summary>
+    /// Checks closed files while nothing is queued: one at a time, publishing a file's diagnostics when
+    /// they differ from what it last got (never published counts as empty). A stale pass restarts from
+    /// the current list, first clearing the files that left it and aren't open.
+    /// </summary>
+    async Task CheckClosedFilesAsync(ChannelReader<JsonDocument> queue, CancellationToken cancel)
+    {
+        if (_closedStale)
+        {
+            _closedStale = false;
+            _closedFiles = service.ClosedDiagnosticFiles().ToList();
+            _closedNext = 0;
+            var current = new HashSet<string>(_closedFiles, StringComparer.Ordinal);
+            foreach (string gone in _closedPublished.Keys.Where(uri => !current.Contains(uri)).ToList())
+            {
+                _closedPublished.Remove(gone);
+                if (!service.IsOpen(gone))
+                    await NotifyAsync("textDocument/publishDiagnostics", new PublishDiagnosticsParams(gone, null, []),
+                        LspJson.Default.PublishDiagnosticsParams, cancel);
+            }
+        }
+        while (_closedNext < _closedFiles.Count && queue.Count == 0)
+        {
+            string uri = _closedFiles[_closedNext++];
+            if (service.IsOpen(uri)) continue;
+            IReadOnlyList<ServiceDiagnostic> diagnostics;
+            try
+            {
+                diagnostics = service.Diagnostics(uri);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                log.WriteLine($"nitrogen lsp: diagnostics of {uri}: {error.Message}");
+                continue;
+            }
+            var last = _closedPublished.GetValueOrDefault(uri) ?? [];
+            if (last.SequenceEqual(diagnostics)) continue;
+            if (diagnostics.Count == 0) _closedPublished.Remove(uri);
+            else _closedPublished[uri] = diagnostics;
+            await NotifyAsync("textDocument/publishDiagnostics", new PublishDiagnosticsParams(uri, null, Lsp(diagnostics)),
                 LspJson.Default.PublishDiagnosticsParams, cancel);
         }
     }
