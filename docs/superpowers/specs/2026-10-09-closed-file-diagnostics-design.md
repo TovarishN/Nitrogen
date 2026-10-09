@@ -48,8 +48,9 @@ Out of scope:
   from what it last published for that URI. Between files it looks at the queue again: when a message
   is waiting, the pass stops and the batch is handled, and the pass then continues from its cursor.
 - **What it last published.** The server remembers, per closed URI, the diagnostics it last
-  published for it, and compares by value (`ServiceDiagnostic` equality, in order). An empty list
-  counts: a file that becomes clean gets one empty publish.
+  published for it, and compares by value (`ServiceDiagnostic` equality, in order). A file never
+  published counts as empty, so a clean workspace sends nothing; a file that becomes clean gets one
+  empty publish.
 - **Leaving.** When a pass restarts, every URI it published for that is no longer in the list and isn't
   open (deleted, dropped from the index, or out of `nitrogen.json`) gets one empty publish and is
   forgotten. A URI that is now open is forgotten without a publish: its diagnostics come from the open
