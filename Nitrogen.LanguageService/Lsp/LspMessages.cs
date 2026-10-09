@@ -16,7 +16,8 @@ public sealed record TextDocumentItem(string Uri, string LanguageId, int Version
 
 public sealed record DidOpenTextDocumentParams(TextDocumentItem TextDocument);
 
-public sealed record TextDocumentContentChangeEvent(string Text);
+/// <summary>A content change: <paramref name="Text"/> replaces <paramref name="Range"/>, or the whole text when there is no range.</summary>
+public sealed record TextDocumentContentChangeEvent(string Text, LspRange? Range = null);
 
 public sealed record DidChangeTextDocumentParams(VersionedTextDocumentIdentifier TextDocument, TextDocumentContentChangeEvent[] ContentChanges);
 
