@@ -52,7 +52,7 @@ The `.vsix` and the Rider ZIP attached to a [GitHub release](https://github.com/
    npm run package
    ```
 
-3. Install `editors/vscode/nitrogen-0.9.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.9.0.vsix` from `editors/vscode` if the `code` command is available.
+3. Install `editors/vscode/nitrogen-0.9.1.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.9.1.vsix` from `editors/vscode` if the `code` command is available.
 4. An extension built this way carries no server: in VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, leaving the setting empty works.
 5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
 

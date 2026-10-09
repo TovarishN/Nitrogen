@@ -11,8 +11,8 @@ The `.vsix` of a release carries a portable Nitrogen server and runs it with `do
 through `DOTNET_ROOT`, the standard install locations and `PATH`; `nitrogen.dotnetPath` names another
 `dotnet`, and `nitrogen.server.path` replaces the bundled server.
 
-Build: `npm install`, `npm run compile`, `npm run package` gives `nitrogen-0.9.0.vsix`; install it with
-`code --install-extension nitrogen-0.9.0.vsix`. A `.vsix` built this way carries no server: point
+Build: `npm install`, `npm run compile`, `npm run package` gives `nitrogen-0.9.1.vsix`; install it with
+`code --install-extension nitrogen-0.9.1.vsix`. A `.vsix` built this way carries no server: point
 `nitrogen.server.path` at the nitrogen executable, for example `Nitrogen.Cli/bin/Release/net10.0/nitrogen`
 after `dotnet build Nitrogen.slnx -c Release`.
 
