@@ -60,7 +60,6 @@ internal static class RiderPluginInput
         string? selfContainedServer = null;
         if (selfContained)
         {
-            if (config is null) return FailRequest("--self-contained needs --config", out error);
             selfContainedServer = server is null ? LanguageBundle.DefaultServer() : Path.GetFullPath(server);
             if (selfContainedServer is null) return FailRequest("this nitrogen is a single-file build with no nitrogen.dll; pass --server", out error);
         }
@@ -80,7 +79,7 @@ internal static class RiderPluginInput
         if (model is null) return null;
         if (start is not null && config is not null)
             model = model with { StartRule = start };
-        return new RiderPluginRequest(model, Path.GetFullPath(output), nitrogen, bundles, selfContainedServer);
+        return new RiderPluginRequest(model, Path.GetFullPath(output), nitrogen, bundles, selfContainedServer, CarriesLanguage: config is not null);
     }
 
     static RiderPluginRequest? FailRequest(string message, out string error)
