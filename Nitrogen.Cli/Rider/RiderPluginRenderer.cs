@@ -23,7 +23,7 @@ internal static class RiderPluginRenderer
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenConfigurable.kt"] = InPackage(ConfigurableKt, request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenBundles.kt"] = InPackage(BundlesKt, request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenPlugin.kt"] = PluginKt(request.Model),
-                ["src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"] = request.SelfContainedServer is null ? LspKt(request) : SelfContainedLspKt(request),
+                ["src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt"] = request.SelfContainedServer is not null && request.CarriesLanguage ? SelfContainedLspKt(request) : LspKt(request),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenFileType.kt"] = FileTypeKt(request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenCSharpStrings.kt"] = InPackage(Resource("rider/NitrogenCSharpStrings.kt"), request.Model),
                 ["src/main/kotlin/org/nitrogen/rider/NitrogenParserDefinition.kt"] = InPackage(Resource("rider/NitrogenParserDefinition.kt"), request.Model),
@@ -48,7 +48,11 @@ internal static class RiderPluginRenderer
                 File.Copy(bundle.Path, destination, overwrite: true);
             }
 
-            if (request.SelfContainedServer is { } server) LanguageBundle.Stage(request.Model, server, Path.Combine(staging, "bundle"));
+            if (request.SelfContainedServer is { } server)
+            {
+                if (request.CarriesLanguage) LanguageBundle.Stage(request.Model, server, Path.Combine(staging, "bundle"));
+                else LanguageBundle.StageServer(server, Path.Combine(staging, "bundle"));
+            }
 
             if (Directory.Exists(outputDirectory)) Directory.Delete(outputDirectory, recursive: true);
             Directory.Move(staging, outputDirectory);
@@ -353,6 +357,21 @@ class NitrogenFileType : LanguageFileType(NitrogenLanguage) {
 }
 """;
 
+    const string InstalledCommandLine = """
+        fun commandLine(): GeneralCommandLine =
+            GeneralCommandLine(NitrogenSettings.getInstance().resolveExecutable(defaultExecutable), "lsp")
+""";
+
+    const string BundledCommandLine = """
+        /** The executable set in Settings when there is one, else the bundled server on the dotnet host. */
+        fun commandLine(): GeneralCommandLine {
+            val settings = NitrogenSettings.getInstance()
+            if (settings.executable.isNotBlank()) return GeneralCommandLine(settings.resolveExecutable(defaultExecutable), "lsp")
+            val server = NitrogenLanguageBundle.directory().resolve("server/nitrogen.dll").toString()
+            return GeneralCommandLine(NitrogenLanguageBundle.dotnet(), server, "lsp")
+        }
+""";
+
     static string LspKt(RiderPluginRequest request) => $$"""
 package {{KotlinPackage(request.Model)}}
 
@@ -369,8 +388,7 @@ class NitrogenLspSupport : LspIntegrationProvider {
         const val defaultExecutable = "{{EscapeKotlin(request.NitrogenPath)}}"
         const val startRule = "{{EscapeKotlin(request.Model.StartRule)}}"
 
-        fun commandLine(): GeneralCommandLine =
-            GeneralCommandLine(NitrogenSettings.getInstance().resolveExecutable(defaultExecutable), "lsp")
+{{(request.SelfContainedServer is null ? InstalledCommandLine : BundledCommandLine)}}
     }
 
     override fun fileOpened(project: Project, file: VirtualFile, clientStarter: LspClientStarter) {
@@ -484,9 +502,14 @@ The server runs the first of: the executable set in Settings | Tools | {{request
 A bundle must be a self-contained single-file server, for example `dotnet publish Nitrogen.Cli -c Release -r osx-arm64 --self-contained -p:PublishSingleFile=true`. Rider extracts it once, checks its SHA-256, and runs it from its system directory.
 
 Build with `gradle buildPlugin` and install the resulting ZIP from Rider's plugin settings.
-""" + (request.SelfContainedServer is null ? "" : """
+""" + (request.SelfContainedServer is null ? "" : request.CarriesLanguage ? """
+
 
 This plugin carries its language and a portable server in `bundle/`, run with `dotnet` (.NET 10); a Nitrogen executable set in Settings replaces the bundled server.
+""" : """
+
+
+This plugin carries a portable server in `bundle/server/`, run with `dotnet` (.NET 10); a Nitrogen executable set in Settings replaces it.
 """);
 
     static string Resource(string name)

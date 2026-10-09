@@ -385,6 +385,30 @@ public sealed class RiderPluginGenerationTests
     }
 
     [Fact]
+    public void A_self_contained_grammar_plugin_carries_only_the_server()
+    {
+        using var dir = new TempDirectory();
+        string grammar = dir.Write("Calc.ngr", "syntax module Calc { }");
+        dir.Write("server/nitrogen.dll", "dll");
+        dir.Write("server/nitrogen.runtimeconfig.json", "{}");
+        var request = RiderPluginInput.ParseRequest(new[] { "generate", "rider", "--grammar", grammar, "--start", "Calc.File",
+            "--output", Path.Combine(dir.Path, "out"), "--self-contained", "--server", Path.Combine(dir.Path, "server") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+        string Read(string path) => File.ReadAllText(Path.Combine(request.OutputDirectory, path));
+
+        Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "bundle", "server", "nitrogen.dll")));
+        Assert.False(Directory.Exists(Path.Combine(request.OutputDirectory, "bundle", "language")));
+        Assert.Contains("PrepareSandboxTask", Read("build.gradle.kts"));
+        Assert.True(File.Exists(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenLanguageBundle.kt")));
+        string lsp = Read("src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt");
+        Assert.Contains("GeneralCommandLine(NitrogenLanguageBundle.dotnet(), server, \"lsp\")", lsp);
+        Assert.Contains("languagesOfOtherPlugins", lsp); // the server reads the workspace's nitrogen.json, as without a bundle
+        Assert.DoesNotContain("--config", lsp);
+        Assert.Contains("carries a portable server", Read("README.md"));
+    }
+
+    [Fact]
     public void Plugins_without_self_contained_are_unchanged_apart_from_the_version()
     {
         using var dir = new TempDirectory();

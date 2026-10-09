@@ -5,7 +5,8 @@ namespace Nitrogen.Cli;
 
 /// <summary>
 /// A self-contained language for an editor plugin: <c>language/nitrogen.json</c> with its grammars and
-/// helper sources, and <c>server/</c>, a framework-dependent Nitrogen build run as <c>dotnet server/nitrogen.dll lsp --config language/nitrogen.json</c>.
+/// helper sources, and <c>server/</c>, a framework-dependent Nitrogen build run as <c>dotnet server/nitrogen.dll lsp --config language/nitrogen.json</c>;
+/// or only <c>server/</c>, run as <c>dotnet server/nitrogen.dll lsp</c>.
 /// </summary>
 internal static class LanguageBundle
 {
@@ -23,12 +24,8 @@ internal static class LanguageBundle
     /// <summary>Replaces <paramref name="destination"/> with the bundle. Throws <see cref="ArgumentException"/> for unusable input.</summary>
     public static void Stage(LanguagePluginModel model, string serverDirectory, string destination)
     {
-        serverDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(serverDirectory));
+        serverDirectory = CheckServer(serverDirectory, destination);
         destination = Path.GetFullPath(destination);
-        if (!IsServer(serverDirectory))
-            throw new ArgumentException($"'{serverDirectory}' is not a framework-dependent Nitrogen build (nitrogen.dll and nitrogen.runtimeconfig.json); pass --server");
-        if (destination.StartsWith(serverDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-            throw new ArgumentException("the bundle cannot be written inside the server directory");
         var grammars = Match(model.GrammarPaths, "grammar");
         var sources = Match(model.SourcePaths, "source");
 
@@ -38,6 +35,26 @@ internal static class LanguageBundle
         Copy(sources, Path.Combine(language, "sources"));
         File.WriteAllText(Path.Combine(destination, ConfigPath), Config(model, grammars, sources), s_utf8);
         CopyServer(serverDirectory, Path.Combine(destination, "server"));
+    }
+
+    /// <summary>Replaces <paramref name="destination"/> with a bundle holding only the server, for a plugin whose server serves its language itself. Throws <see cref="ArgumentException"/> for unusable input.</summary>
+    public static void StageServer(string serverDirectory, string destination)
+    {
+        serverDirectory = CheckServer(serverDirectory, destination);
+        destination = Path.GetFullPath(destination);
+        if (Directory.Exists(destination)) Directory.Delete(destination, recursive: true);
+        CopyServer(serverDirectory, Path.Combine(destination, "server"));
+    }
+
+    /// <summary>The server directory, full; throws when it is not a framework-dependent build or the bundle would be written inside it.</summary>
+    static string CheckServer(string serverDirectory, string destination)
+    {
+        serverDirectory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(serverDirectory));
+        if (!IsServer(serverDirectory))
+            throw new ArgumentException($"'{serverDirectory}' is not a framework-dependent Nitrogen build (nitrogen.dll and nitrogen.runtimeconfig.json); pass --server");
+        if (Path.GetFullPath(destination).StartsWith(serverDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw new ArgumentException("the bundle cannot be written inside the server directory");
+        return serverDirectory;
     }
 
     /// <summary>The files the patterns name, as the language service expands them; every pattern must match and names must be unique.</summary>
