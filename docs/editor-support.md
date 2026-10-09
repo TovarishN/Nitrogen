@@ -35,6 +35,8 @@ The [VS Code extension](../editors/vscode/README.md) starts `nitrogen lsp`. The 
 
 For a `nitrogen.json` language, the server also reads the language's files in the workspace folder that are not open (skipping `bin`, `obj`, `node_modules`, and hidden folders), so references into closed files resolve and rename edits them. Their diagnostics, and those of the language's grammars, are reported too: checked while the server is idle, and published when they change. Clients that support dynamic registration are asked to report changes to those files.
 
+The `.vsix` and the Rider ZIP attached to a [GitHub release](https://github.com/TovarishN/Nitrogen/releases) carry a portable Nitrogen server and need only the .NET 10 runtime: install them, and they find `dotnet` through `DOTNET_ROOT`, the standard install locations, and `PATH`. In VS Code, `nitrogen.dotnetPath` names the `dotnet` to use and `nitrogen.server.path` replaces the bundled server; in Rider, Settings | Tools | Nitrogen sets an executable that replaces it. The steps below build the extension from source.
+
 1. Build the language server from the repository root:
 
    ```sh
@@ -51,7 +53,7 @@ For a `nitrogen.json` language, the server also reads the language's files in th
    ```
 
 3. Install `editors/vscode/nitrogen-0.8.0.vsix` using VS Code's **Extensions: Install from VSIX...** command, or run `code --install-extension nitrogen-0.8.0.vsix` from `editors/vscode` if the `code` command is available.
-4. In VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, the default setting works.
+4. An extension built this way carries no server: in VS Code settings, set `nitrogen.server.path` to the absolute path of the built CLI executable. For a Release build on macOS or Linux, this is `<repo>/Nitrogen.Cli/bin/Release/net10.0/nitrogen` (replace `<repo>` with this repository's absolute path). The extension passes `lsp` to that executable automatically. If `nitrogen` is already on `PATH`, leaving the setting empty works.
 5. Open the repository folder in VS Code. To enable a custom language, put `nitrogen.json` at the workspace root. For the included Calc grammar:
 
    ```json
@@ -73,7 +75,8 @@ Open a `.calc` file such as `sample.calc` containing `1 + 2;`. The server recomp
 
 The generic Rider plugin is in `editors/rider` and uses the same `nitrogen lsp`
 server as VS Code. Build it with `gradle buildPlugin`, then install the ZIP in
-Rider. The default executable is `nitrogen` on `PATH`.
+Rider. The default executable is `nitrogen` on `PATH`. The release plugin is generated with
+`--self-contained`: it carries the portable server and runs it with `dotnet`.
 
 To generate a grammar-specific plugin from a workspace configuration:
 
