@@ -584,7 +584,7 @@ In `Nitrogen.LanguageService/Lsp/LspServer.cs`:
     /// <returns>The process exit code: 0 after <c>shutdown</c> then <c>exit</c>; 1 for <c>exit</c> without shutdown, end of input or broken framing.</returns>
     public async Task<int> RunAsync(CancellationToken cancel)
     {
-        var queue = Channel.CreateUnbounded<JsonDocument>(new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+        var queue = Channel.CreateUnbounded<JsonDocument>(); // not single-reader: that kind cannot count its items
         _ = Task.Run(() => ReadAllAsync(queue.Writer, cancel), CancellationToken.None);
         Task? dayChange = null;
         try

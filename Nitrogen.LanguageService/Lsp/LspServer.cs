@@ -1,11 +1,13 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using System.Threading.Channels;
 
 namespace Nitrogen.LanguageService.Lsp;
 
 /// <summary>
-/// The LSP server loop (issue 238): one message at a time, in order. A request that fails gets an
-/// error response and the loop goes on; broken framing ends the session. Diagnostics are pushed
+/// The LSP server loop (issue 238): a reader task queues messages as they arrive, and the loop handles
+/// everything queued as a batch, in order. A request that fails gets an error response and the loop
+/// goes on; broken framing ends the session. Diagnostics are pushed
 /// after every document change, for every document the change may affect. When a served language's
 /// values read the clock, hints are refreshed at each local midnight.
 /// </summary>
@@ -24,62 +26,112 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     bool _refreshInlayHints;  // the client takes workspace/inlayHint/refresh
     int _languagesSeen;       // service.LanguagesVersion when the client last had current hints
     int _refreshes;
+    readonly object _gate = new();            // orders the reader's enqueue against the loop's idle check
+    readonly ManualResetEventSlim _idle = new(false);
+    volatile Exception? _readError;           // why reading stopped early: logged when the loop reaches it
+
+    /// <summary>Set while the loop waits with nothing queued, so every message read so far is handled; tests feed input in lockstep with it.</summary>
+    internal WaitHandle Idle => _idle.WaitHandle;
 
     /// <returns>The process exit code: 0 after <c>shutdown</c> then <c>exit</c>; 1 for <c>exit</c> without shutdown, end of input or broken framing.</returns>
     public async Task<int> RunAsync(CancellationToken cancel)
     {
-        Task<JsonDocument?>? reading = null;
+        var queue = Channel.CreateUnbounded<JsonDocument>(); // not single-reader: that kind cannot count its items
+        _ = Task.Run(() => ReadAllAsync(queue.Writer, cancel), CancellationToken.None);
         Task? dayChange = null;
-        while (true)
+        try
         {
-            JsonDocument? message;
-            try
+            while (true)
             {
-                // Armed before the read starts, and checked first, so a day change during the wait is never missed.
+                // Armed before the wait starts, and checked first, so a day change during the wait is never missed.
                 dayChange ??= DayChange(cancel);
-                reading ??= connection.ReadAsync(cancel);
-                if (dayChange is not null && await Task.WhenAny(dayChange, reading) == dayChange && dayChange.IsCompletedSuccessfully)
+                lock (_gate)
+                    if (queue.Reader.Count == 0) _idle.Set();
+                var waiting = queue.Reader.WaitToReadAsync(cancel).AsTask();
+                if (dayChange is not null && await Task.WhenAny(dayChange, waiting) == dayChange && dayChange.IsCompletedSuccessfully)
                 {
                     dayChange = null;
                     await SendInlayHintRefreshAsync(cancel);
                     continue;
                 }
-                message = await reading;
-                reading = null;
-            }
-            catch (InvalidDataException error)
-            {
-                log.WriteLine($"nitrogen lsp: {error.Message}");
-                return 1;
-            }
-            if (message is null) return 1;
-
-            using (message)
-            {
-                var root = message.RootElement;
-                string method = root.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
-                bool isRequest = root.TryGetProperty("id", out var idElement);
-                var id = isRequest ? idElement.Clone() : default;
-                var parameters = root.TryGetProperty("params", out var p) ? p : default;
-                if (isRequest && method.Length == 0) continue; // a response to our own request (client/registerCapability)
-                if (method == "exit") return _shutdown ? 0 : 1;
-
+                if (!await waiting)
+                {
+                    if (_readError is { } error) log.WriteLine($"nitrogen lsp: {error.Message}");
+                    return 1;
+                }
+                var batch = new List<JsonDocument>();
+                while (queue.Reader.TryRead(out var message)) batch.Add(message);
                 try
                 {
-                    if (isRequest) await HandleRequestAsync(method, id, parameters, cancel);
-                    else
-                    {
-                        await HandleNotificationAsync(method, parameters, cancel);
-                        await RefreshInlayHintsAsync(cancel);
-                    }
+                    if (await RunBatchAsync(batch, cancel) is int code) return code;
                 }
-                catch (Exception error) when (error is not OperationCanceledException)
+                finally
                 {
-                    if (isRequest) await RespondErrorAsync(id, error switch { RenameRefusedException => RequestFailed, JsonException => InvalidParams, _ => InternalError }, error.Message, cancel);
-                    else log.WriteLine($"nitrogen lsp: {method}: {error.Message}");
+                    foreach (var message in batch) message.Dispose();
                 }
             }
         }
+        finally
+        {
+            _idle.Set(); // a lockstep reader waiting for the loop reads on to the end of its input
+        }
+    }
+
+    /// <summary>Reads messages into the queue as they arrive; completes it at the end of input or when reading fails.</summary>
+    async Task ReadAllAsync(ChannelWriter<JsonDocument> queue, CancellationToken cancel)
+    {
+        try
+        {
+            while (await connection.ReadAsync(cancel) is { } message)
+                lock (_gate)
+                {
+                    _idle.Reset();
+                    queue.TryWrite(message);
+                }
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            _readError = error;
+        }
+        finally
+        {
+            queue.TryComplete();
+        }
+    }
+
+    /// <returns>The exit code when the batch ends the session; null to go on.</returns>
+    async Task<int?> RunBatchAsync(IReadOnlyList<JsonDocument> batch, CancellationToken cancel)
+    {
+        foreach (var message in batch)
+            if (await HandleMessageAsync(message.RootElement, cancel) is int code) return code;
+        return null;
+    }
+
+    /// <returns>The exit code for <c>exit</c>; null otherwise.</returns>
+    async Task<int?> HandleMessageAsync(JsonElement root, CancellationToken cancel)
+    {
+        string method = root.TryGetProperty("method", out var m) ? m.GetString() ?? "" : "";
+        bool isRequest = root.TryGetProperty("id", out var idElement);
+        var id = isRequest ? idElement.Clone() : default;
+        var parameters = root.TryGetProperty("params", out var p) ? p : default;
+        if (isRequest && method.Length == 0) return null; // a response to our own request (client/registerCapability)
+        if (method == "exit") return _shutdown ? 0 : 1;
+
+        try
+        {
+            if (isRequest) await HandleRequestAsync(method, id, parameters, cancel);
+            else
+            {
+                await HandleNotificationAsync(method, parameters, cancel);
+                await RefreshInlayHintsAsync(cancel);
+            }
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            if (isRequest) await RespondErrorAsync(id, error switch { RenameRefusedException => RequestFailed, JsonException => InvalidParams, _ => InternalError }, error.Message, cancel);
+            else log.WriteLine($"nitrogen lsp: {method}: {error.Message}");
+        }
+        return null;
     }
 
     async Task HandleRequestAsync(string method, JsonElement id, JsonElement parameters, CancellationToken cancel)

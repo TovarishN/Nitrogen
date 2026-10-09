@@ -11,10 +11,12 @@ public class LspServerTests
 {
     internal static async Task<(int Code, List<JsonElement> Messages, string Log)> Session(NitrogenLanguageService service, params string[] bodies)
     {
-        var input = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
+        var input = new LockstepInput(bodies);
         var output = new MemoryStream();
         var log = new StringWriter();
-        int code = await new LspServer(new JsonRpcConnection(input, output), service, log).RunAsync(CancellationToken.None);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, log);
+        input.Idle = server.Idle;
+        int code = await server.RunAsync(CancellationToken.None);
 
         output.Position = 0;
         var messages = new List<JsonElement>();

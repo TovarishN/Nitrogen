@@ -86,10 +86,11 @@ public sealed class GrammarLoopTests : IDisposable
             "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}",
             "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}",
         ];
-        var input = new MemoryStream(bodies.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
+        var input = new LockstepInput(bodies);
         var output = new MemoryStream();
-        await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, Path.Combine(_root, "bundle"))
-            .RunAsync(CancellationToken.None);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, Path.Combine(_root, "bundle"));
+        input.Idle = server.Idle;
+        await server.RunAsync(CancellationToken.None);
 
         output.Position = 0;
         var counts = new List<int>();
@@ -157,12 +158,14 @@ public sealed class GrammarLoopTests : IDisposable
         string watched = "{\"jsonrpc\":\"2.0\",\"method\":\"workspace/didChangeWatchedFiles\",\"params\":{\"changes\":[{\"uri\":\"" + Uri(grammar) + "\",\"type\":2}]}}";
 
         // The grammar changes on disk between the open and the watched-files notification.
-        var input = new BlockingInput(
-            [initialize, "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}", open],
-            () => File.WriteAllText(grammar, WorkspaceTests.Greet.Replace("Name:Word;", "Name:Word \"!\";")),
-            [watched, "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}", "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}"]);
+        var input = new LockstepInput(
+            initialize, "{\"jsonrpc\":\"2.0\",\"method\":\"initialized\",\"params\":{}}", open,
+            (Action)(() => File.WriteAllText(grammar, WorkspaceTests.Greet.Replace("Name:Word;", "Name:Word \"!\";"))),
+            watched, "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}", "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
         var output = new MemoryStream();
-        await new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null).RunAsync(CancellationToken.None);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null);
+        input.Idle = server.Idle;
+        await server.RunAsync(CancellationToken.None);
 
         output.Position = 0;
         var counts = new List<int>();
@@ -173,36 +176,6 @@ public sealed class GrammarLoopTests : IDisposable
                     && message.RootElement.GetProperty("params").GetProperty("uri").GetString() == sample)
                     counts.Add(message.RootElement.GetProperty("params").GetProperty("diagnostics").GetArrayLength());
         Assert.Equal(new[] { 0, 1 }, counts); // clean with the first grammar, then "!" missing after the edit on disk
-    }
-
-    /// <summary>Framed messages in two batches, with an action run between them when the first batch is consumed.</summary>
-    internal sealed class BlockingInput(string[] first, Action between, string[] second) : Stream
-    {
-        readonly MemoryStream _first = new(first.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
-        readonly MemoryStream _second = new(second.SelectMany(b => JsonRpcConnectionTests.Frame(b)).ToArray());
-        bool _switched;
-
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            int read = _first.Read(buffer, offset, count);
-            if (read > 0) return read;
-            if (!_switched)
-            {
-                _switched = true;
-                between();
-            }
-            return _second.Read(buffer, offset, count);
-        }
-
-        public override bool CanRead => true;
-        public override bool CanSeek => false;
-        public override bool CanWrite => false;
-        public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
-        public override void Flush() { }
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
-        public override void SetLength(long value) => throw new NotSupportedException();
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     const string Checked = """
