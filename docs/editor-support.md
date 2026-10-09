@@ -12,7 +12,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | --- | --- | --- | --- |
 | Coloring | ✓ | ✓ (painted as decorations) | ✓ (added to Rider's) |
 | Completion | ✓ | ✓ | ✓ |
-| Signature help³ | ✓ | ✓ | ✓ |
+| Signature help³ | ✓ | ✓ | — (Rider's C# parameter info handles C# files) |
 | Diagnostics | ✓ | ✓ | ✓ |
 | Diagnostics in closed files | ✓ (Problems panel) | — (closed C# files aren't read) | — |
 | Go to definition, references | ✓ | ✓ | ✓ (find usages) |
@@ -174,9 +174,9 @@ get the server's results directly.
 
 In Rider, C# files get a second Nitrogen client of their own (the platform switches features per
 client, not per file). Its colors are added to Rider's, and diagnostics, completion, hover, go to
-definition, find usages, statement values, quick fixes (in Alt+Enter) and signature help work in the
-strings; rename, structure view, formatting and the rest stay with Rider. Outside tagged strings the
-server offers no fixes or signatures, so Rider's own Alt+Enter and parameter info are unchanged. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
+definition, find usages, statement values and quick fixes (in Alt+Enter) work in the strings; signature
+help, rename, structure view, formatting and the rest stay with Rider. Outside tagged strings the server
+offers no fixes, so Rider's own Alt+Enter is unchanged. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
 always does, for its own language. A client whose server reads the workspace's `nitrogen.json` leaves
 the strings of languages that another installed Nitrogen plugin carries in its bundle to that plugin
 (it passes them as the `skipLanguages` initialization option, which any client can send), so they are
