@@ -31,8 +31,6 @@ import com.intellij.platform.lsp.api.customization.LspOnTypeFormattingCustomizer
 import com.intellij.platform.lsp.api.customization.LspOnTypeFormattingDisabled
 import com.intellij.platform.lsp.api.customization.LspOptimizeImportsCustomizer
 import com.intellij.platform.lsp.api.customization.LspOptimizeImportsDisabled
-import com.intellij.platform.lsp.api.customization.LspRenameCustomizer
-import com.intellij.platform.lsp.api.customization.LspRenameDisabled
 import com.intellij.platform.lsp.api.customization.LspSelectionRangeCustomizer
 import com.intellij.platform.lsp.api.customization.LspSelectionRangeDisabled
 import com.intellij.platform.lsp.api.customization.LspSignatureHelpCustomizer
@@ -48,11 +46,11 @@ import java.nio.file.Files
  * statement). C# files get a Nitrogen client of their own, separate from the one for the language's
  * files, because the platform switches features per client rather than per file. The server answers it
  * only inside tagged strings: its colours are added to Rider's, and diagnostics, completion, hover, go to
- * definition, find usages, statement values and quick fixes work in the strings. Quick fixes stay on because
- * the server gives none outside a tagged string, so Rider's Alt+Enter for ordinary C# is its own. Signature
- * help is off: Rider's own C# parameter info handles `(` and Ctrl+P in C# files, so the platform's never asks.
- * Everything that would compete with Rider's C# support (rename, structure view, formatting, highlighting
- * usages) is left to Rider.
+ * definition, find usages, statement values, quick fixes and rename work in the strings. Quick fixes and
+ * rename stay on because the server offers neither outside a tagged string, so Rider's Alt+Enter and rename
+ * for ordinary C# are its own. Signature help is off: Rider's own C# parameter info handles `(` and Ctrl+P in
+ * C# files, so the platform's never asks. Everything else that would compete with Rider's C# support
+ * (structure view, formatting, highlighting usages) is left to Rider.
  *
  * [skipLanguages] names the languages (by name or extension) this client's server leaves alone: a client
  * whose server reads the workspace's nitrogen.json skips those another installed plugin carries itself,
@@ -72,7 +70,6 @@ class NitrogenCSharpClient(
     override fun createInitializationOptions(): Any = mapOf("skipLanguages" to skipLanguages())
 
     override val lspCustomization: LspCustomization = object : NitrogenCustomization() {
-        override val renameCustomizer: LspRenameCustomizer = LspRenameDisabled
         override val documentSymbolCustomizer: LspDocumentSymbolCustomizer = LspDocumentSymbolDisabled
         override val formattingCustomizer: LspFormattingCustomizer = LspFormattingDisabled
         override val onTypeFormattingCustomizer: LspOnTypeFormattingCustomizer = LspOnTypeFormattingDisabled
