@@ -96,6 +96,34 @@ public sealed class ValueHintTests : IDisposable
     }
 
     [Fact]
+    public void A_range_at_the_end_of_a_long_file_gets_its_values_without_evaluating_the_rest()
+    {
+        using var service = Service();
+        service.EvaluationBudget = TimeSpan.Zero; // one statement per request
+        string text = string.Concat(Enumerable.Range(0, 2000).Select(i => $"{i} + 1;\n"));
+
+        var end = new DocumentRange(new DocumentPosition(1999, 0), new DocumentPosition(2000, 0));
+        Assert.Equal("= 2000", Assert.Single(Hints(service, text, end)).Label);
+        Assert.Equal(1, service.EvaluatedStatements);
+    }
+
+    [Fact]
+    public void A_range_asked_again_is_not_evaluated_again_and_a_later_request_goes_on()
+    {
+        using var service = Service();
+        service.EvaluationBudget = TimeSpan.Zero;
+        var first = new DocumentRange(new DocumentPosition(0, 0), new DocumentPosition(2, 0));
+        Assert.Single(Hints(service, "1 + 1;\n2 + 2;\n3 + 3;", first)); // the budget stops after the first
+        Assert.Equal(1, service.EvaluatedStatements);
+
+        Assert.Equal(["= 2", "= 4"], service.ValueHints(Uri("a.datecalc"), first).Select(h => h.Label)); // the cached one, then the next
+        Assert.Equal(["= 2", "= 4", "= 6"], service.ValueHints(Uri("a.datecalc"), Whole).Select(h => h.Label));
+        Assert.Equal(3, service.EvaluatedStatements);
+        service.ValueHints(Uri("a.datecalc"), Whole);
+        Assert.Equal(3, service.EvaluatedStatements);
+    }
+
+    [Fact]
     public void An_edit_shows_the_new_values()
     {
         using var service = Service();
