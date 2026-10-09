@@ -7,8 +7,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.platform.lsp.api.ProjectWideLspClientDescriptor
 import com.intellij.platform.lsp.api.customization.LspCallHierarchyDisabled
 import com.intellij.platform.lsp.api.customization.LspCallHierarchyCustomizer
-import com.intellij.platform.lsp.api.customization.LspCodeActionsCustomizer
-import com.intellij.platform.lsp.api.customization.LspCodeActionsDisabled
 import com.intellij.platform.lsp.api.customization.LspCodeLensCustomizer
 import com.intellij.platform.lsp.api.customization.LspCodeLensDisabled
 import com.intellij.platform.lsp.api.customization.LspCommandsCustomizer
@@ -50,8 +48,11 @@ import java.nio.file.Files
  * statement). C# files get a Nitrogen client of their own, separate from the one for the language's
  * files, because the platform switches features per client rather than per file. The server answers it
  * only inside tagged strings: its colours are added to Rider's, and diagnostics, completion, hover, go to
- * definition, find usages and statement values work in the strings. Everything that would compete with
- * Rider's C# support (rename, structure view, formatting, code actions, highlighting usages) is left to Rider.
+ * definition, find usages, statement values and quick fixes work in the strings. Quick fixes stay on because
+ * the server gives none outside a tagged string, so Rider's Alt+Enter for ordinary C# is its own. Signature
+ * help is off: Rider's own C# parameter info handles `(` and Ctrl+P in C# files, so the platform's never asks.
+ * Everything that would compete with Rider's C# support (rename, structure view, formatting, highlighting
+ * usages) is left to Rider.
  *
  * [skipLanguages] names the languages (by name or extension) this client's server leaves alone: a client
  * whose server reads the workspace's nitrogen.json skips those another installed plugin carries itself,
@@ -75,7 +76,6 @@ class NitrogenCSharpClient(
         override val documentSymbolCustomizer: LspDocumentSymbolCustomizer = LspDocumentSymbolDisabled
         override val formattingCustomizer: LspFormattingCustomizer = LspFormattingDisabled
         override val onTypeFormattingCustomizer: LspOnTypeFormattingCustomizer = LspOnTypeFormattingDisabled
-        override val codeActionsCustomizer: LspCodeActionsCustomizer = LspCodeActionsDisabled
         override val commandsCustomizer: LspCommandsCustomizer = LspCommandsDisabled
         override val optimizeImportsCustomizer: LspOptimizeImportsCustomizer = LspOptimizeImportsDisabled
         override val documentHighlightsCustomizer: LspDocumentHighlightsCustomizer = LspDocumentHighlightsDisabled

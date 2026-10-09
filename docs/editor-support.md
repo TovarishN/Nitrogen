@@ -12,7 +12,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | --- | --- | --- | --- |
 | Coloring | ✓ | ✓ (painted as decorations) | ✓ (added to Rider's) |
 | Completion | ✓ | ✓ | ✓ |
-| Signature help³ | ✓ | ✓ | — (left to Rider) |
+| Signature help³ | ✓ | ✓ | — (Rider's C# parameter info handles C# files) |
 | Diagnostics | ✓ | ✓ | ✓ |
 | Diagnostics in closed files | ✓ (Problems panel) | — (closed C# files aren't read) | — |
 | Go to definition, references | ✓ | ✓ | ✓ (find usages) |
@@ -23,7 +23,7 @@ overview, see the [README](../README.md); for the grammar language, the [languag
 | Workspace symbols | ✓ (open and closed files, and the `nitrogen.json` grammars) | ✓ (open C# files) | — (Rider's C# client keeps it off) |
 | Hover, with the expression's value¹ | ✓ | ✓ | ✓ |
 | Each statement's value at its end¹ | ✓ | ✓ | ✓ |
-| Quick fixes² | ✓ | ✓ | — (Rider's C# client keeps code actions off, so its Alt+Enter menu holds only Rider's own) |
+| Quick fixes² | ✓ | ✓ | ✓ (in Alt+Enter, only inside a tagged string) |
 
 ¹ When the language's helper sources export an `EvaluationProfile` (see [Helper sources](#helper-sources)).
 ² When they export `DiagnosticFixes`.
@@ -174,8 +174,9 @@ get the server's results directly.
 
 In Rider, C# files get a second Nitrogen client of their own (the platform switches features per
 client, not per file). Its colors are added to Rider's, and diagnostics, completion, hover, go to
-definition, find usages and statement values work in the strings; rename, structure view, formatting,
-quick fixes and the rest stay with Rider. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
+definition, find usages, statement values and quick fixes (in Alt+Enter) work in the strings; signature
+help, rename, structure view, formatting and the rest stay with Rider. Outside tagged strings the server
+offers no fixes, so Rider's own Alt+Enter is unchanged. The generic plugin starts it when the project has a `nitrogen.json`; a generated plugin
 always does, for its own language. A client whose server reads the workspace's `nitrogen.json` leaves
 the strings of languages that another installed Nitrogen plugin carries in its bundle to that plugin
 (it passes them as the `skipLanguages` initialization option, which any client can send), so they are

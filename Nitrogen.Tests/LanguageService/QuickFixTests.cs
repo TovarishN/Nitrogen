@@ -102,6 +102,19 @@ public sealed class QuickFixTests : IDisposable
     }
 
     [Fact]
+    public void Ordinary_csharp_gets_no_fixes_even_beside_a_fixable_string()
+    {
+        using var service = Service();
+        string uri = Uri("C.cs");
+        const string host = "class C { const string D = /*lang=datecalc*/ \"2026-02-30;\"; int M() => Math.Max(1, 2); }";
+        service.Open(uri, 1, host);
+        int max = host.IndexOf("Math.Max", StringComparison.Ordinal);
+
+        Assert.Empty(service.QuickFixes(uri, new DocumentRange(new DocumentPosition(0, max), new DocumentPosition(0, max))));
+        Assert.Empty(service.QuickFixes(uri, new DocumentRange(new DocumentPosition(0, 0), new DocumentPosition(0, 0))));
+    }
+
+    [Fact]
     public async Task The_server_answers_code_actions_with_quick_fixes()
     {
         string doc = Uri("a.datecalc");
