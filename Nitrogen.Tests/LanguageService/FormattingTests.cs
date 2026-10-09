@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Nitrogen.Cli;
 using Nitrogen.LanguageService;
 using Xunit;
@@ -253,5 +254,35 @@ public class FormattingTests
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task The_server_answers_formatting_requests()
+    {
+        const string text = "syntax module M\n{\ntoken Word = ['a'..'z']+;\n    }\n";
+        string open = "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/didOpen\",\"params\":{\"textDocument\":{\"uri\":\"" + Uri
+            + "\",\"languageId\":\"ngr\",\"version\":1,\"text\":" + JsonSerializer.Serialize(text) + "}}}";
+        const string options = "\"options\":{\"tabSize\":2,\"insertSpaces\":true}";
+        string format = "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"textDocument/formatting\",\"params\":{\"textDocument\":{\"uri\":\"" + Uri + "\"}," + options + "}}";
+        string range = "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"textDocument/rangeFormatting\",\"params\":{\"textDocument\":{\"uri\":\"" + Uri
+            + "\"},\"range\":{\"start\":{\"line\":2,\"character\":0},\"end\":{\"line\":2,\"character\":3}}," + options + "}}";
+        string onType = "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"textDocument/onTypeFormatting\",\"params\":{\"textDocument\":{\"uri\":\"" + Uri
+            + "\"},\"position\":{\"line\":3,\"character\":5},\"ch\":\"}\"," + options + "}}";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+
+        var (_, messages, _) = await LspServerTests.Session(service,
+            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{}}}""", open, format, range, onType,
+            """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
+
+        var capabilities = messages[0].GetProperty("result").GetProperty("capabilities");
+        Assert.True(capabilities.GetProperty("documentFormattingProvider").GetBoolean());
+        Assert.True(capabilities.GetProperty("documentRangeFormattingProvider").GetBoolean());
+        Assert.Equal("}", capabilities.GetProperty("documentOnTypeFormattingProvider").GetProperty("firstTriggerCharacter").GetString());
+        JsonElement Result(int id) => messages.Single(m => m.TryGetProperty("id", out var i) && i.ValueKind == JsonValueKind.Number && i.GetInt32() == id).GetProperty("result");
+        Assert.Equal(2, Result(5).GetArrayLength());   // the token line and the closer
+        Assert.Equal(1, Result(6).GetArrayLength());   // the token line
+        var closer = Assert.Single(Result(7).EnumerateArray());
+        Assert.Equal("", closer.GetProperty("newText").GetString());
+        Assert.Equal(3, closer.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32());
     }
 }

@@ -43,7 +43,10 @@ public sealed record ServerCapabilities(
     SignatureHelpOptions? SignatureHelpProvider = null,
     bool? FoldingRangeProvider = null,
     bool? SelectionRangeProvider = null,
-    bool? WorkspaceSymbolProvider = null);
+    bool? WorkspaceSymbolProvider = null,
+    bool? DocumentFormattingProvider = null,
+    bool? DocumentRangeFormattingProvider = null,
+    DocumentOnTypeFormattingOptions? DocumentOnTypeFormattingProvider = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -119,6 +122,16 @@ public sealed record WorkspaceSymbolParams(string? Query);
 /// <summary>A symbol found by <c>workspace/symbol</c>; <paramref name="Kind"/> is LSP's SymbolKind.</summary>
 public sealed record LspSymbolInformation(string Name, int Kind, LspLocation Location, string? ContainerName = null);
 
+public sealed record DocumentOnTypeFormattingOptions(string FirstTriggerCharacter);
+
+public sealed record LspFormattingOptions(int TabSize, bool InsertSpaces);
+
+public sealed record DocumentFormattingParams(TextDocumentIdentifier TextDocument, LspFormattingOptions Options);
+
+public sealed record DocumentRangeFormattingParams(TextDocumentIdentifier TextDocument, LspRange Range, LspFormattingOptions Options);
+
+public sealed record DocumentOnTypeFormattingParams(TextDocumentIdentifier TextDocument, LspPosition Position, string Ch, LspFormattingOptions Options);
+
 /// <summary>A parameter by its [start, end) offsets in the signature's label.</summary>
 public sealed record LspParameterInformation(int[] Label);
 
@@ -170,4 +183,8 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(LspSelectionRange[]))]
 [JsonSerializable(typeof(WorkspaceSymbolParams))]
 [JsonSerializable(typeof(LspSymbolInformation[]))]
+[JsonSerializable(typeof(DocumentFormattingParams))]
+[JsonSerializable(typeof(DocumentRangeFormattingParams))]
+[JsonSerializable(typeof(DocumentOnTypeFormattingParams))]
+[JsonSerializable(typeof(LspTextEdit[]))]
 internal sealed partial class LspJson : JsonSerializerContext;

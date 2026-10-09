@@ -209,7 +209,9 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
                         SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
-                        FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true),
+                        FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true,
+                        DocumentFormattingProvider: true, DocumentRangeFormattingProvider: true,
+                        DocumentOnTypeFormattingProvider: new DocumentOnTypeFormattingOptions("}")),
                     new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
@@ -348,6 +350,25 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 await RespondAsync(id, symbols, LspJson.Default.LspSymbolInformationArray, cancel);
                 break;
             }
+            case "textDocument/formatting":
+            {
+                var request = Params(parameters, LspJson.Default.DocumentFormattingParams);
+                await RespondEditsAsync(id, service.Format(request.TextDocument.Uri, Options(request.Options)), cancel);
+                break;
+            }
+            case "textDocument/rangeFormatting":
+            {
+                var request = Params(parameters, LspJson.Default.DocumentRangeFormattingParams);
+                var range = new DocumentRange(Position(request.Range.Start), Position(request.Range.End));
+                await RespondEditsAsync(id, service.FormatRange(request.TextDocument.Uri, range, Options(request.Options)), cancel);
+                break;
+            }
+            case "textDocument/onTypeFormatting":
+            {
+                var request = Params(parameters, LspJson.Default.DocumentOnTypeFormattingParams);
+                await RespondEditsAsync(id, service.FormatOnType(request.TextDocument.Uri, Position(request.Position), request.Ch, Options(request.Options)), cancel);
+                break;
+            }
             default:
                 await RespondErrorAsync(id, MethodNotFound, $"'{method}' is not supported", cancel);
                 break;
@@ -471,6 +492,11 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     }
 
     static DocumentPosition Position(LspPosition position) => new(position.Line, position.Character);
+
+    static FormattingOptions Options(LspFormattingOptions options) => new(options.TabSize, options.InsertSpaces);
+
+    Task RespondEditsAsync(JsonElement id, IReadOnlyList<DocumentEdit> edits, CancellationToken cancel) =>
+        RespondAsync(id, edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText)).ToArray(), LspJson.Default.LspTextEditArray, cancel);
 
     static LspLocation Location(DocumentLocation location) => new(location.Uri, Range(location.Range));
 
