@@ -17,8 +17,13 @@
       "properties": {
         "nitrogen.server.path": {
           "type": "string",
-          "default": "nitrogen",
-          "description": "The nitrogen executable (runs `nitrogen lsp`)."
+          "default": "",
+          "description": "The nitrogen executable (runs `nitrogen lsp`); empty runs the server bundled with the extension."
+        },
+        "nitrogen.dotnetPath": {
+          "type": "string",
+          "default": "",
+          "description": "The dotnet executable that runs the bundled server; empty finds it through DOTNET_ROOT, the standard install locations, and PATH."
         }
       }
     }
@@ -26,7 +31,7 @@
   "scripts": {
     "compile": "tsc -p ./ --noEmit && esbuild src/extension.ts --bundle --platform=node --target=node20 --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
     "package": "vsce package --no-dependencies --allow-missing-repository",
-    "test": "esbuild src/otherExtensions.test.ts --bundle --platform=node --target=node20 --format=cjs --outfile=out/test/otherExtensions.test.js && node --test out/test/otherExtensions.test.js"
+    "test": "esbuild src/otherExtensions.test.ts src/server.test.ts --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/otherExtensions.test.js out/test/server.test.js"
   },
   "dependencies": { "vscode-languageclient": "^9.0.1" },
   "devDependencies": { "@types/node": "^20.0.0", "@types/vscode": "^1.90.0", "@vscode/vsce": "^3.0.0", "esbuild": "^0.28.2", "typescript": "^5.4.0" }

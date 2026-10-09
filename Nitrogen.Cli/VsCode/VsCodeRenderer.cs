@@ -177,7 +177,7 @@ const DISPLAY = {{JsonSerializer.Serialize(model.DisplayName)}};
 let client: LanguageClient | undefined;
 let strings: CSharpStrings | undefined;
 
-/** The dotnet host: the setting, then DOTNET_ROOT, then the standard install locations, then PATH. */
+/** The dotnet host: the setting, then DOTNET_ROOT, then the standard install locations, then PATH. The Nitrogen extension's server.ts looks in the same places. */
 function dotnet(): string {
   const configured = workspace.getConfiguration(LANGUAGE).get<string>('dotnetPath');
   if (configured) return configured;
