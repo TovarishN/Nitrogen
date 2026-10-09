@@ -112,6 +112,19 @@ public sealed class EmbeddedStringTests : IDisposable
     }
 
     [Fact]
+    public void Ordinary_csharp_has_nothing_to_rename()
+    {
+        using var service = Service();
+        const string host = "var r = Run(/*lang=datecalc*/ \"let start = 2026-10-05; weekday(start);\");";
+        string uri = Uri("C.cs");
+        service.Open(uri, 1, host);
+
+        // Outside the tagged string, rename is refused, so the C# rename is the editor's own.
+        Assert.Throws<RenameRefusedException>(() => service.PrepareRename(uri, At(host, "Run")));
+        Assert.Throws<RenameRefusedException>(() => service.Rename(uri, At(host, "Run"), "Go"));
+    }
+
+    [Fact]
     public void An_open_helper_source_shows_the_workspace_compile_errors_in_it()
     {
         string helper = Path.Combine(_root, "MathModule.cs");
