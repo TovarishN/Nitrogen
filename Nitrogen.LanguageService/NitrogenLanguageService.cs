@@ -56,6 +56,13 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     public int? VersionOf(string uri) =>
         _hosts.TryGetValue(uri, out var host) ? host.Version : _documents.TryGetValue(uri, out var document) ? document.Version : null;
 
+    /// <summary>The current text of an open document, C# host or open file of no served language; null otherwise. Tagged strings are not documents the editor changes.</summary>
+    public string? TextOf(string uri) =>
+        _hosts.TryGetValue(uri, out var host) ? host.Text
+        : _documents.TryGetValue(uri, out var document) && !IsEmbedded(uri) ? document.Text
+        : _unserved.TryGetValue(uri, out var unserved) ? unserved.Text
+        : null;
+
     /// <returns>Every open document whose diagnostics may have changed: this one and the others of its language. Empty when nobody serves the file type.</returns>
     public IReadOnlyList<string> Open(string uri, int version, string text) => Visible(Update(uri, version, text));
 
