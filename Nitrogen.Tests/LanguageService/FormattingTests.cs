@@ -170,4 +170,41 @@ public class FormattingTests
         service.Open(Uri, 1, "syntax module M\n{\n  token Word = ['a'..'z']+;\n}\n");
         Assert.Empty(service.Format(Uri, TwoSpaces));
     }
+
+    [Fact]
+    public void A_document_with_a_syntax_error_gets_no_edits()
+    {
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open(Uri, 1, "syntax module M\n{\ntoken = ;\n}\n");
+        Assert.Empty(service.Format(Uri, TwoSpaces));
+    }
+
+    [Fact]
+    public void A_range_formats_only_its_lines()
+    {
+        const string text = "syntax module M\n{\ntoken Word = ['a'..'z']+;\ntoken Other = ['b'..'c']+;\n}\n";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open(Uri, 1, text);
+        var edits = service.FormatRange(Uri, new DocumentRange(new DocumentPosition(3, 0), new DocumentPosition(3, 5)), TwoSpaces);
+        Assert.Equal("syntax module M\n{\ntoken Word = ['a'..'z']+;\n  token Other = ['b'..'c']+;\n}\n", Apply(text, edits));
+    }
+
+    [Fact]
+    public void Typing_a_closing_brace_reindents_its_line_and_other_characters_do_nothing()
+    {
+        const string text = "syntax module M\n{\n  token Word = ['a'..'z']+;\n    }\n";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open(Uri, 1, text);
+        Assert.Equal("syntax module M\n{\n  token Word = ['a'..'z']+;\n}\n",
+            Apply(text, service.FormatOnType(Uri, new DocumentPosition(3, 5), "}", TwoSpaces)));
+        Assert.Empty(service.FormatOnType(Uri, new DocumentPosition(2, 27), ";", TwoSpaces));
+    }
+
+    [Fact]
+    public void A_csharp_file_is_left_to_csharp()
+    {
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open("file:///w/C.cs", 1, "class C\n{\nint x;\n}\n");
+        Assert.Empty(service.Format("file:///w/C.cs", TwoSpaces));
+    }
 }
