@@ -27,6 +27,14 @@ public sealed partial class NitrogenLanguageService
     public IReadOnlyList<string> IndexedExtensions() => _grammarLanguages
         .Where(l => l.Entry is not null).SelectMany(l => l.Extensions).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
 
+    /// <summary>The files whose diagnostics are published while closed: the closed indexed files and the workspace languages' grammars, minus the open documents; by URI.</summary>
+    public IReadOnlyList<string> ClosedDiagnosticFiles() => _closed.Keys
+        .Concat(_grammarLanguages.SelectMany(l => l.Files()).Select(path => new Uri(path).AbsoluteUri))
+        .Where(uri => !IsOpen(uri))
+        .Distinct(StringComparer.Ordinal)
+        .Order(StringComparer.Ordinal)
+        .ToList();
+
     /// <summary>Drops every closed document and reads the workspace again.</summary>
     IReadOnlyList<string> Reindex()
     {

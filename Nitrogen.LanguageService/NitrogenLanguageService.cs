@@ -90,10 +90,12 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         return Visible(affected);
     }
 
+    /// <summary>The diagnostics of an open document, C# host or closed indexed file, or the compile diagnostics of a grammar; empty for any other file.</summary>
     public IReadOnlyList<ServiceDiagnostic> Diagnostics(string uri)
     {
         if (_hosts.TryGetValue(uri, out var host)) return HostDiagnostics(host);
-        if (!_documents.TryGetValue(uri, out var document)) return [];
+        // A closed indexed file is checked like an open one; any other closed file has only its grammar compile diagnostics, if it is a grammar.
+        if (!TryDocument(uri, out var document)) return GrammarDiagnostics(uri).ToList();
         var diagnostics = new List<ServiceDiagnostic>();
         var parsed = document.Parsed;
         foreach (var diagnostic in parsed.Diagnostics)
