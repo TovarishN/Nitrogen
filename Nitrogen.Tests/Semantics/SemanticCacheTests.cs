@@ -7,10 +7,10 @@ namespace Nitrogen.Tests;
 
 public sealed class SemanticCacheTests
 {
-    [Fact]
-    public void Reading_one_property_does_not_allocate_a_cache_for_every_node_in_a_large_file()
+    /// <summary>The bytes one read of a rarely used property of the root allocates, in a file of <paramref name="statements"/> statements.</summary>
+    static long AllocatedByOneRead(int statements)
     {
-        string source = "unit a { " + string.Concat(Enumerable.Repeat("let x = 1;", 2000)) + " }";
+        string source = "unit a { " + string.Concat(Enumerable.Repeat("let x = 1;", statements)) + " }";
         using var parsed = FileBindingTests.Scopes.Parse(source, ScopesModule.File);
         Assert.True(parsed.Success);
         var project = new Project(FileBindingTests.Scopes);
@@ -21,9 +21,17 @@ public sealed class SemanticCacheTests
         string value = file.Get(file.Tree.Root, property);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal("cached", value);
-        // A broad deterministic allocation budget, not a timing test: touching
-        // one node must not reserve arrays proportional to the entire file.
-        Assert.InRange(allocated, 0, 4096);
+        return allocated;
+    }
+
+    [Fact]
+    public void Reading_one_property_does_not_allocate_a_cache_for_every_node_in_a_large_file()
+    {
+        AllocatedByOneRead(20); // one-time costs (JIT, type setup, a runner's instrumentation) are paid here, not measured
+        long small = AllocatedByOneRead(20);
+        long large = AllocatedByOneRead(2000);
+        // Touching one node must not reserve arrays proportional to the file: a hundred times the statements, about the same bytes.
+        Assert.InRange(large, 0, small + 1024);
     }
 
     [Fact]

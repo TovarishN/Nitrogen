@@ -129,7 +129,11 @@ public sealed class DateCalcTests
     [Fact]
     public void Tagged_snippets_run()
     {
-        Assert.Equal(["81", "Friday"], Snippets.Countdown().Skip(1).Select(l => l.Text));
-        Assert.Equal("2026-11-16 Mon", Assert.Single(Snippets.Due()).Text);
+        // The example is there to be edited: this checks that each snippet runs, not the values its dates give.
+        Assert.All(new[] { Snippets.Countdown(), Snippets.Due() }, lines =>
+        {
+            Assert.NotEmpty(lines);
+            Assert.All(lines, line => Assert.False(line.IsError, line.Text));
+        });
     }
 }

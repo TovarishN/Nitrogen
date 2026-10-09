@@ -1,0 +1,9 @@
+// Numbers, dates and durations; each line shows its value.
+let start = 2026-10-05;
+let sprint = 2 weeks;
+start + sprint;
+weekday(start + 3 * sprint);
+(2026-12-25 - start) in days;
+sprint / 1 days;
+round(2 * pi, 2);
+max(start + 10 weeks, 2026-12-25);
