@@ -79,7 +79,7 @@ public static class GrammarValidator
                         "an alternative that is not a single rule reference needs a name: '| Name = ...'", alternative.Span, module);
 
                 CheckExpr(alternative.Body, module, implicitModule, inToken: false);
-                CheckClauses(alternative.Clauses, alternative.Body, module, point, isAlias: false, implicitModule);
+                CheckClauses(alternative.Clauses, alternative.Body, module, point, isAlias: false, implicitModule, alternative.Name);
 
                 bool postfix = _analysis.IsPostfix(alternative, module, implicitModule, pointKey);
                 if (alternative.Precedence is int precedence && (precedence < 0 || precedence > 255))
@@ -315,7 +315,8 @@ public static class GrammarValidator
             _analysis.PrimaryRules(module).OfType<SyntaxRule>()
                 .Any(r => r.Name == rule && r.Clauses.Any(c => c.Kind == BindingClauseKind.Scope));
 
-        void CheckClauses(EquatableArray<BindingClause> clauses, Expr body, ModuleDecl module, RuleDecl owner, bool isAlias, string? implicitModule = null)
+        void CheckClauses(EquatableArray<BindingClause> clauses, Expr body, ModuleDecl module, RuleDecl owner, bool isAlias, string? implicitModule = null,
+            string? alternative = null)
         {
             if (clauses.Count == 0) return;
             if (isAlias)
@@ -401,7 +402,7 @@ public static class GrammarValidator
                         var span = new GrammarSpan(clause.Target.Span.Start + hole.Index, hole.Length);
                         var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>().FirstOrDefault(element => element.Label == name);
                         if (field is null)
-                            Report(GrammarCodes.UnknownHole, $"'${name}' is not a field of this rule", span, module);
+                            Report(GrammarCodes.UnknownHole, $"'${name}' is not a field of {(string.IsNullOrEmpty(alternative) ? owner.Name : alternative)}", span, module);
                         else if (field.Inner is not ReferenceExpr reference ||
                                  _analysis.Resolve(reference.Name, reference.Span, module, implicitModule)?.Rule is not (SyntaxRule or ExtensibleRule))
                             Report(GrammarCodes.HoleNotARule, $"'${name}' must be a field of a syntax or extensible rule to be a hole", span, module);

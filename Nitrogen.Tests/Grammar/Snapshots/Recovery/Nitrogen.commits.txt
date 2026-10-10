@@ -44,8 +44,8 @@ Alternative: "|" Named:AlternativeName? Body:Expression Precedence:PrecedenceSpe
   2 Body:Expression  static  insert {"declares", "dynamic", "lowers", "precedence", "references", "rewrites", "scope", "{", "|", "}"}  sync {"!", "&", "(", ".", "[", DottedName, Identifier, String} @2, {"precedence"} @3, {"declares", "dynamic", "lowers", "references", "rewrites", "scope"} @4, {"{"} @5
 PrecedenceSpec: "precedence" Level:Integer Associativity:Associativity?
   1 Level:Integer  static  insert {"declares", "dynamic", "left", "lowers", "references", "rewrites", "right", "scope", "{", "|", "}"}  sync {Integer} @1, {"left", "right"} @2
-Rewrites: "rewrites" Text:Template
-  1 Text:Template  static  insert {";", "declares", "dynamic", "lowers", "references", "rewrites", "scope", "{", "|", "}"}  sync {Template} @1
+Rewrites: "rewrites" Text:TemplateString
+  1 Text:TemplateString  static  insert {";", "declares", "dynamic", "lowers", "references", "rewrites", "scope", "{", "|", "}"}  sync {TemplateString} @1
 Declares: "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:DeclaredType?
   1 SymbolKind:Identifier  static  insert {Identifier}  sync {Identifier} @1, {Identifier} @2, {"sequential"} @3, {"in"} @4, {"export"} @5, {"type"} @6
   2 Field:Identifier  static  insert {";", "declares", "dynamic", "export", "in", "lowers", "references", "rewrites", "scope", "sequential", "type", "{", "|", "}"}  sync {Identifier} @2, {"sequential"} @3, {"in"} @4, {"export"} @5, {"type"} @6

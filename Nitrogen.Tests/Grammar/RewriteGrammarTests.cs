@@ -36,6 +36,9 @@ public class RewriteGrammarTests
     {
         var unknown = Assert.Single(Validate("syntax module M { token N = ['0'..'9']+; syntax R = \"r\" X:S  rewrites <[ $Y ]>; syntax S = N; }"));
         Assert.Equal("NGR0135", unknown.Code);
+        Assert.Equal("'$Y' is not a field of R", unknown.Message);
+        var alternative = Assert.Single(Validate("syntax module M { token N = ['0'..'9']+; syntax S = N; extensible syntax E { | Twice = X:S \"twice\"  rewrites <[ $Y ]> } }"));
+        Assert.Equal("'$Y' is not a field of Twice", alternative.Message);
         var token = Assert.Single(Validate("syntax module M { token N = ['0'..'9']+; syntax R = \"r\" X:N  rewrites <[ $X ]>; }"));
         Assert.Equal("NGR0136", token.Code);
     }

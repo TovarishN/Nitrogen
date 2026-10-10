@@ -161,7 +161,7 @@ public sealed class RewriteTests : IDisposable
         Assert.DoesNotContain(root.Origins, o => o.Span == new TextSpan(0, 12));
     }
 
-    void AddRules(string alternatives, string rules = "")
+    void AddRules(string alternatives, string rules = "", string statement = "Setup")
     {
         string grammar = Path.Combine(_root, "DateCalc.ngr");
         string text = File.ReadAllText(grammar);
@@ -169,7 +169,7 @@ public sealed class RewriteTests : IDisposable
         text = text.Insert(days, alternatives);
         if (rules.Length > 0)
         {
-            text = text.Replace("syntax Statement = Let / Show;", "syntax Statement = Let / Show / Setup;");
+            text = text.Replace("syntax Statement = Let / Show;", $"syntax Statement = Let / Show / {statement};");
             int program = text.IndexOf("  syntax Program", StringComparison.Ordinal);
             text = text.Insert(program, rules);
         }
@@ -188,6 +188,7 @@ public sealed class RewriteTests : IDisposable
         int broken = Array.FindIndex(grammarText.Split('\n'), l => l.Contains("| Broken", StringComparison.Ordinal));
         Assert.True(broken >= 0);
         Assert.Equal(broken, warning.Range.Start.Line);
+        Assert.Contains("expected", warning.Message);
 
         service.Open(Uri("a.datecalc"), 1, "1 broken;\n2 fortnights;");
         Assert.Contains(service.InspectDocument(Uri("a.datecalc"))!.Diagnostics, d => d.Code == "NH0009");
@@ -210,7 +211,41 @@ public sealed class RewriteTests : IDisposable
         const string text = "3 fortnights;";
         service.Open(Uri("a.datecalc"), 1, text);
         var hover = service.Hover(Uri("a.datecalc"), new DocumentPosition(0, text.IndexOf("fortnights", StringComparison.Ordinal) + 2))!;
-        Assert.Contains("rewrites <[ $Count * 2 weeks ]>", hover.Markdown);
+        Assert.Contains("```\nrewrites <[ $Count * 2 weeks ]>\n```", hover.Markdown);
         Assert.DoesNotContain("rewrites", service.Hover(Uri("a.datecalc"), new DocumentPosition(0, 0))?.Markdown ?? ""); // on the child
+    }
+
+    [Fact]
+    public void A_statement_use_lowers_as_its_expansion()
+    {
+        AddRules("", "  syntax Twice = \"twice\" Value:Expr \";\"  rewrites <[ $Value + $Value; ]>;\n", statement: "Twice");
+        using var service = Service();
+        Assert.Equal(Lowered(service, "b.datecalc", "3 + 3;"), Lowered(service, "a.datecalc", "twice 3;"));
+        Assert.Empty(service.Diagnostics(Uri("a.datecalc")));
+    }
+
+    [Fact]
+    public void An_instantiation_is_not_mistaken_for_a_document_named_rewrite()
+    {
+        var workspace = new Nitrogen.Workspace.GrammarWorkspace { GeneratedNamespace = "DateCalc.Syntax" };
+        workspace.SetGrammar("DateCalc.ngr", File.ReadAllText(Path.Combine(_root, "DateCalc.ngr")));
+        foreach (string source in new[] { "DateCalcLanguage.cs", "MathModule.cs", "DateCalcEvaluator.cs", "DateCalcFixes.cs" })
+            workspace.Sources[source] = File.ReadAllText(Path.Combine(_root, source));
+        using var snapshot = workspace.Compile();
+        Assert.True(snapshot.Succeeded, string.Join("\n", snapshot.Diagnostics));
+        const string text = "3 fortnights;"; // shorter than the template, so a template origin taken as this file's overruns it
+        using var parsed = snapshot.Parse(text, "DateCalc.Program");
+        var project = new Nitrogen.Binding.Project(snapshot.Language!);
+        project.Set("rewrite", parsed.Tree);
+        var lowered = HirLowering.Lower(new Nitrogen.Semantics.ProjectSemantics(project)["rewrite"], snapshot.Language!.SemanticCatalog);
+        Assert.Empty(lowered.Diagnostics);
+        var origins = new List<SourceOrigin>();
+        void Collect(HirNode node)
+        {
+            origins.AddRange(node.Origins);
+            if (node is HirOperation operation) foreach (var argument in operation.Arguments) Collect(argument);
+        }
+        Collect(Assert.Single(lowered.Roots));
+        Assert.All(origins.Where(o => o.Path == "rewrite"), o => Assert.True(o.Span.End <= text.Length, o.ToString()));
     }
 }

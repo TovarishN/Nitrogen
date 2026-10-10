@@ -36,4 +36,19 @@ public sealed class NgrEditorLoweringTests
         Assert.Contains("`Grammar.TokenRule`", hover!.Markdown, StringComparison.Ordinal);
         Assert.Empty(service.Diagnostics(Uri));
     }
+
+    [Fact]
+    public void A_rewrite_template_is_coloured_as_a_string()
+    {
+        const string source = "syntax module M { token T = ['a'..'z']+; syntax S = T; syntax R = \"r\" Name:S  rewrites <[ $Name ]>; }";
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open(Uri, 1, source);
+
+        var tokens = service.SemanticTokens(Uri);
+
+        var start = new DocumentPosition(0, source.IndexOf("<[", StringComparison.Ordinal));
+        var template = Assert.Single(tokens, token => token.Start == start);
+        Assert.Equal(TokenType.String, template.Type);
+        Assert.Equal("<[ $Name ]>".Length, template.Length);
+    }
 }

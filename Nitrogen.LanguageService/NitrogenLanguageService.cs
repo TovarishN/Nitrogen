@@ -184,7 +184,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         var hover = HoverWithoutRewrite(uri, position);
         if (document is null || RewriteAt(document, document.Lines.OffsetOf(position)) is not { } rewrite) return hover;
         var (template, span) = rewrite;
-        string line = $"`rewrites <[{template}]>`";
+        // A fence, not a code span: a template may span lines or hold backticks.
+        string line = $"```\nrewrites <[{template}]>\n```";
         return hover is null ? new HoverInfo(line, document.Lines.RangeOf(span)) : hover with { Markdown = hover.Markdown + "\n\n" + line };
     }
 
@@ -213,8 +214,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>The template of the rewrite use whose own text holds the offset (not one of its holes' children), with the use's span; null otherwise.</summary>
     static (string Template, TextSpan Span)? RewriteAt(Document document, int offset)
     {
-        var tree = document.Parsed.Tree;
         var declarative = document.Language.Language.Declarative;
+        if (!declarative.HasRewrites) return null;
+        var tree = document.Parsed.Tree;
         int innermost = -1, length = int.MaxValue;
         for (int node = 0; node < tree.NodeCount; node++)
         {

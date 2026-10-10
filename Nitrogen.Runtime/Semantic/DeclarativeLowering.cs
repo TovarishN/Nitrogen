@@ -18,9 +18,16 @@ public sealed class DeclarativeLowering
 
     readonly IReadOnlyDictionary<int, ResolvedRule> _rules;
 
-    DeclarativeLowering(Dictionary<int, ResolvedRule> rules) => _rules = rules;
+    DeclarativeLowering(Dictionary<int, ResolvedRule> rules)
+    {
+        _rules = rules;
+        HasRewrites = rules.Values.Any(rule => rule.Rule.Form == DeclarativeForm.Rewrite);
+    }
 
     public bool IsEmpty => _rules.Count == 0;
+
+    /// <summary>Whether any rule rewrites (spec: quasiquote rewrites); editor features skip looking for uses otherwise.</summary>
+    public bool HasRewrites { get; }
 
     /// <summary>The declarative rule of a node kind, or null when it has none.</summary>
     public DeclarativeRule? RuleOf(int kind) => RuleFor(kind)?.Rule;

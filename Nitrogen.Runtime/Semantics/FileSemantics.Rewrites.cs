@@ -33,12 +33,11 @@ public sealed partial class FileSemantics
         if (_instances.TryGetValue(node, out var known)) return known;
         RewriteInstance? instance = null;
         if (_chain.Contains(rule)) _cyclic.Add(node);
-        else if (_language.RewriteTemplate(rule).Parsed is { } parsed)
+        else if (_language.RewriteTemplate(rule).Tree is { } template)
         {
-            var template = parsed.Tree;
             var project = new Nitrogen.Binding.Project(_language);
-            project.Set("rewrite", template);
-            var file = new ProjectSemantics(project)["rewrite"];
+            project.Set(Language.RewritePath, template);
+            var file = new ProjectSemantics(project)[Language.RewritePath];
             var children = new Dictionary<int, int>();
             for (int hole = 0; hole < template.NodeCount; hole++)
                 if (template.Kind(hole) == SyntaxKinds.Hole)

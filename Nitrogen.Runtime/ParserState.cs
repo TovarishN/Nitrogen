@@ -32,14 +32,20 @@ public unsafe ref struct ParserState
     /// trivia: pushes a <see cref="SyntaxKinds.Hole"/> leaf over <c>$Name</c> and returns true. Any other input,
     /// or a hole for another rule, leaves the state as it was.
     /// </summary>
-    public bool TryHole(string rule)
+    /// <remarks>A normal parse pays only the inlined <see cref="InTemplate"/> check.</remarks>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public bool TryHole(string rule) => Holes is not null && TryHoleCore(rule);
+
+    /// <summary>True in a template parse, the only parse in which a hole can match.</summary>
+    public readonly bool InTemplate => Holes is not null;
+
+    bool TryHoleCore(string rule)
     {
-        if (Holes is null) return false;
         int at = PeekPastTrivia();
         if (at >= _text.Length || _text[at] != '$') return false;
         int end = at + 1;
         while (end < _text.Length && IsIdentifierPart(_text[end])) end++;
-        if (end == at + 1 || !Holes.TryGetValue(_text[(at + 1)..end].ToString(), out var holeRule) || holeRule != rule) return false;
+        if (end == at + 1 || !Holes!.TryGetValue(_text[(at + 1)..end].ToString(), out var holeRule) || holeRule != rule) return false;
         Position = at;
         PushLeaf(SyntaxKinds.Hole, end);
         return true;
