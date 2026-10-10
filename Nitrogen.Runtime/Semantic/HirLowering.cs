@@ -41,6 +41,28 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     internal LoweringContext Expanding(FileSemantics template, IReadOnlyDictionary<Binding.Symbol, HirNode> arguments) =>
         new(template, this, arguments);
 
+    /// <summary>
+    /// The context of a rewrite's instantiation: each Hole node lowers to the use's child, lowered in the caller; reports
+    /// go to the caller. <paramref name="use"/> is the use's origin, kept from the outermost use when instantiations nest.
+    /// </summary>
+    LoweringContext(FileSemantics file, LoweringContext caller, IReadOnlyDictionary<int, HirNode> holes, SourceOrigin use)
+        : this(file, caller.SnapshotId, caller.CheckScope, caller.Admission)
+    {
+        _reported = caller._reported;
+        _activeTemplates = caller._activeTemplates;
+        Holes = holes;
+        Use = caller.Use ?? use;
+    }
+
+    /// <summary>In a rewrite's instantiation: the lowered child each Hole node stands for; null elsewhere.</summary>
+    internal IReadOnlyDictionary<int, HirNode>? Holes { get; }
+
+    /// <summary>In a rewrite's instantiation: the outermost use, in the user's document, where problems within it are reported.</summary>
+    internal SourceOrigin? Use { get; }
+
+    internal LoweringContext Rewriting(FileSemantics instance, IReadOnlyDictionary<int, HirNode> holes, SourceOrigin use) =>
+        new(instance, this, holes, use);
+
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
     public SemanticCheckScope CheckScope { get; } = checkScope;

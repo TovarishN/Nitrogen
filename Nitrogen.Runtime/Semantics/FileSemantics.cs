@@ -13,7 +13,7 @@ namespace Nitrogen.Semantics;
 /// A re-entrant request is a cycle (NS0001) and an exception is NS0002; both yield the default.
 /// Owned by a <see cref="ProjectSemantics"/>, which replaces it on any project change. Not thread-safe.
 /// </summary>
-public sealed class FileSemantics
+public sealed partial class FileSemantics
 {
     const byte Computing = 1, Done = 2;
 
@@ -88,6 +88,9 @@ public sealed class FileSemantics
 
     public T Get<T>(int node, Property<T> property)
     {
+        // A template's hole reads every property on the use's child it stands for.
+        if (Holes is { } holes && Tree.Kind(node) == SyntaxKinds.Hole && holes.Children.TryGetValue(node, out int child))
+            return holes.File.Get(child, property);
         if (!_slots.TryGetValue(property, out var boxed)) _slots[property] = boxed = new Slot<T>(Tree.NodeCount);
         var slot = (Slot<T>)boxed;
         slot.Read(node, out byte state, out T cached);
@@ -121,6 +124,8 @@ public sealed class FileSemantics
         if (RuleOf(kind) is { } rule)
             foreach (var entry in rule.Outs)
                 if (ReferenceEquals(entry.Property, property)) return ((SemanticsOut<T>)entry).Compute(this, node);
+        // A rewrite's use: what its own rule doesn't define comes from its expansion.
+        if (Instance(node) is { } instance) return instance.File.Get(instance.Root, property);
         return property.Default();
     }
 
@@ -206,11 +211,12 @@ public sealed class FileSemantics
     {
         if (!_allChecked) { CheckNodes(Tree.Root, ancestors: false); _allChecked = true; }
         var declarative = DeclarativeTypes.Diagnostics();
+        var expansions = ExpansionDiagnostics();
         // The lists only grow, so their counts tell whether the sorted copy is still current.
-        var counts = (_checks.Count, _evaluation.Count, declarative.Count);
+        var counts = (_checks.Count, _evaluation.Count, declarative.Count, expansions.Count);
         if (_sorted is null || _sortedCounts != counts)
         {
-            _sorted = _checks.Concat(_evaluation).Concat(declarative)
+            _sorted = _checks.Concat(_evaluation).Concat(declarative).Concat(expansions)
                 .OrderBy(d => d.Span.Start)
                 .ThenBy(d => d.Code, StringComparer.Ordinal)
                 .ToList();
@@ -220,7 +226,7 @@ public sealed class FileSemantics
     }
 
     List<SemanticDiagnostic>? _sorted;
-    (int Checks, int Evaluation, int Declarative) _sortedCounts;
+    (int Checks, int Evaluation, int Declarative, int Expansions) _sortedCounts;
     IReadOnlyList<Reference>? _unresolvedByStart;
     IReadOnlyList<BindingDiagnostic>? _bindingErrorsByStart;
     Dictionary<TextSpan, int>? _nodeBySpan;
@@ -254,7 +260,7 @@ public sealed class FileSemantics
         if (!_allChecked) CheckNodes(node, ancestors: true);
         var declarative = DeclarativeTypes.DiagnosticsForSubtree(node);
         var span = Tree.Span(node);
-        return _checks.Concat(_evaluation).Concat(declarative)
+        return _checks.Concat(_evaluation).Concat(declarative).Concat(ExpansionDiagnostics())
             .Where(error => error.Span.Start >= span.Start && error.Span.End <= span.End)
             .OrderBy(error => error.Span.Start).ThenBy(error => error.Code, StringComparer.Ordinal).ToList();
     }

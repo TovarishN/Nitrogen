@@ -152,6 +152,35 @@ public sealed unsafe class Language
         }
     }
 
+    readonly System.Collections.Concurrent.ConcurrentDictionary<DeclarativeRule, RewriteTemplate> _rewrites = new();
+
+    /// <summary>
+    /// A rewrite rule's template, parsed once as its category with its holes (spec: quasiquote rewrites); or why it
+    /// can't be used: it doesn't parse, or it declares a name. The text is trimmed first, so spans in the tree are
+    /// relative to the trimmed text.
+    /// </summary>
+    public RewriteTemplate RewriteTemplate(DeclarativeRule rule) => _rewrites.GetOrAdd(rule, r =>
+    {
+        var spec = r.Rewrite ?? throw new ArgumentException("Not a rewrite rule.", nameof(rule));
+        string text = spec.Text.Trim();
+        var holes = spec.Holes.ToDictionary(h => h.Name, h => h.Rule);
+        ParseResult parsed;
+        try { parsed = ParseTemplate(text, spec.Category, holes); }
+        catch (ArgumentException error) { return new RewriteTemplate(null, error.Message); }
+        if (!parsed.Success)
+        {
+            parsed.Dispose();
+            return new RewriteTemplate(null, $"'{text}' does not parse as {spec.Category}");
+        }
+        var project = new Nitrogen.Binding.Project(this);
+        if (project.Set("rewrite", parsed.Tree).Declarations.Count > 0)
+        {
+            parsed.Dispose();
+            return new RewriteTemplate(null, "a template cannot declare names");
+        }
+        return new RewriteTemplate(parsed, null);
+    });
+
     static bool ParseTemplateStart(ref ParserState s) => s.ParseExtensible(s.TemplateStart!, 0);
 
     bool Run(string text, Rule start, ParseContext context, bool recovering,
@@ -181,3 +210,6 @@ public sealed unsafe class Language
         return true;
     }
 }
+
+/// <summary>A rewrite rule's parsed template, or why it can't be used.</summary>
+public sealed record RewriteTemplate(ParseResult? Parsed, string? Error);

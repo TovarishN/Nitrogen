@@ -121,8 +121,8 @@ public sealed class DeclarativeLowering
 
                 rules[kind] = new ResolvedRule(rule, operation, literal, declared,
                     argumentSequenceTypes, argumentOptionalTypes);
-                if (rule.Form == DeclarativeForm.Expand)
-                    lowerers.Add(new LoweringRegistration(kind, "<expand>",
+                if (rule.Form is DeclarativeForm.Expand or DeclarativeForm.Rewrite)
+                    lowerers.Add(new LoweringRegistration(kind, rule.Form == DeclarativeForm.Expand ? "<expand>" : "<rewrite>",
                         (context, node) => context.File.DeclarativeTypes.LowerRoot(context, node), DynamicOperation: true));
                 // An optional computed operation is a root too; where it is missing, the node lowers to nothing.
                 else if (operation is not null || rule.OperationProperty is not null)
