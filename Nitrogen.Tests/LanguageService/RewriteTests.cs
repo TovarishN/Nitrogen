@@ -160,4 +160,42 @@ public sealed class RewriteTests : IDisposable
         Assert.Equal(new TextSpan(1, 5), root.Origins[0].Span); // the sum's own, not the use's
         Assert.DoesNotContain(root.Origins, o => o.Span == new TextSpan(0, 12));
     }
+
+    void AddRules(string alternatives, string rules = "")
+    {
+        string grammar = Path.Combine(_root, "DateCalc.ngr");
+        string text = File.ReadAllText(grammar);
+        int days = text.IndexOf("    | Days    =", StringComparison.Ordinal);
+        text = text.Insert(days, alternatives);
+        if (rules.Length > 0)
+        {
+            text = text.Replace("syntax Statement = Let / Show;", "syntax Statement = Let / Show / Setup;");
+            int program = text.IndexOf("  syntax Program", StringComparison.Ordinal);
+            text = text.Insert(program, rules);
+        }
+        File.WriteAllText(grammar, text);
+    }
+
+    [Fact]
+    public void A_template_that_does_not_parse_warns_and_its_uses_report()
+    {
+        AddRules("    | Broken = Count:Expr \"broken\" precedence 30  rewrites <[ $Count * ]>\n");
+        using var service = Service();
+        service.Open(Uri("DateCalc.ngr"), 1, File.ReadAllText(Path.Combine(_root, "DateCalc.ngr")));
+        var warning = Assert.Single(service.Diagnostics(Uri("DateCalc.ngr")), d => d.Code == "NGR0137");
+        Assert.Equal(ServiceSeverity.Warning, warning.Severity);
+
+        service.Open(Uri("a.datecalc"), 1, "1 broken;\n2 fortnights;");
+        Assert.Contains(service.InspectDocument(Uri("a.datecalc"))!.Diagnostics, d => d.Code == "NH0009");
+        Assert.Empty(service.Diagnostics(Uri("a.datecalc")).Where(d => d.Range.Start.Line == 1)); // the language still works
+    }
+
+    [Fact]
+    public void A_template_that_declares_a_name_warns()
+    {
+        AddRules("", "  syntax Setup = \"setup\" \";\"  rewrites <[ let tmp = 1; ]>;\n");
+        using var service = Service();
+        service.Open(Uri("DateCalc.ngr"), 1, File.ReadAllText(Path.Combine(_root, "DateCalc.ngr")));
+        Assert.Contains(service.Diagnostics(Uri("DateCalc.ngr")), d => d.Code == "NGR0138" && d.Severity == ServiceSeverity.Warning);
+    }
 }
