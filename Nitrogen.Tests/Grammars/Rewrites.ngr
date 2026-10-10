@@ -1,0 +1,18 @@
+// Rewrite rules for the tests of quasiquoted rewrites: a statement form and an operator form.
+syntax module Rewrites
+{
+  token Number = ['0'..'9']+;
+
+  syntax Program   = Statements:Statement*;
+  syntax Statement = Show / Twice;
+  syntax Show      = Value:Expr ";";
+  syntax Twice     = "twice" Value:Expr ";"  rewrites <[ $Value + $Value; ]>;
+
+  extensible syntax Expr
+  {
+    | Num     = Value:Number
+    | Add     = Left:Expr "+" Right:Expr  precedence 10 left
+    | Mul     = Left:Expr "*" Right:Expr  precedence 20 left
+    | Doubled = Inner:Expr "doubled"  precedence 30  rewrites <[ $Inner * 2 ]>
+  }
+}

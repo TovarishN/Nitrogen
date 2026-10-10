@@ -183,6 +183,16 @@ internal static class NgrProjector
                 case "Dynamic":
                     clauses.Add(new BindingClause(BindingClauseKind.Dynamic, default, "", default, false, false, Span(node)));
                     break;
+                case "Rewrites":
+                {
+                    // The token includes its delimiters; the bootstrap parser keeps the text between them.
+                    var token = Span(a[0]);
+                    string text = Text(a[0]);
+                    clauses.Add(new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
+                        GrammarSpan.FromBounds(Span(node).Start, token.End),
+                        Target: new NameDecl(text[2..^2], GrammarSpan.FromBounds(token.Start + 2, token.End - 2))));
+                    break;
+                }
                 case "Lowers":
                     clauses.Add(Lowers(node));
                     break;

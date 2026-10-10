@@ -50,6 +50,10 @@ public static class GrammarCodes
     public const string InvalidValueProperty = "NGR0132";
     public const string OptionalArgumentNeedsOptionalField = "NGR0133";
     public const string InvalidTemplateClause = "NGR0134";
+    public const string UnknownHole = "NGR0135";
+    public const string HoleNotARule = "NGR0136";
+    public const string TemplateDoesNotParse = "NGR0137";
+    public const string TemplateDeclares = "NGR0138";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

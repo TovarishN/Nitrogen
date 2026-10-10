@@ -28,7 +28,7 @@ internal static class DeclarativeWriter
         var lowers = clauses.FirstOrDefault(c => c.Kind is BindingClauseKind.Lowers or BindingClauseKind.LowersLiteral
             or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence or BindingClauseKind.LowersValue
             or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
-            or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand);
+            or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand or BindingClauseKind.Rewrites);
         var declares = clauses.FirstOrDefault(c => c.Kind == BindingClauseKind.Declares && c.Target is not null);
         if (lowers is null && declares is null) return null;
 
@@ -79,6 +79,22 @@ internal static class DeclarativeWriter
                 ? new[] { BindingWriter.ChildIndex(elements, lowers.Field), BindingWriter.ChildIndex(elements, list) }
                 : new[] { BindingWriter.ChildIndex(elements, list) });
             if (elements.OfType<LabeledExpr>().First(element => element.Label == list).Inner is SeparatedListExpr) sequenceStride = 2;
+        }
+        else if (lowers is { Kind: BindingClauseKind.Rewrites })
+        {
+            form = "Rewrite";
+            string implicitModule = kind.ImplicitModule ?? info.Module.Name;
+            string Qualified(GrammarSymbol symbol) => symbol.Module.Name + "." + symbol.Rule.Name;
+            var holes = new List<string>();
+            foreach (var name in System.Text.RegularExpressions.Regex.Matches(lowers.Target!.Name, @"\$([A-Za-z_][A-Za-z0-9_]*)")
+                         .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Groups[1].Value).Distinct())
+            {
+                var field = elements.OfType<LabeledExpr>().First(element => element.Label == name);
+                var rule = model.Resolve(((ReferenceExpr)field.Inner).Name, info.Module, implicitModule);
+                holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(name)}, {BindingWriter.ChildIndex(elements, name)}, {CSharpText.Literal(Qualified(rule))})");
+            }
+            extraArguments += $", rewrite: new global::Nitrogen.Semantic.RewriteSpec({CSharpText.Literal(lowers.Target.Name)}, " +
+                $"{CSharpText.Literal(Category(model, info, kind))}, new global::Nitrogen.Semantic.RewriteHole[] {{ {string.Join(", ", holes)} }})";
         }
         else if (lowers is not null)
         {
@@ -135,6 +151,21 @@ internal static class DeclarativeWriter
         if (lowers is { Kind: BindingClauseKind.Lowers, Optional: true })
             propertyArgument += ", optionalOperation: true";
         return $"new({kind.Local}, {FormType}.{form}, {target}, {arguments}, {declaredType}, {declaredChild}{stride}{extraArguments}{propertyArgument})";
+    }
+
+    /// <summary>
+    /// What a rewrite's template parses as: an alternative's extension point; a plain rule's alias when exactly one
+    /// alias of its module lists it; otherwise the rule itself.
+    /// </summary>
+    static string Category(EmitModel model, ModuleInfo info, KindInfo kind)
+    {
+        if (kind.Point is { } point) return point.Module.Name + "." + point.Rule.Name;
+        var rule = (SyntaxRule)kind.Rule!;
+        var aliases = info.Module.Rules.OfType<SyntaxRule>().Where(EmitModel.IsAlias)
+            .Where(alias => (alias.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { alias.Body })
+                .Any(alternative => alternative is ReferenceExpr reference && reference.Name == rule.Name))
+            .ToList();
+        return info.Module.Name + "." + (aliases.Count == 1 ? aliases[0].Name : rule.Name);
     }
 
     static string Ints(IEnumerable<int> values)

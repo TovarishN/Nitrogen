@@ -79,7 +79,7 @@ public static class GrammarValidator
                         "an alternative that is not a single rule reference needs a name: '| Name = ...'", alternative.Span, module);
 
                 CheckExpr(alternative.Body, module, implicitModule, inToken: false);
-                CheckClauses(alternative.Clauses, alternative.Body, module, point, isAlias: false);
+                CheckClauses(alternative.Clauses, alternative.Body, module, point, isAlias: false, implicitModule);
 
                 bool postfix = _analysis.IsPostfix(alternative, module, implicitModule, pointKey);
                 if (alternative.Precedence is int precedence && (precedence < 0 || precedence > 255))
@@ -315,7 +315,7 @@ public static class GrammarValidator
             _analysis.PrimaryRules(module).OfType<SyntaxRule>()
                 .Any(r => r.Name == rule && r.Clauses.Any(c => c.Kind == BindingClauseKind.Scope));
 
-        void CheckClauses(EquatableArray<BindingClause> clauses, Expr body, ModuleDecl module, RuleDecl owner, bool isAlias)
+        void CheckClauses(EquatableArray<BindingClause> clauses, Expr body, ModuleDecl module, RuleDecl owner, bool isAlias, string? implicitModule = null)
         {
             if (clauses.Count == 0) return;
             if (isAlias)
@@ -334,7 +334,7 @@ public static class GrammarValidator
             {
                 var key = clause.Kind is BindingClauseKind.LowersLiteral or BindingClauseKind.LowersText or BindingClauseKind.LowersSequence
                     or BindingClauseKind.LowersValue or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
-                    or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand
+                    or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand or BindingClauseKind.Rewrites
                     ? BindingClauseKind.Lowers : clause.Kind;
                 if (!seen.Add(key))
                     Report(GrammarCodes.DuplicateClause, $"a rule takes at most one '{Keyword(clause.Kind)}' clause", clause.Span, module);
@@ -394,6 +394,18 @@ public static class GrammarValidator
                     !clauses.Any(candidate => candidate.Kind == BindingClauseKind.References && candidate.Field == clause.Field))
                     Report(GrammarCodes.InvalidTemplateClause,
                         $"an expansion needs a references clause on its field '{clause.Field}'", clause.FieldSpan, module);
+                if (clause.Kind == BindingClauseKind.Rewrites)
+                    foreach (System.Text.RegularExpressions.Match hole in System.Text.RegularExpressions.Regex.Matches(clause.Target!.Name, @"\$([A-Za-z_][A-Za-z0-9_]*)"))
+                    {
+                        string name = hole.Groups[1].Value;
+                        var span = new GrammarSpan(clause.Target.Span.Start + hole.Index, hole.Length);
+                        var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>().FirstOrDefault(element => element.Label == name);
+                        if (field is null)
+                            Report(GrammarCodes.UnknownHole, $"'${name}' is not a field of this rule", span, module);
+                        else if (field.Inner is not ReferenceExpr reference ||
+                                 _analysis.Resolve(reference.Name, reference.Span, module, implicitModule)?.Rule is not (SyntaxRule or ExtensibleRule))
+                            Report(GrammarCodes.HoleNotARule, $"'${name}' must be a field of a syntax or extensible rule to be a hole", span, module);
+                    }
                 if (clause.OperationProperty is { } operationName)
                 {
                     var operationProperty = SemanticsWriter.PropertiesOf(owner)
@@ -446,6 +458,7 @@ public static class GrammarValidator
                 or BindingClauseKind.LowersSequence or BindingClauseKind.LowersValue
                 or BindingClauseKind.LowersReference or BindingClauseKind.LowersRepeat
                 or BindingClauseKind.LowersTemplate or BindingClauseKind.LowersExpand => "lowers",
+            BindingClauseKind.Rewrites => "lowers' or 'rewrites",
             _ => "dynamic",
         };
 

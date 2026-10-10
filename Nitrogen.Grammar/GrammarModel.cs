@@ -130,6 +130,7 @@ public enum BindingClauseKind
     LowersRepeat,
     LowersTemplate,
     LowersExpand,
+    Rewrites,
 }
 
 /// <summary>A binding clause after a syntax rule or an alternative (issue 237), or a declarative lowering clause (issue 251).</summary>
@@ -140,7 +141,7 @@ public enum BindingClauseKind
 /// <param name="FileScope"><c>declares … in file</c>: entered in the current file's root scope, independently of enclosing scopes.</param>
 /// <param name="Sequential"><c>declares … sequential</c>: visible after the declaring node, replacing earlier sequential declarations in its scope.</param>
 /// <param name="Qualifier"><c>references … in K</c> (issue 239): resolve in the scope of the symbol the nearest enclosing reference of kind K names.</param>
-/// <param name="Target">Declares: the <c>type</c> field label or qualified type name; Lowers: the operation ID; LowersLiteral: the literal's type (issue 251).</param>
+/// <param name="Target">Declares: the <c>type</c> field label or qualified type name; Lowers: the operation ID; LowersLiteral: the literal's type (issue 251); Rewrites: the template text between &lt;[ and ]&gt;, verbatim, with its span.</param>
 /// <param name="Arguments">Lowers: the argument field labels, in parameter order (issue 251). LowersTemplate: the parameter list; LowersExpand: the argument list.</param>
 public sealed record BindingClause(
     BindingClauseKind Kind,

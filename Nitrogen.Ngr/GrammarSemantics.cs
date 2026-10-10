@@ -71,6 +71,7 @@ public static class GrammarSemantics
         Op("SingleKind", Types.Kinds, Text),
         Op("Scope", Types.Clause),
         Op("Dynamic", Types.Clause),
+        Op("Rewrites", Types.Clause, Text),
         Op("Lowers", Types.Clause, Types.LowersForm),
         Op("LowersTemplate", Types.LowersForm, Text, Text),
         Op("LowersExpand", Types.LowersForm, Text, Text),
