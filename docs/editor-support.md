@@ -112,7 +112,8 @@ Each plugin carries the grammar, helper sources, and a portable Nitrogen server,
 A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or
 `SemanticModule` field or property in them is added to the language, so its declarative `lowers` and
 `declares … type` clauses and C# lowerers run in the editor: hover shows typed HIR, and lowering errors
-(such as a cyclic template expansion, `NH0007`, or `NH0004` from a lowerer that throws) appear in the file
+(such as a cyclic template expansion, `NH0007`, a rewrite that reaches itself, `NH0008`, a rewrite
+whose template can't be used, `NH0009`, or `NH0004` from a lowerer that throws) appear in the file
 they point into, even when found while lowering another open file. A lowering that is only blocked
 (`NH0001`–`NH0003`: by recovered syntax, an unresolved name, or invalid semantics) is not shown: its cause
 is reported on its own, or is no error at all, such as a name an open (`dynamic`) scope accepts. Composition errors such as `NC0001` or `NM0008` are reported on the

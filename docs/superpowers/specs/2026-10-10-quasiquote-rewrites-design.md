@@ -118,6 +118,12 @@ generator can't parse templates at build time).
 - **Cost.** An instantiation is made when a use is typed or lowered, and kept with the use's
   `FileSemantics` for that version.
 
+**As implemented.** Two accepted deviations: (a) only the expansion's root HIR carries the use's origin
+first; HIR from inner template nodes keeps the template's origins, under a path no document has, and
+editor features filter those out by path. (b) A plain rule's category is the alias that lists it only
+when exactly one alias of its module does; otherwise it is the rule itself (documented in the
+[language guide](../../language-guide.md#rewrite-rules)).
+
 ## 5. Editors
 
 No editor change: coloring, folding, outline, navigation and diagnostics run on the user's document. One

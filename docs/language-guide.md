@@ -102,6 +102,16 @@ Templates may not declare names, and holes stand for syntax or extensible rules,
 that doesn't parse or declares a name is a warning in the grammar (NGR0137, NGR0138); its uses report
 NH0009.
 
+Limits of this version:
+
+- Names in a template resolve only against the language's built-ins, not the declarations of the
+  document that uses it.
+- `in` properties a template's nodes would pass down are not forwarded into its holes.
+- A rewrite that reaches itself, directly or through another rewrite, reports NH0008 at the use.
+- A plain rule's template parses as the alias listing it only when exactly one alias of its module lists
+  it; otherwise it parses as the rule itself, so it can only be a hole or a use of the same rule. List
+  such a rule in one alias.
+
 ## Editor support for lowered languages
 
 The language server uses what a document lowers to as well as its syntax:
