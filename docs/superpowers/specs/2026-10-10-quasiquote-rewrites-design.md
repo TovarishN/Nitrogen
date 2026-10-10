@@ -6,7 +6,7 @@ Status: approved (2026-10-10).
 
 Nitrogen languages can add syntax only by writing its lowering: a `lowers` clause naming a catalog
 operation, a template the user declares (`lowers template` / `lowers expand`), or C#. A language
-author who wants a convenience form (`3 fortnights`, `tomorrow(d)`, `unless c b`) has to give it its own
+author who wants a convenience form (`3 fortnights`, `d next day`, `unless c b`) has to give it its own
 operation, types and handlers, even when it means nothing more than code the language already has.
 
 Nemerle solves this with quasiquotation: `<[ … ]>` quotes code as a syntax tree, `$x` splices a tree
@@ -33,15 +33,18 @@ extensible syntax Expr
 {
   | Fortnights = Count:Expr "fortnights" precedence 30
       rewrites <[ $Count * 2 weeks ]>
+  | NextDay    = Date:Expr "next" "day" precedence 30
+      rewrites <[ $Date + 1 days ]>
 }
-syntax Tomorrow = "tomorrow" "(" Date:Expr ")" rewrites <[ $Date + 1 days ]>;
 ```
 
 - **The clause.** `rewrites <[ text ]>` stands where a `lowers …` clause stands, after the rule's
   `declares`/`references` clauses; a rule has one of `lowers` and `rewrites`, not both. The text runs
   from after `<[` to the first `]>` that closes it, may span lines, and is kept verbatim.
 - **The template** is written in the language being defined. It must parse as the rule's **category**:
-  for an alternative of an extensible rule, that rule (an `Expr`); for a plain rule, the rule itself.
+  for an alternative of an extensible rule, that rule (an `Expr`); for a plain rule listed by exactly one
+  alias rule (`syntax Statement = Let / Show / Setup;`), that alias (a `Statement`), so the template can
+  be any form the rule may stand for; otherwise the rule itself.
 - **Holes.** `$Name` is a hole for the rule's field `Name`. The field must be a syntax rule or an
   extensible rule (a nonterminal); the hole stands for one node of that nonterminal. Each field may
   appear any number of times, including not at all.
@@ -80,10 +83,15 @@ with `rewrites`:
    (the parser's message, at the template). The parse must consume the whole template.
 3. The template is bound in a project of its own, with the language's built-ins. **NGR0138**: it
    declares a name. References that don't resolve are left to each use (they report there).
-4. The parsed template is kept on the language: `Language.RewriteFor(int kind)` returns a
-   `RewriteTemplate` (the rule kind, the text, the frozen tree, and each hole node's field name) or null.
+4. The parsed template is kept on the language: `Language.RewriteTemplate(DeclarativeRule rule)` parses
+   it once (lazily, cached) and returns the tree, or why it can't be used.
 
-The diagnostics are reported in the grammar file at the template, like other NGR diagnostics.
+NGR0135 and NGR0136 need only the grammar, so the grammar validator reports them as errors, on every
+path (the editor's grammar workspace and the source generator). NGR0137 and NGR0138 need the composed
+language, so the grammar workspace reports them after composing, as **warnings** in the grammar file at
+the template: one broken template doesn't stop the language. A use of a rule whose template can't be
+used reports **NH0009** (also the only report when a generated grammar's template fails, since the
+generator can't parse templates at build time).
 
 ## 4. A use: binding, types, checks and lowering
 
@@ -93,6 +101,11 @@ The diagnostics are reported in the grammar file at the template, like other NGR
   instantiation** of the template: the template's tree with its semantics, where each `Hole` node's type
   is the type of the use's child for that field. An untyped child leaves the hole untyped, as an
   untyped argument does today.
+- **Properties both ways.** Every semantic property read on a `Hole` node in the instantiation is read
+  on the use's child in the user's document (`Type`, a computed operation, anything). And every out
+  property of a macro use that its own rule doesn't define is read on the instantiation's root: so
+  `let x = 3 fortnights;` gives `x` the expansion's `Type`. Properties a template's parent would pass
+  down into a hole (`in` properties) are not forwarded in this version.
 - **Checks.** The template's semantic checks run in the instantiation. A diagnostic from it is reported
   at the use, with the template's message prefixed: `in the expansion of Fortnights: …`, code unchanged.
   A child's own diagnostics stay where they are.
@@ -116,11 +129,13 @@ addition: hover on a macro use (the node's own text, outside its children) appen
 - **Holes (part 1):** a hole parses as its nonterminal and as nothing else; `$Count * 2` extends past a
   hole; with `-$X` / `!$X` a hole is one operand; an unknown `$Name` is plain text (and fails as the
   grammar decides); a normal parse never matches `$Name`.
-- **Compile:** NGR0135 to NGR0138 each at the template; a valid template is kept (`RewriteFor`).
-- **Uses**, in a test grammar extending DateCalc's syntax with `fortnights` and `tomorrow(…)`:
+- **Compile:** NGR0135 and NGR0136 from the validator; NGR0137 and NGR0138 as workspace warnings at the
+  template, with the language still served and uses reporting NH0009.
+- **Uses**, in a DateCalc grammar extended with `fortnights` and `next day`:
   - `3 fortnights` lowers to the same HIR as `3 * 2 weeks`, and has type `Duration`;
-  - `tomorrow(2026-10-05)` has the value `2026-10-06 Tue` (statement values work);
-  - `tomorrow(3)` reports the template's type error at the use, prefixed `in the expansion of Tomorrow`;
+  - `let x = 3 fortnights;` gives `x` the type `Duration`;
+  - `2026-10-05 next day` has the value `2026-10-06 Tue` (statement values work);
+  - `3 next day` reports the template's type error at the use, prefixed `in the expansion of NextDay`;
   - a child's error stays at the child;
   - a rewrite using another rewrite expands both; a cycle reports NH0008;
   - hover on a use shows its type and `rewrites <[ … ]>`.
