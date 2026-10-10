@@ -54,7 +54,17 @@ public sealed partial class FileSemantics
         return instance;
     }
 
-    /// <summary>Each rewrite use's expansion diagnostics, at the use, prefixed with the rule's name.</summary>
+    /// <summary>The unqualified name of the rule <paramref name="node"/> uses, for messages about its expansion.</summary>
+    internal string RewriteName(int node)
+    {
+        string name = _language.GetKindName(Tree.Kind(node));
+        return name[(name.LastIndexOf('.') + 1)..];
+    }
+
+    /// <summary>
+    /// Each rewrite use's expansion diagnostics, at the use, prefixed with the rule's name: the instantiation's binding
+    /// diagnostics (a name the template refers to resolves in its own project only) and its semantic diagnostics.
+    /// </summary>
     List<SemanticDiagnostic> ExpansionDiagnostics()
     {
         if (_expansions is not null) return _expansions;
@@ -62,9 +72,11 @@ public sealed partial class FileSemantics
         for (int node = 0; node < Tree.NodeCount; node++)
             if (Instance(node) is { } instance)
             {
-                string name = _language.GetKindName(Tree.Kind(node));
-                name = name[(name.LastIndexOf('.') + 1)..];
-                foreach (var diagnostic in instance.File.Diagnostics())
+                string name = RewriteName(node);
+                var file = instance.File;
+                foreach (var diagnostic in file._project.Project.Diagnostics(file.Path))
+                    found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}"));
+                foreach (var diagnostic in file.Diagnostics())
                     found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}"));
             }
         return _expansions = found;

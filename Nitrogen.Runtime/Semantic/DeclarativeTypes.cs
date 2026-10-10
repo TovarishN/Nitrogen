@@ -551,21 +551,20 @@ public sealed class DeclarativeTypes
     /// <summary>
     /// Lowers a rewrite's use as its instantiation, each hole bound to the use's child lowered here (once per child).
     /// The result's origins start with the use's. NH0008 for a rewrite reaching itself, NH0009 when its template can't be used.
-    /// A use inside an instantiation reports at the outermost use, in the user's document.
+    /// Problems within the instantiation are reported at the use, prefixed (see <see cref="LoweringContext"/>).
     /// </summary>
     HirNode? LowerRewrite(LoweringContext context, int node, DeclarativeRule rule)
     {
         var use = context.Origin(node);
-        var site = context.Use ?? use;
         if (_file.IsCyclicRewrite(node))
         {
-            context.Report("NH0008", site, "A rewrite that reaches itself prevents lowering.");
+            context.Report("NH0008", use, "A rewrite that reaches itself prevents lowering.");
             return null;
         }
         if (_file.Instance(node) is not { } instance)
         {
             string reason = _file.Tree.Language!.RewriteTemplate(rule).Error ?? "it has no template";
-            context.Report("NH0009", site, $"This rule's rewrite template can't be used: {reason}.");
+            context.Report("NH0009", use, $"This rule's rewrite template can't be used: {reason}.");
             return null;
         }
         var holes = new Dictionary<int, HirNode>();
@@ -576,7 +575,9 @@ public sealed class DeclarativeTypes
             if (lowered is null) return null;
             holes[hole] = lowered;
         }
-        var body = context.Rewriting(instance.File, holes, use);
+        // A template that is a single hole is the child itself: its HIR, with its own origins.
+        if (holes.TryGetValue(instance.Root, out var whole)) return whole;
+        var body = context.Rewriting(instance.File, holes, use, _file.RewriteName(node));
         if (!HirLowering.Admit(body, instance.Root)) return null;
         var result = instance.File.DeclarativeTypes.LowerNested(body, instance.Root);
         return result is null ? null

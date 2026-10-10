@@ -16,6 +16,8 @@ public sealed class RewriteTests : IDisposable
             | Doubled    = Value:Expr "doubled" precedence 30  rewrites <[ $Value + $Value ]>
             | Monthish   = Count:Expr "monthish" precedence 30  rewrites <[ $Count * 2 fortnights ]>
             | Loops      = Count:Expr "loops" precedence 30  rewrites <[ $Count loops ]>
+            | Mystery    = Value:Expr "mystery" precedence 30  rewrites <[ $Value + nowhere ]>
+            | Same       = Value:Expr "same" precedence 30  rewrites <[ $Value ]>
 
         """;
 
@@ -133,5 +135,29 @@ public sealed class RewriteTests : IDisposable
         Assert.Contains(service.InspectDocument(Uri("a.datecalc"))!.Diagnostics, d => d.Code == "NH0008");
         var cycle = Assert.Single(service.Diagnostics(Uri("a.datecalc")), d => d.Code == "NH0008");
         Assert.Equal(new DocumentRange(new DocumentPosition(0, 0), new DocumentPosition(0, 7)), cycle.Range);
+        Assert.Equal("in the expansion of Loops: A rewrite that reaches itself prevents lowering.", cycle.Message);
+    }
+
+    [Fact]
+    public void A_lowering_problem_in_the_expansion_is_reported_at_the_use()
+    {
+        using var service = Service();
+        service.Open(Uri("a.datecalc"), 1, "1 mystery;");
+        var error = Assert.Single(service.Diagnostics(Uri("a.datecalc")), d => d.Severity == ServiceSeverity.Error);
+        Assert.Equal("NB0001", error.Code);
+        Assert.Equal("in the expansion of Mystery: unresolved value 'nowhere'", error.Message);
+        Assert.Equal(new DocumentRange(new DocumentPosition(0, 0), new DocumentPosition(0, 9)), error.Range);
+        Assert.Empty(service.InspectDocument(Uri("a.datecalc"))!.Roots);
+        Assert.All(service.InspectDocument(Uri("a.datecalc"))!.Diagnostics, d => Assert.Equal(Uri("a.datecalc"), d.Origin.Path));
+    }
+
+    [Fact]
+    public void A_template_that_is_a_hole_lowers_as_the_child_itself()
+    {
+        using var service = Service();
+        service.Open(Uri("a.datecalc"), 1, "(1 + 2) same;");
+        var root = Assert.Single(service.InspectDocument(Uri("a.datecalc"))!.Roots);
+        Assert.Equal(new TextSpan(1, 5), root.Origins[0].Span); // the sum's own, not the use's
+        Assert.DoesNotContain(root.Origins, o => o.Span == new TextSpan(0, 12));
     }
 }
