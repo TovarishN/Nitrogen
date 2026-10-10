@@ -35,12 +35,14 @@ internal sealed class SyntaxCodeWriter
         {
             var alternatives = rule.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { rule.Body };
             b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s) =>\n        ")
+                .Append($"s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})\n        || ")
                 .Append(string.Join("\n        || ", alternatives.Select(a => Element(a, module, null, 0))))
                 .Append(";\n\n");
             return;
         }
         var elements = Elements(rule.Body);
         b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n");
+        b.Append($"        if (s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})) return true;\n");
         if (LeadingLiteral(elements[0]) is { } literal)
         {
             // Fail on the first character before any bookkeeping, recording the expectation the

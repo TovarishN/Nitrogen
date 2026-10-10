@@ -68,6 +68,7 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     internal static bool ParsePair(ref ParserState s)
     {
+        if (s.TryHole("Mini.Pair")) return true;
         s.SkipTrivia();
         if (s.Current != '(') return s.ExpectLiteral("(");
         var start = s.Mark();
@@ -113,11 +114,13 @@ public sealed unsafe class MiniModule : SyntaxModule
     }
 
     internal static bool ParseChoice(ref ParserState s) =>
-        ParseAb(ref s)
+        s.TryHole("Mini.Choice")
+        || ParseAb(ref s)
         || ParseAc(ref s);
 
     internal static bool ParseAb(ref ParserState s)
     {
+        if (s.TryHole("Mini.Ab")) return true;
         s.SkipTrivia();
         if (s.Current != 'a') return s.ExpectLiteral("a");
         var start = s.Mark();
@@ -132,6 +135,7 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     internal static bool ParseAc(ref ParserState s)
     {
+        if (s.TryHole("Mini.Ac")) return true;
         s.SkipTrivia();
         if (s.Current != 'a') return s.ExpectLiteral("a");
         var start = s.Mark();
@@ -160,6 +164,7 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     internal static bool ParseIf(ref ParserState s)
     {
+        if (s.TryHole("Mini.If")) return true;
         s.SkipTrivia();
         if (s.Current != 'i') return s.ExpectLiteral("if");
         var start = s.Mark();
@@ -188,6 +193,7 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     internal static bool ParseMaybe(ref ParserState s)
     {
+        if (s.TryHole("Mini.Maybe")) return true;
         s.SkipTrivia();
         if (s.Current != '(') return s.ExpectLiteral("(");
         var start = s.Mark();

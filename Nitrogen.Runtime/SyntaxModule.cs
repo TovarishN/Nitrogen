@@ -81,5 +81,10 @@ public sealed class ExtensionPointDecl
 
     public int GlobalId { get; }
 
+    string? _qualifiedName;
+
+    /// <summary><c>Module.Rule</c>: how templates name this extension point.</summary>
+    public string QualifiedName => _qualifiedName ??= Owner.Name + "." + Name;
+
     public override string ToString() => Owner.Name + "." + Name;
 }

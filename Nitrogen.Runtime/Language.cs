@@ -118,14 +118,51 @@ public sealed unsafe class Language
         }
     }
 
-    bool Run(string text, Rule start, ParseContext context, bool recovering)
+    /// <summary>
+    /// Parses <paramref name="text"/> as the rule <paramref name="category"/> (qualified: <c>Module.Rule</c>, a
+    /// syntax or extensible rule), where each <c>$Name</c> of <paramref name="holes"/> stands for a node of the
+    /// rule it maps to (spec: quasiquote rewrites). The fast pass only: a template either parses or doesn't.
+    /// </summary>
+    public ParseResult ParseTemplate(string text, string category, IReadOnlyDictionary<string, string> holes)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(holes);
+        int dot = category.LastIndexOf('.');
+        string moduleName = dot < 0 ? "" : category[..dot], ruleName = category[(dot + 1)..];
+        Rule start;
+        ExtensionPointDecl? point = null;
+        if (Modules.FirstOrDefault(m => m.Name == moduleName)?.GetRule(ruleName) is { } rule) start = rule;
+        else
+        {
+            point = _points.FirstOrDefault(p => p is not null && p.Decl.QualifiedName == category)?.Decl
+                ?? throw new ArgumentException($"'{category}' is not a rule of this language.", nameof(category));
+            start = new Rule(category, &ParseTemplateStart);
+        }
+        var context = ParseContext.Acquire();
+        try
+        {
+            var arena = context.Arena;
+            if (Run(text, start, context, recovering: false, holes, point))
+                return ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], text, this), arena);
+            return ParseResult.Failed(TreeFreezer.ErrorTree(text, this), arena, ParseResult.CaptureFailure(arena));
+        }
+        finally
+        {
+            ParseContext.Release(context);
+        }
+    }
+
+    static bool ParseTemplateStart(ref ParserState s) => s.ParseExtensible(s.TemplateStart!, 0);
+
+    bool Run(string text, Rule start, ParseContext context, bool recovering,
+        IReadOnlyDictionary<string, string>? holes = null, ExtensionPointDecl? templateStart = null)
     {
         var arena = context.Arena;
         arena.Clear();
         context.Memo.Clear();
         arena.Recovering = recovering;
         arena.CallFlagMask = recovering ? 3 : 0;
-        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this };
+        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart };
         var parse = start.Parse;
         if (!parse(ref state)) return false;
         state.SkipTrivia();

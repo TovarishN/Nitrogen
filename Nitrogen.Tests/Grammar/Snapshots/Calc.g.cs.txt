@@ -84,6 +84,7 @@ public sealed unsafe class CalcModule : SyntaxModule
 
     internal static bool ParseProgram(ref ParserState s)
     {
+        if (s.TryHole("Calc.Program")) return true;
         var start = s.Mark();
         s.Open(CalcKinds.Program);
         s.SkipTrivia();
@@ -93,11 +94,13 @@ public sealed unsafe class CalcModule : SyntaxModule
     }
 
     internal static bool ParseStatement(ref ParserState s) =>
-        ParseAssign(ref s)
+        s.TryHole("Calc.Statement")
+        || ParseAssign(ref s)
         || ParseExprStatement(ref s);
 
     internal static bool ParseAssign(ref ParserState s)
     {
+        if (s.TryHole("Calc.Assign")) return true;
         var start = s.Mark();
         s.Open(CalcKinds.Assign);
         s.SkipTrivia();
@@ -114,6 +117,7 @@ public sealed unsafe class CalcModule : SyntaxModule
 
     internal static bool ParseExprStatement(ref ParserState s)
     {
+        if (s.TryHole("Calc.ExprStatement")) return true;
         var start = s.Mark();
         s.Open(CalcKinds.ExprStatement);
     e0:

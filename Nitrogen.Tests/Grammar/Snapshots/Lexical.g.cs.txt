@@ -97,6 +97,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
 
     internal static bool ParseDocument(ref ParserState s)
     {
+        if (s.TryHole("Lexical.Document")) return true;
         var start = s.Mark();
         s.Open(LexicalKinds.Document);
     e0:
@@ -122,7 +123,8 @@ public sealed unsafe class LexicalModule : SyntaxModule
     }
 
     internal static bool ParseItem(ref ParserState s) =>
-        ParseBlock(ref s)
+        s.TryHole("Lexical.Item")
+        || ParseBlock(ref s)
         || ParsePick(ref s)
         || ParseTagged(ref s)
         || s.MatchToken(LexicalKinds.Comment, MatchComment(s.Text, s.Position), "Comment")
@@ -135,6 +137,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
 
     internal static bool ParseBlock(ref ParserState s)
     {
+        if (s.TryHole("Lexical.Block")) return true;
         s.SkipTrivia();
         if (s.Current != '{') return s.ExpectLiteral("{");
         var start = s.Mark();
@@ -166,6 +169,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
 
     internal static bool ParsePick(ref ParserState s)
     {
+        if (s.TryHole("Lexical.Pick")) return true;
         s.SkipTrivia();
         if (s.Current != 'p') return s.ExpectLiteral("pick");
         var start = s.Mark();
@@ -201,6 +205,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
 
     internal static bool ParseTagged(ref ParserState s)
     {
+        if (s.TryHole("Lexical.Tagged")) return true;
         s.SkipTrivia();
         if (s.Current != 't') return s.ExpectLiteral("tag");
         var start = s.Mark();

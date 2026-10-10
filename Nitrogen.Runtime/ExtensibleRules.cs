@@ -45,7 +45,8 @@ public static unsafe class ExtensibleRules
         int callerFlags = s.CallFlags;
         s.CallPoint = point;
         s.CallFlags = callFlags;
-        bool parsed = ParsePrefix(ref s, point);
+        // A template's hole is a whole prefix result: operators may extend past it, never into it.
+        bool parsed = s.TryHole(point.Decl.QualifiedName) || ParsePrefix(ref s, point);
         if (parsed) ParsePostfix(ref s, point, minPrecedence);
         s.CallPoint = callerPoint;
         s.CallFlags = callerFlags;

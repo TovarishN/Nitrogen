@@ -145,6 +145,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseFile(ref ParserState s)
     {
+        if (s.TryHole("Lowered.File")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.File);
         s.SkipTrivia();
@@ -154,13 +155,15 @@ public sealed unsafe class LoweredModule : SyntaxModule
     }
 
     internal static bool ParseItem(ref ParserState s) =>
-        ParseInput(ref s)
+        s.TryHole("Lowered.Item")
+        || ParseInput(ref s)
         || ParseFixed(ref s)
         || ParsePlain(ref s)
         || ParseStatement(ref s);
 
     internal static bool ParseInput(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Input")) return true;
         s.SkipTrivia();
         if (s.Current != 'i') return s.ExpectLiteral("input");
         var start = s.Mark();
@@ -259,6 +262,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseFixed(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Fixed")) return true;
         s.SkipTrivia();
         if (s.Current != 'f') return s.ExpectLiteral("fixed");
         var start = s.Mark();
@@ -305,6 +309,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParsePlain(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Plain")) return true;
         s.SkipTrivia();
         if (s.Current != 'p') return s.ExpectLiteral("plain");
         var start = s.Mark();
@@ -351,6 +356,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseStatement(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Statement")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.Statement);
     e0:
@@ -376,7 +382,8 @@ public sealed unsafe class LoweredModule : SyntaxModule
     }
 
     internal static bool ParseValue(ref ParserState s) =>
-        ParseAdd(ref s)
+        s.TryHole("Lowered.Value")
+        || ParseAdd(ref s)
         || ParseTurn(ref s)
         || ParseWrap(ref s)
         || ParseNum(ref s)
@@ -384,6 +391,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseAdd(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Add")) return true;
         s.SkipTrivia();
         if (s.Current != 'a') return s.ExpectLiteral("add");
         var start = s.Mark();
@@ -518,6 +526,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseTurn(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Turn")) return true;
         s.SkipTrivia();
         if (s.Current != 't') return s.ExpectLiteral("turn");
         var start = s.Mark();
@@ -587,6 +596,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseWrap(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Wrap")) return true;
         s.SkipTrivia();
         if (s.Current != 'w') return s.ExpectLiteral("wrap");
         var start = s.Mark();
@@ -656,6 +666,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseNum(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Num")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.Num);
         s.SkipTrivia();
@@ -666,6 +677,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseRef(ref ParserState s)
     {
+        if (s.TryHole("Lowered.Ref")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.Ref);
         s.SkipTrivia();
