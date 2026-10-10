@@ -181,13 +181,17 @@ public sealed class RewriteTests : IDisposable
     {
         AddRules("    | Broken = Count:Expr \"broken\" precedence 30  rewrites <[ $Count * ]>\n");
         using var service = Service();
-        service.Open(Uri("DateCalc.ngr"), 1, File.ReadAllText(Path.Combine(_root, "DateCalc.ngr")));
+        string grammarText = File.ReadAllText(Path.Combine(_root, "DateCalc.ngr"));
+        service.Open(Uri("DateCalc.ngr"), 1, grammarText);
         var warning = Assert.Single(service.Diagnostics(Uri("DateCalc.ngr")), d => d.Code == "NGR0137");
         Assert.Equal(ServiceSeverity.Warning, warning.Severity);
+        int broken = Array.FindIndex(grammarText.Split('\n'), l => l.Contains("| Broken", StringComparison.Ordinal));
+        Assert.True(broken >= 0);
+        Assert.Equal(broken, warning.Range.Start.Line);
 
         service.Open(Uri("a.datecalc"), 1, "1 broken;\n2 fortnights;");
         Assert.Contains(service.InspectDocument(Uri("a.datecalc"))!.Diagnostics, d => d.Code == "NH0009");
-        Assert.Empty(service.Diagnostics(Uri("a.datecalc")).Where(d => d.Range.Start.Line == 1)); // the language still works
+        Assert.DoesNotContain(service.Diagnostics(Uri("a.datecalc")), d => d.Range.Start.Line == 1); // the language still works
     }
 
     [Fact]
