@@ -1,6 +1,6 @@
 # Quasiquoted rewrite rules
 
-Status: approved (2026-10-10).
+Status: implemented (2026-10-10).
 
 ## Problem
 

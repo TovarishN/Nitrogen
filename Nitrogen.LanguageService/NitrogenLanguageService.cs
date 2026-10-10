@@ -181,6 +181,15 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (_documents.TryGetValue(uri, out var document) && AssistOf(document) is { } assisted &&
             document.Language.Assist!.Hover(assisted, document.Lines.OffsetOf(position)) is { } help)
             return new HoverInfo(help.Markdown, document.Lines.RangeOf(help.Span));
+        var hover = HoverWithoutRewrite(uri, position);
+        if (document is null || RewriteAt(document, document.Lines.OffsetOf(position)) is not { } rewrite) return hover;
+        var (template, span) = rewrite;
+        string line = $"`rewrites <[{template}]>`";
+        return hover is null ? new HoverInfo(line, document.Lines.RangeOf(span)) : hover with { Markdown = hover.Markdown + "\n\n" + line };
+    }
+
+    HoverInfo? HoverWithoutRewrite(string uri, DocumentPosition position)
+    {
         var existing = HoverCore(uri, position);
         var inspection = Inspect(uri, position);
         if (inspection is null) return existing;
@@ -199,6 +208,30 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (HoverValue(_documents[uri], inspection, atName) is { } value) summary += "\n\n" + value;
         return new HoverInfo(existing is null ? summary : existing.Markdown + "\n\n" + summary,
             existing?.Range ?? inspection.Range);
+    }
+
+    /// <summary>The template of the rewrite use whose own text holds the offset (not one of its holes' children), with the use's span; null otherwise.</summary>
+    static (string Template, TextSpan Span)? RewriteAt(Document document, int offset)
+    {
+        var tree = document.Parsed.Tree;
+        var declarative = document.Language.Language.Declarative;
+        int innermost = -1, length = int.MaxValue;
+        for (int node = 0; node < tree.NodeCount; node++)
+        {
+            var span = tree.Span(node);
+            if (span.Start <= offset && offset < span.End && span.Length < length) (innermost, length) = (node, span.Length);
+        }
+        for (int node = innermost; node >= 0; node = tree.Parent(node))
+            if (declarative.RuleOf(tree.Kind(node))?.Rewrite is { } spec)
+            {
+                foreach (var hole in spec.Holes)
+                {
+                    var child = tree.Span(tree.Child(node, hole.Child));
+                    if (child.Start <= offset && offset < child.End) return null;
+                }
+                return (spec.Text, tree.Span(node));
+            }
+        return null;
     }
 
     HoverInfo? HoverCore(string uri, DocumentPosition position)

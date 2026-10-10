@@ -22,6 +22,9 @@ public sealed class DeclarativeLowering
 
     public bool IsEmpty => _rules.Count == 0;
 
+    /// <summary>The declarative rule of a node kind, or null when it has none.</summary>
+    public DeclarativeRule? RuleOf(int kind) => RuleFor(kind)?.Rule;
+
     internal ResolvedRule? RuleFor(int kind) => _rules.TryGetValue(kind, out var rule) ? rule : null;
 
     internal static SemanticType? SequenceElement(SemanticType type) =>

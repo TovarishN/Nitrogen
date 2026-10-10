@@ -202,4 +202,15 @@ public sealed class RewriteTests : IDisposable
         service.Open(Uri("DateCalc.ngr"), 1, File.ReadAllText(Path.Combine(_root, "DateCalc.ngr")));
         Assert.Contains(service.Diagnostics(Uri("DateCalc.ngr")), d => d.Code == "NGR0138" && d.Severity == ServiceSeverity.Warning);
     }
+
+    [Fact]
+    public void Hover_on_a_use_shows_its_template()
+    {
+        using var service = Service();
+        const string text = "3 fortnights;";
+        service.Open(Uri("a.datecalc"), 1, text);
+        var hover = service.Hover(Uri("a.datecalc"), new DocumentPosition(0, text.IndexOf("fortnights", StringComparison.Ordinal) + 2))!;
+        Assert.Contains("rewrites <[ $Count * 2 weeks ]>", hover.Markdown);
+        Assert.DoesNotContain("rewrites", service.Hover(Uri("a.datecalc"), new DocumentPosition(0, 0))?.Markdown ?? ""); // on the child
+    }
 }
