@@ -21,6 +21,36 @@ public unsafe ref struct ParserState
     /// <summary>The language being parsed; needed by extensible rules. Null only in unit tests of the primitives.</summary>
     internal Language? Language { get; init; }
 
+    /// <summary>A template parse's holes: hole name → qualified rule (spec: quasiquote rewrites). Null in a normal parse, so a normal parse never matches one.</summary>
+    internal IReadOnlyDictionary<string, string>? Holes { get; init; }
+
+    /// <summary>The extension point a template parse starts at, when its category is an extensible rule.</summary>
+    internal ExtensionPointDecl? TemplateStart { get; init; }
+
+    /// <summary>
+    /// In a template parse, a hole for <paramref name="rule"/> (a qualified rule name) at the position, after
+    /// trivia: pushes a <see cref="SyntaxKinds.Hole"/> leaf over <c>$Name</c> and returns true. Any other input,
+    /// or a hole for another rule, leaves the state as it was.
+    /// </summary>
+    /// <remarks>A normal parse pays only the inlined <see cref="InTemplate"/> check.</remarks>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public bool TryHole(string rule) => Holes is not null && TryHoleCore(rule);
+
+    /// <summary>True in a template parse, the only parse in which a hole can match.</summary>
+    public readonly bool InTemplate => Holes is not null;
+
+    bool TryHoleCore(string rule)
+    {
+        int at = PeekPastTrivia();
+        if (at >= _text.Length || _text[at] != '$') return false;
+        int end = at + 1;
+        while (end < _text.Length && IsIdentifierPart(_text[end])) end++;
+        if (end == at + 1 || !Holes!.TryGetValue(_text[(at + 1)..end].ToString(), out var holeRule) || holeRule != rule) return false;
+        Position = at;
+        PushLeaf(SyntaxKinds.Hole, end);
+        return true;
+    }
+
     /// <summary>Current input position. Generated code may read it; it should move it only through the Match/Push methods.</summary>
     public int Position;
 

@@ -22,6 +22,8 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
 {
     readonly List<LoweringDiagnostic> _reported = new();
     readonly HashSet<(string Path, int Node)> _activeTemplates = new();
+    readonly LoweringContext? _caller;
+    readonly (SourceOrigin Use, string Rule)? _rewrite;
 
     /// <summary>The context of a template body in <paramref name="file"/>: its parameters bound to the arguments; reports go to <paramref name="caller"/>.</summary>
     LoweringContext(FileSemantics file, LoweringContext caller, IReadOnlyDictionary<Binding.Symbol, HirNode> arguments)
@@ -29,6 +31,7 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     {
         _reported = caller._reported;
         _activeTemplates = caller._activeTemplates;
+        _caller = caller;
         Arguments = arguments;
     }
 
@@ -41,6 +44,27 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     internal LoweringContext Expanding(FileSemantics template, IReadOnlyDictionary<Binding.Symbol, HirNode> arguments) =>
         new(template, this, arguments);
 
+    /// <summary>
+    /// The context of a rewrite's instantiation: each Hole node lowers to the use's child, lowered in the caller. Reports
+    /// go to the caller; one within the instantiation is moved to <paramref name="use"/> and prefixed with
+    /// <paramref name="rule"/>'s name, as the instantiation's semantic diagnostics are (spec: quasiquote rewrites).
+    /// </summary>
+    LoweringContext(FileSemantics file, LoweringContext caller, IReadOnlyDictionary<int, HirNode> holes, SourceOrigin use, string rule)
+        : this(file, caller.SnapshotId, caller.CheckScope, caller.Admission)
+    {
+        _reported = caller._reported;
+        _activeTemplates = caller._activeTemplates;
+        _caller = caller;
+        _rewrite = (use, rule);
+        Holes = holes;
+    }
+
+    /// <summary>In a rewrite's instantiation: the lowered child each Hole node stands for; null elsewhere.</summary>
+    internal IReadOnlyDictionary<int, HirNode>? Holes { get; }
+
+    internal LoweringContext Rewriting(FileSemantics instance, IReadOnlyDictionary<int, HirNode> holes, SourceOrigin use, string rule) =>
+        new(instance, this, holes, use, rule);
+
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
     public SemanticCheckScope CheckScope { get; } = checkScope;
@@ -50,7 +74,10 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentNullException.ThrowIfNull(message);
-        _reported.Add(new LoweringDiagnostic(code, origin, message));
+        if (_caller is null) _reported.Add(new LoweringDiagnostic(code, origin, message));
+        else if (_rewrite is { } rewrite && origin.Path == File.Path)
+            _caller.Report(code, rewrite.Use, $"in the expansion of {rewrite.Rule}: {message}");
+        else _caller.Report(code, origin, message);
     }
     internal IReadOnlyList<LoweringDiagnostic> Reported => _reported;
 }

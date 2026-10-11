@@ -81,6 +81,37 @@ parameter's declared type (`NT0001`). An expansion is blocked by errors within t
 there (`NH0001`–`NH0003`), and a cycle reports `NH0007` at the name of the call that closes it.
 Geometry's `def`/`make` use these clauses; see the [design](superpowers/specs/2026-10-02-declarative-templates-design.md).
 
+## Rewrite rules
+
+A rule can mean code the language already has, written in the language itself: `rewrites <[ … ]>`
+replaces a `lowers` clause, and each `$Field` in the template is filled by that field of the use.
+
+```text
+extensible syntax Expr
+{
+  | Fortnights = Count:Expr "fortnights" precedence 30  rewrites <[ $Count * 2 weeks ]>
+}
+```
+
+`3 fortnights` then types, checks, lowers and evaluates exactly as `3 * 2 weeks`. A hole is one node:
+`!$Cond` with `a + b` in the hole means `!(a + b)`. The template parses as the rule's category: the
+extensible rule of an alternative, or the alias that lists a plain rule. Errors inside an expansion are
+reported at the use (`in the expansion of Fortnights: …`), and hover on a use shows its template.
+
+Templates may not declare names, and holes stand for syntax or extensible rules, not tokens. A template
+that doesn't parse or declares a name is a warning in the grammar (NGR0137, NGR0138); its uses report
+NH0009.
+
+Limits of this version:
+
+- Names in a template resolve only against the language's built-ins, not the declarations of the
+  document that uses it.
+- `in` properties a template's nodes would pass down are not forwarded into its holes.
+- A rewrite that reaches itself, directly or through another rewrite, reports NH0008 at the use.
+- A plain rule's template parses as the alias listing it only when exactly one alias of its module lists
+  it; otherwise it parses as the rule itself, so it can only be a hole or a use of the same rule. List
+  such a rule in one alias.
+
 ## Editor support for lowered languages
 
 The language server uses what a document lowers to as well as its syntax:

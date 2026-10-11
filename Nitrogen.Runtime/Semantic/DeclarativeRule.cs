@@ -16,7 +16,15 @@ public enum DeclarativeForm
     Template,
     /// <summary>An expansion of the template its reference names: the one argument is the argument list child.</summary>
     Expand,
+    /// <summary>A rule whose uses mean its quasiquoted template (spec: quasiquote rewrites); see <see cref="DeclarativeRule.Rewrite"/>.</summary>
+    Rewrite,
 }
+
+/// <summary>A rewrite template's hole: the field it names, that field's child index in a use, and the qualified rule it stands for.</summary>
+public sealed record RewriteHole(string Name, int Child, string Rule);
+
+/// <summary>A rule's rewrite: the template text (verbatim), the qualified rule it parses as, and its holes.</summary>
+public sealed record RewriteSpec(string Text, string Category, IReadOnlyList<RewriteHole> Holes);
 
 /// <summary>One syntax kind's declarative typing and lowering clauses (issue 251), emitted by the generator as data.</summary>
 public sealed class DeclarativeRule
@@ -27,7 +35,7 @@ public sealed class DeclarativeRule
         bool[]? argumentTexts = null, string?[]? argumentOptionalTypes = null,
         Property? property = null, Property? typeProperty = null, Property? operationProperty = null,
         bool optionalOperation = false, Property? initializerProperty = null, bool[]? argumentInferredSequences = null,
-        bool[]? argumentOptionalTexts = null)
+        bool[]? argumentOptionalTexts = null, RewriteSpec? rewrite = null)
     {
         ArgumentNullException.ThrowIfNull(arguments);
         if (form == DeclarativeForm.Repeat && (arguments.Length != 3 || target is null))
@@ -52,6 +60,8 @@ public sealed class DeclarativeRule
             throw new ArgumentException("Optional operation lowering requires a computed operation property.", nameof(optionalOperation));
         if (initializerProperty is not null && form != DeclarativeForm.Reference)
             throw new ArgumentException("An initializer property requires reference lowering.", nameof(initializerProperty));
+        if ((form == DeclarativeForm.Rewrite) != (rewrite is not null))
+            throw new ArgumentException("A rewrite needs exactly its template.", nameof(rewrite));
         LocalKind = localKind;
         Form = form;
         Target = target;
@@ -77,6 +87,7 @@ public sealed class DeclarativeRule
         OperationProperty = operationProperty;
         OptionalOperation = optionalOperation;
         InitializerProperty = initializerProperty;
+        Rewrite = rewrite;
         if (ArgumentSequenceTypes.Count != arguments.Length || ArgumentSequenceStrides.Count != arguments.Length ||
             ArgumentTexts.Count != arguments.Length || ArgumentOptionalTypes.Count != arguments.Length ||
             ArgumentInferredSequences.Count != arguments.Length || ArgumentOptionalTexts.Count != arguments.Length ||
@@ -91,6 +102,9 @@ public sealed class DeclarativeRule
     }
 
     public int LocalKind { get; }
+
+    /// <summary>The template a rewrite's uses mean; null for every other form.</summary>
+    public RewriteSpec? Rewrite { get; }
 
     public DeclarativeForm Form { get; }
 

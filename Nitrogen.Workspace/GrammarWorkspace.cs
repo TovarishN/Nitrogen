@@ -106,6 +106,7 @@ public sealed class GrammarWorkspace
                 diagnostics.AddRange(composition.Select(d => new WorkspaceDiagnostic("", 0, 0, d.Code, d.Message, IsError: true)));
                 return new WorkspaceSnapshot(version, diagnostics);
             }
+            diagnostics.AddRange(TemplateDiagnostics(language!));
             var evaluation = Evaluation(types, language!, diagnostics);
             var fixes = Fixes(types, diagnostics);
             var calls = Calls(types, diagnostics);
@@ -140,6 +141,28 @@ public sealed class GrammarWorkspace
                 !found.Any(m => ReferenceEquals(m, module)))
                 found.Add(module);
         return found;
+    }
+
+    /// <summary>
+    /// A rewrite template that can't be used (spec: quasiquote rewrites) is a warning at the template in its grammar
+    /// file: NGR0137 when it doesn't parse, NGR0138 when it declares a name. The language is still served.
+    /// </summary>
+    IEnumerable<WorkspaceDiagnostic> TemplateDiagnostics(Language language)
+    {
+        foreach (var rule in language.Modules.SelectMany(module => module.DeclarativeRules))
+        {
+            if (rule.Rewrite is not { } spec || language.RewriteTemplate(rule).Error is not { } error) continue;
+            // A parse failure's message quotes the template, so key on the declaring message's own start.
+            string code = error.StartsWith("a template cannot declare", StringComparison.Ordinal)
+                ? GrammarCodes.TemplateDeclares : GrammarCodes.TemplateDoesNotParse;
+            foreach (var (path, text) in _files)
+            {
+                int at = text.IndexOf("<[" + spec.Text + "]>", StringComparison.Ordinal);
+                if (at < 0) continue;
+                var (line, column) = LineColumn(text, at);
+                yield return new WorkspaceDiagnostic(path, line, column, code, $"rewrite template: {error}", IsError: false);
+            }
+        }
     }
 
     /// <summary>

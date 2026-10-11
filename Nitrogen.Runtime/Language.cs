@@ -118,14 +118,91 @@ public sealed unsafe class Language
         }
     }
 
-    bool Run(string text, Rule start, ParseContext context, bool recovering)
+    /// <summary>
+    /// Parses <paramref name="text"/> as the rule <paramref name="category"/> (qualified: <c>Module.Rule</c>, a
+    /// syntax or extensible rule), where each <c>$Name</c> of <paramref name="holes"/> stands for a node of the
+    /// rule it maps to (spec: quasiquote rewrites). The fast pass only: a template either parses or doesn't.
+    /// </summary>
+    public ParseResult ParseTemplate(string text, string category, IReadOnlyDictionary<string, string> holes)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        ArgumentNullException.ThrowIfNull(holes);
+        int dot = category.LastIndexOf('.');
+        string moduleName = dot < 0 ? "" : category[..dot], ruleName = category[(dot + 1)..];
+        Rule start;
+        ExtensionPointDecl? point = null;
+        if (Modules.FirstOrDefault(m => m.Name == moduleName)?.GetRule(ruleName) is { } rule) start = rule;
+        else
+        {
+            point = _points.FirstOrDefault(p => p is not null && p.Decl.QualifiedName == category)?.Decl
+                ?? throw new ArgumentException($"'{category}' is not a rule of this language.", nameof(category));
+            start = new Rule(category, &ParseTemplateStart);
+        }
+        var context = ParseContext.Acquire();
+        try
+        {
+            var arena = context.Arena;
+            if (Run(text, start, context, recovering: false, holes, point))
+                return ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], text, this), arena);
+            return ParseResult.Failed(TreeFreezer.ErrorTree(text, this), arena, ParseResult.CaptureFailure(arena));
+        }
+        finally
+        {
+            ParseContext.Release(context);
+        }
+    }
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<DeclarativeRule, Lazy<RewriteTemplate>> _rewrites = new();
+
+    /// <summary>The document path of a template's instantiation: a URI no document has (spec: quasiquote rewrites).</summary>
+    internal const string RewritePath = "nitrogen:rewrite";
+
+    /// <summary>
+    /// A rewrite rule's template, parsed once as its category with its holes (spec: quasiquote rewrites); or why it
+    /// can't be used: it doesn't parse (with the parser's first message), or it declares a name. The text is trimmed
+    /// first, so spans in the tree are relative to the trimmed text.
+    /// </summary>
+    public RewriteTemplate RewriteTemplate(DeclarativeRule rule)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        return _rewrites.GetOrAdd(rule, r => new Lazy<RewriteTemplate>(() => ParseRewrite(r))).Value;
+    }
+
+    RewriteTemplate ParseRewrite(DeclarativeRule rule)
+    {
+        var spec = rule.Rewrite ?? throw new ArgumentException("Not a rewrite rule.", nameof(rule));
+        string text = spec.Text.Trim();
+        var holes = spec.Holes.ToDictionary(h => h.Name, h => h.Rule);
+        ParseResult parsed;
+        try { parsed = ParseTemplate(text, spec.Category, holes); }
+        catch (ArgumentException error) { return new RewriteTemplate(null, error.Message); }
+        if (!parsed.Success)
+        {
+            var first = parsed.Diagnostics[0];
+            string error = $"'{text}' does not parse as {spec.Category}: {parsed.FormatMessage(first)} at {first.Span.Start}";
+            parsed.Dispose();
+            return new RewriteTemplate(null, error);
+        }
+        var project = new Nitrogen.Binding.Project(this);
+        if (project.Set(RewritePath, parsed.Tree).Declarations.Count > 0)
+        {
+            parsed.Dispose();
+            return new RewriteTemplate(null, "a template cannot declare names");
+        }
+        return new RewriteTemplate(parsed.Tree, null);
+    }
+
+    static bool ParseTemplateStart(ref ParserState s) => s.ParseExtensible(s.TemplateStart!, 0);
+
+    bool Run(string text, Rule start, ParseContext context, bool recovering,
+        IReadOnlyDictionary<string, string>? holes = null, ExtensionPointDecl? templateStart = null)
     {
         var arena = context.Arena;
         arena.Clear();
         context.Memo.Clear();
         arena.Recovering = recovering;
         arena.CallFlagMask = recovering ? 3 : 0;
-        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this };
+        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart };
         var parse = start.Parse;
         if (!parse(ref state)) return false;
         state.SkipTrivia();
@@ -144,3 +221,9 @@ public sealed unsafe class Language
         return true;
     }
 }
+
+/// <summary>
+/// A rewrite rule's parsed template, or why it can't be used. The tree is the language's, shared by every use and kept
+/// for the language's lifetime: read it, never dispose it.
+/// </summary>
+public sealed record RewriteTemplate(SyntaxTree? Tree, string? Error);

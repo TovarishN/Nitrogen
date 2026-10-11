@@ -81,6 +81,7 @@ public static class GrammarDumper
         BindingClauseKind.LowersLiteral => $"(lowers literal {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersTemplate => $"(lowers template {clause.Field}({clause.Arguments[0].Name}))",
         BindingClauseKind.LowersExpand => $"(lowers expand {clause.Field}({clause.Arguments[0].Name}))",
+        BindingClauseKind.Rewrites => $"(rewrites {CSharpText.Literal(clause.Target!.Name)})",
         BindingClauseKind.LowersText => $"(lowers text {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersSequence => $"(lowers sequence {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersValue => clause.TypeProperty is { } typeProperty

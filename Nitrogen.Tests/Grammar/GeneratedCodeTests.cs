@@ -80,7 +80,7 @@ public class GeneratedCodeTests
     {
         string mini = Source("Mini.g.cs");
         Assert.Contains(
-            "    internal static bool ParsePair(ref ParserState s)\n    {\n        s.SkipTrivia();\n        if (s.Current != '(') return s.ExpectLiteral(\"(\");\n        var start = s.Mark();",
+            "    internal static bool ParsePair(ref ParserState s)\n    {\n        if (s.TryHole(\"Mini.Pair\")) return true;\n        s.SkipTrivia();\n        if (s.Current != '(') return s.ExpectLiteral(\"(\");\n        var start = s.Mark();",
             mini);
         Assert.Contains("if (s.Current != 'i') return s.ExpectLiteral(\"if\");", mini);
     }

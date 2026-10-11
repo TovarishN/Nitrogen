@@ -22,7 +22,10 @@ public static class SyntaxKinds
     /// <summary>Input the recovery pass skipped: an arena marker only, never in a frozen tree (issue 235).</summary>
     public const int Skipped = 7;
 
-    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped"];
+    /// <summary>A template's hole (<c>$Name</c>): a leaf standing for a node of the rule the hole names (spec: quasiquote rewrites).</summary>
+    public const int Hole = 8;
+
+    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole"];
 
     public static int ModuleOf(int kind) => kind >>> 16;
 

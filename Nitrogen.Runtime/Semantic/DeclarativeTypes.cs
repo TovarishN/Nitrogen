@@ -83,6 +83,10 @@ public sealed class DeclarativeTypes
         var tree = _file.Tree;
         if ((tree.Flags(node) & NodeFlags.Missing) != 0) return SemanticTypes.Error;
         int kind = tree.Kind(node);
+        // A template's hole has the type of the use's child it stands for.
+        if (kind == SyntaxKinds.Hole)
+            return _file.Holes is { } holes && holes.Children.TryGetValue(node, out int child)
+                ? holes.File.DeclarativeTypes.TypeOf(child) : SemanticTypes.Error;
         if (kind == SyntaxKinds.Ambiguous)
             return tree.ChildCount(node) > 0 ? TypeOf(tree.Child(node, 0)) : SemanticTypes.Error;
         if (_lowering.RuleFor(kind) is { } rule && rule.Rule.Form != DeclarativeForm.None)
@@ -100,6 +104,8 @@ public sealed class DeclarativeTypes
                 DeclarativeForm.Template => null,
                 DeclarativeForm.Expand => TemplateOf(node) is { } template
                     ? template.Types.TypeOf(template.Body) : SemanticTypes.Error,
+                DeclarativeForm.Rewrite => _file.Instance(node) is { } instance
+                    ? instance.File.DeclarativeTypes.TypeOf(instance.Root) : SemanticTypes.Error,
                 _ => SemanticTypes.Error,
             };
         if (_file.HasReference(node))
@@ -291,7 +297,7 @@ public sealed class DeclarativeTypes
     {
         var tree = _file.Tree;
         for (int parent = tree.Parent(node); parent >= 0; parent = tree.Parent(parent))
-            if (_lowering.RuleFor(tree.Kind(parent)) is { Rule.Form: DeclarativeForm.Operation or DeclarativeForm.Template }) return null;
+            if (_lowering.RuleFor(tree.Kind(parent)) is { Rule.Form: DeclarativeForm.Operation or DeclarativeForm.Template or DeclarativeForm.Rewrite }) return null;
         return Lower(context, node);
     }
 
@@ -299,6 +305,10 @@ public sealed class DeclarativeTypes
 
     HirNode? Lower(LoweringContext context, int node)
     {
+        if (_file.Tree.Kind(node) == SyntaxKinds.Hole)
+            return context.Holes is { } holes && holes.TryGetValue(node, out var lowered) ? lowered : null;
+        if (_lowering.RuleFor(_file.Tree.Kind(node)) is { Rule.Form: DeclarativeForm.Rewrite } rewrite)
+            return LowerRewrite(context, node, rewrite.Rule);
         if (_lowering.RuleFor(_file.Tree.Kind(node)) is { Rule.Form: DeclarativeForm.Expand } expand)
             return LowerExpansion(context, node, expand.Rule);
         var type = TypeOf(node);
@@ -536,6 +546,42 @@ public sealed class DeclarativeTypes
                 : HirTraversal.WithOrigins(lowered, lowered.Origins.Prepend(context.Origin(node)).Distinct().ToArray());
         }
         finally { context.ActiveTemplates.Remove(key); }
+    }
+
+    /// <summary>
+    /// Lowers a rewrite's use as its instantiation, each hole bound to the use's child lowered here (once per child).
+    /// The result's origins start with the use's. NH0008 for a rewrite reaching itself, NH0009 when its template can't be used.
+    /// Problems within the instantiation are reported at the use, prefixed (see <see cref="LoweringContext"/>).
+    /// </summary>
+    HirNode? LowerRewrite(LoweringContext context, int node, DeclarativeRule rule)
+    {
+        var use = context.Origin(node);
+        if (_file.IsCyclicRewrite(node))
+        {
+            context.Report("NH0008", use, "A rewrite that reaches itself prevents lowering.");
+            return null;
+        }
+        if (_file.Instance(node) is not { } instance)
+        {
+            string reason = _file.Tree.Language!.RewriteTemplate(rule).Error ?? "it has no template";
+            context.Report("NH0009", use, $"This rule's rewrite template can't be used: {reason}.");
+            return null;
+        }
+        var holes = new Dictionary<int, HirNode>();
+        var byChild = new Dictionary<int, HirNode?>();
+        foreach (var (hole, child) in instance.File.Holes!.Value.Children)
+        {
+            if (!byChild.TryGetValue(child, out var lowered)) byChild[child] = lowered = Lower(context, child);
+            if (lowered is null) return null;
+            holes[hole] = lowered;
+        }
+        // A template that is a single hole is the child itself: its HIR, with its own origins.
+        if (holes.TryGetValue(instance.Root, out var whole)) return whole;
+        var body = context.Rewriting(instance.File, holes, use, _file.RewriteName(node));
+        if (!HirLowering.Admit(body, instance.Root)) return null;
+        var result = instance.File.DeclarativeTypes.LowerNested(body, instance.Root);
+        return result is null ? null
+            : HirTraversal.WithOrigins(result, result.Origins.Prepend(use).Distinct().ToArray());
     }
 
     /// <summary>The argument bound to a template parameter reference, keeping the reference's origin first.</summary>

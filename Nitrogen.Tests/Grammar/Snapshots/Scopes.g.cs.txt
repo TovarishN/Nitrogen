@@ -164,6 +164,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseFile(ref ParserState s)
     {
+        if (s.TryHole("Scopes.File")) return true;
         var start = s.Mark();
         s.Open(ScopesKinds.File);
         s.SkipTrivia();
@@ -174,6 +175,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseUnit(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Unit")) return true;
         s.SkipTrivia();
         if (s.Current != 'u') return s.ExpectLiteral("unit");
         var start = s.Mark();
@@ -256,7 +258,8 @@ public sealed unsafe class ScopesModule : SyntaxModule
     }
 
     internal static bool ParseItem(ref ParserState s) =>
-        ParseLet(ref s)
+        s.TryHole("Scopes.Item")
+        || ParseLet(ref s)
         || ParseUse(ref s)
         || ParseBlock(ref s)
         || ParseGen(ref s)
@@ -267,6 +270,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseSequential(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Sequential")) return true;
         s.SkipTrivia();
         if (s.Current != 's') return s.ExpectLiteral("seq");
         var start = s.Mark();
@@ -365,6 +369,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseSequentialExport(ref ParserState s)
     {
+        if (s.TryHole("Scopes.SequentialExport")) return true;
         s.SkipTrivia();
         if (s.Current != 's') return s.ExpectLiteral("seqexport");
         var start = s.Mark();
@@ -463,6 +468,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGlobal(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Global")) return true;
         s.SkipTrivia();
         if (s.Current != 'g') return s.ExpectLiteral("global");
         var start = s.Mark();
@@ -509,6 +515,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGlobalGen(ref ParserState s)
     {
+        if (s.TryHole("Scopes.GlobalGen")) return true;
         s.SkipTrivia();
         if (s.Current != 'g') return s.ExpectLiteral("globalgen");
         var start = s.Mark();
@@ -555,6 +562,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseLet(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Let")) return true;
         s.SkipTrivia();
         if (s.Current != 'l') return s.ExpectLiteral("let");
         var start = s.Mark();
@@ -653,6 +661,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseUse(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Use")) return true;
         s.SkipTrivia();
         if (s.Current != 'u') return s.ExpectLiteral("use");
         var start = s.Mark();
@@ -699,6 +708,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseBlock(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Block")) return true;
         s.SkipTrivia();
         if (s.Current != 'b') return s.ExpectLiteral("block");
         var start = s.Mark();
@@ -753,6 +763,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGen(ref ParserState s)
     {
+        if (s.TryHole("Scopes.Gen")) return true;
         s.SkipTrivia();
         if (s.Current != 'g') return s.ExpectLiteral("gen");
         var start = s.Mark();
@@ -799,6 +810,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGenName(ref ParserState s)
     {
+        if (s.TryHole("Scopes.GenName")) return true;
         var start = s.Mark();
         s.Open(ScopesKinds.GenName);
     e0:

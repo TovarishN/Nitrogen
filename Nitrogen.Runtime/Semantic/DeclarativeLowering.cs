@@ -18,9 +18,19 @@ public sealed class DeclarativeLowering
 
     readonly IReadOnlyDictionary<int, ResolvedRule> _rules;
 
-    DeclarativeLowering(Dictionary<int, ResolvedRule> rules) => _rules = rules;
+    DeclarativeLowering(Dictionary<int, ResolvedRule> rules)
+    {
+        _rules = rules;
+        HasRewrites = rules.Values.Any(rule => rule.Rule.Form == DeclarativeForm.Rewrite);
+    }
 
     public bool IsEmpty => _rules.Count == 0;
+
+    /// <summary>Whether any rule rewrites (spec: quasiquote rewrites); editor features skip looking for uses otherwise.</summary>
+    public bool HasRewrites { get; }
+
+    /// <summary>The declarative rule of a node kind, or null when it has none.</summary>
+    public DeclarativeRule? RuleOf(int kind) => RuleFor(kind)?.Rule;
 
     internal ResolvedRule? RuleFor(int kind) => _rules.TryGetValue(kind, out var rule) ? rule : null;
 
@@ -121,8 +131,8 @@ public sealed class DeclarativeLowering
 
                 rules[kind] = new ResolvedRule(rule, operation, literal, declared,
                     argumentSequenceTypes, argumentOptionalTypes);
-                if (rule.Form == DeclarativeForm.Expand)
-                    lowerers.Add(new LoweringRegistration(kind, "<expand>",
+                if (rule.Form is DeclarativeForm.Expand or DeclarativeForm.Rewrite)
+                    lowerers.Add(new LoweringRegistration(kind, rule.Form == DeclarativeForm.Expand ? "<expand>" : "<rewrite>",
                         (context, node) => context.File.DeclarativeTypes.LowerRoot(context, node), DynamicOperation: true));
                 // An optional computed operation is a root too; where it is missing, the node lowers to nothing.
                 else if (operation is not null || rule.OperationProperty is not null)

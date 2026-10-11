@@ -401,9 +401,27 @@ public static class GrammarParser
             return inner;
         }
 
-        static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic" or "lowers";
+        static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic" or "lowers" or "rewrites";
 
         static NameDecl Name(GrammarToken token) => new(token.Value, token.Span);
+
+        /// <summary>
+        /// <c>rewrites &lt;[ text ]&gt;</c> (spec: quasiquote rewrites): the text runs verbatim to the first <c>]&gt;</c>,
+        /// never tokenized. Lexing resumes after it.
+        /// </summary>
+        BindingClause Rewrite(GrammarToken keyword)
+        {
+            int open = GrammarLexer.SkipTrivia(_text, keyword.End);
+            if (string.CompareOrdinal(_text, open, "<[", 0, 2) != 0)
+                throw new GrammarSyntaxException("expected '<[' after 'rewrites'", new GrammarSpan(open, 0));
+            int start = open + 2, close = _text.IndexOf("]>", start, StringComparison.Ordinal);
+            if (close < 0) throw new GrammarSyntaxException("expected ']>' to close the template", new GrammarSpan(open, 2));
+            _tokens.RemoveRange(_position, _tokens.Count - _position);
+            _lexed = close + 2;
+            return new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
+                GrammarSpan.FromBounds(keyword.Start, close + 2),
+                Target: new NameDecl(_text.Substring(start, close - start), GrammarSpan.FromBounds(start, close)));
+        }
 
         /// <summary>Binding clauses (issue 237) after a rule body or an alternative; none is fine.</summary>
         LoweringArgument ParseLoweringArgument()
@@ -608,6 +626,11 @@ public static class GrammarParser
                             Target: computed ? null : operation, Arguments: arguments.ToArray(),
                             OperationProperty: computed ? operation : null));
                     }
+                }
+                else if (AtKeyword("rewrites"))
+                {
+                    var keyword = Advance();
+                    clauses.Add(Rewrite(keyword));
                 }
                 else if (AtKeyword("scope") || AtKeyword("dynamic"))
                 {

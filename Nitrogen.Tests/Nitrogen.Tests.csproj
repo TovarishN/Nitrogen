@@ -51,6 +51,7 @@
     <AdditionalFiles Include="Grammars\Calc.ngr" Namespace="Nitrogen.Tests.Calc" />
     <AdditionalFiles Include="Grammars\InitializedRefs.ngr" Namespace="Nitrogen.Tests.InitializedRefs" />
     <AdditionalFiles Include="Grammars\Counted.ngr" Namespace="Nitrogen.Tests.Counted" />
+    <AdditionalFiles Include="Grammars\Rewrites.ngr" Namespace="Nitrogen.Tests.Rewrites" />
     <AdditionalFiles Include="Grammars\Power.ngr" Namespace="Nitrogen.Tests.Calc" />
     <AdditionalFiles Include="Grammars\Clash.ngr" Namespace="Nitrogen.Tests.Calc" />
     <AdditionalFiles Include="Grammars\Mini.ngr" Namespace="Nitrogen.Tests.Mini" />

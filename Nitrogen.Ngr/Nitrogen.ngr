@@ -21,6 +21,8 @@ syntax module Nitrogen
   token CsNested  = "(" CsInner ")" / "[" CsInner "]" / "{" CsInner "}";
   token CsInner   = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\''])*;
   token CsCode    = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';'])+;
+  // A rewrite template; the name colours it as a string in the editor.
+  token TemplateString = "<[" (!"]>" .)* "]>";
   token CsCond    = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';' ':'])+;
   token CsType    = (CsString / CsChar / CsComment / CsNested / [^ '(' ')' '[' ']' '{' '}' '"' '\'' ';' '='])+;
   token CheckCode = ['A'..'Z'] ['A'..'Z']+ ['0'..'9'] ['0'..'9'] ['0'..'9'] ['0'..'9'] !IdPart;
@@ -64,7 +66,8 @@ syntax module Nitrogen
   syntax Associativity  = "left" / "right"  lowers text Core.Text this;
 
   // Binding clauses (issue 237).
-  syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;
+  syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers / Rewrites;
+  syntax Rewrites       = "rewrites" Text:TemplateString  lowers Grammar.Rewrites(text Text);
   syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:DeclaredType?
                           lowers Grammar.Declares(text SymbolKind, text Field, optional text Sequential, optional text FileScope,
                             optional text Export, optional Core.Text Type);
@@ -131,7 +134,7 @@ syntax module Nitrogen
   syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / GroupClose)  lowers Grammar.Parenthesized(Inner, Tail);
   syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+")  lowers Grammar.SeparatorTail(Separator, text Op);
   syntax GroupClose     = ")"  lowers Grammar.GroupClose();
-  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" Name:QualifiedName  references? rule Name
+  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" !"rewrites" Name:QualifiedName  references? rule Name
                           lowers Grammar.Reference(text Name);
   syntax QualifiedName  = DottedName / Identifier;
   syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]"  lowers Grammar.CharClass(optional text Negated, sequence Grammar.ClassItem Items);
