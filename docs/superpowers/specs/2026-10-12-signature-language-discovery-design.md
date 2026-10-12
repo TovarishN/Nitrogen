@@ -1,7 +1,7 @@
 # Self-describing languages and source-text augmentation
 
 Date: 2026-10-12
-Status: Proposed for written-spec review; no implementation authorized by this document.
+Status: Written design approved on 2026-10-12; implementation plan pending review.
 
 ## Intent and agreed scope
 
