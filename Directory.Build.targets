@@ -5,4 +5,28 @@
   <PropertyGroup Condition="'$(TargetFramework)' == 'net10.0' and '$(IsTestProject)' != 'true'">
     <EnableSingleFileAnalyzer>true</EnableSingleFileAnalyzer>
   </PropertyGroup>
+  <!-- Commit count is reproducible for a commit; the SHA disambiguates branches with equal counts.
+       Keep package/plugin release versions intact and carry identity in informational metadata. -->
+  <Target Name="NitrogenBuildIdentity" BeforeTargets="GetAssemblyVersion" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec Command="git rev-parse --is-shallow-repository" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NitrogenShallowRepository" />
+    </Exec>
+    <Error Condition="'$(NitrogenShallowRepository)' == 'true'" Text="Build numbering requires full Git history. Run git fetch --unshallow." />
+    <Exec Command="git rev-list --count HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NitrogenBuildNumber" />
+      <Output TaskParameter="ExitCode" PropertyName="NitrogenGitExitCode" />
+    </Exec>
+    <Exec Command="git rev-parse HEAD" WorkingDirectory="$(MSBuildThisFileDirectory)"
+          ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="NitrogenCommit" />
+    </Exec>
+    <PropertyGroup>
+      <NitrogenBuildNumber Condition="'$(NitrogenGitExitCode)' != '0'">0</NitrogenBuildNumber>
+      <NitrogenCommit Condition="'$(NitrogenGitExitCode)' != '0'">unknown</NitrogenCommit>
+      <InformationalVersion>$(Version)+build.$(NitrogenBuildNumber).$(NitrogenCommit)</InformationalVersion>
+      <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    </PropertyGroup>
+  </Target>
 </Project>
