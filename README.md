@@ -159,6 +159,15 @@ dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj
 ./build.sh        # also builds the editor plugins into artifacts/; add --config nitrogen.json [--language NAME] for a language's plugins
 ```
 
+Every build records its Git commit count and full commit SHA as
+`VERSION+build.COUNT.SHA`; run `nitrogen --version` to inspect it. Commit counts
+require full Git history (shallow clones must run `git fetch --unshallow`). Source
+archives without Git report build `0` and commit `unknown`. The plugin build also
+writes `artifacts/build-info.json` and carries it beside each bundled server.
+CI builds branch pushes and pull requests with full history. The count identifies
+history depth; the SHA distinguishes commits on branches with the same count.
+Release package and plugin version numbers remain unchanged.
+
 The plugins use the release version in `Directory.Build.props`; `VERSION=1.2.3 ./build.sh` overrides
 it, and version tags supply theirs. The [Plugins workflow](.github/workflows/plugins.yml) runs the same
 script on Linux.

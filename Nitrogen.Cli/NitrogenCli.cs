@@ -8,6 +8,13 @@ internal static class NitrogenCli
     /// <summary>The process exit code: 0 clean, 1 compile or parse errors, 2 unusable arguments. <c>watch</c> returns 0 when cancelled.</summary>
     public static async Task<int> RunAsync(IReadOnlyList<string> args, TextWriter output, CancellationToken cancel)
     {
+        if (args is ["--version"])
+        {
+            output.WriteLine(typeof(NitrogenCli).Assembly
+                .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion);
+            return 0;
+        }
         if (args.Count >= 2 && args[0] == "generate" && args[1] == "rider")
         {
             var request = RiderPluginInput.ParseRequest(args, out string generationError);

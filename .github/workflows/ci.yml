@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["**"]
   pull_request:
 
 jobs:
@@ -10,10 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
+      - run: python3 eng/test-build-identity.py
       - run: dotnet build Nitrogen.slnx -warnaserror
+      - run: dotnet Nitrogen.Cli/bin/Debug/net10.0/nitrogen.dll --version
       - run: dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build
 
   vscode:
@@ -23,6 +27,8 @@ jobs:
         working-directory: editors/vscode
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -36,12 +42,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - run: eng/check-links.py
 
   packages:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x

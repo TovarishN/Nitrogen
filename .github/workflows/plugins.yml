@@ -5,14 +5,9 @@ name: Plugins
 # because it downloads the Rider SDK and takes minutes.
 on:
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ["v*"]
   pull_request:
-    paths:
-      - "build.sh"
-      - "editors/**"
-      - "Nitrogen.Cli/**"
-      - ".github/workflows/plugins.yml"
   workflow_dispatch:
 
 jobs:
@@ -20,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
@@ -46,6 +43,7 @@ jobs:
         with:
           name: nitrogen-plugins
           path: |
+            artifacts/build-info.json
             artifacts/*.vsix
             artifacts/rider/*.zip
           if-no-files-found: error
@@ -60,6 +58,8 @@ jobs:
     concurrency: release-${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@v7
         with:
           name: nitrogen-plugins
