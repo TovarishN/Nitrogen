@@ -5,12 +5,33 @@
   "version": "0.10.0",
   "publisher": "nitrogen",
   "license": "MIT",
-  "engines": { "vscode": "^1.90.0" },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
   "main": "./out/extension.js",
-  "activationEvents": ["onLanguage:ngr", "workspaceContains:nitrogen.json"],
+  "activationEvents": [
+    "onLanguage:ngr",
+    "workspaceContains:nitrogen.json",
+    "onStartupFinished"
+  ],
   "contributes": {
     "languages": [
-      { "id": "ngr", "aliases": ["Nitrogen grammar"], "extensions": [".ngr"], "configuration": "./language-configuration.json" }
+      {
+        "id": "ngr",
+        "aliases": [
+          "Nitrogen grammar"
+        ],
+        "extensions": [
+          ".ngr"
+        ],
+        "configuration": "./language-configuration.json"
+      },
+      {
+        "id": "nitrogen-signature",
+        "aliases": [
+          "Nitrogen signed program"
+        ]
+      }
     ],
     "configuration": {
       "title": "Nitrogen",
@@ -31,8 +52,16 @@
   "scripts": {
     "compile": "tsc -p ./ --noEmit && esbuild src/extension.ts --bundle --platform=node --target=node20 --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
     "package": "vsce package --no-dependencies --allow-missing-repository",
-    "test": "esbuild src/otherExtensions.test.ts src/server.test.ts src/developmentConfig.test.ts --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/otherExtensions.test.js out/test/server.test.js out/test/developmentConfig.test.js"
+    "test": "esbuild src/otherExtensions.test.ts src/server.test.ts src/developmentConfig.test.ts src/signatureDocuments.test.ts src/signatureRouting.test.ts --external:vscode --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/otherExtensions.test.js out/test/server.test.js out/test/developmentConfig.test.js out/test/signatureDocuments.test.js out/test/signatureRouting.test.js"
   },
-  "dependencies": { "vscode-languageclient": "^9.0.1" },
-  "devDependencies": { "@types/node": "^20.0.0", "@types/vscode": "^1.90.0", "@vscode/vsce": "^3.0.0", "esbuild": "^0.28.2", "typescript": "^5.4.0" }
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^5.4.0"
+  }
 }

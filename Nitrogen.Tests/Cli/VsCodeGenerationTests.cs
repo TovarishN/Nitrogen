@@ -108,7 +108,10 @@ public sealed class VsCodeGenerationTests : IDisposable
         VsCodeRenderer.Render(request, CancellationToken.None);
 
         Assert.Contains("...csharpSelector", Read(request, "src/extension.ts"));
-        Assert.Contains("middleware: strings.middleware", Read(request, "src/extension.ts"));
+        Assert.Contains("signatureDocuments: signatureOwner", Read(request, "src/extension.ts"));
+        Assert.Contains("ownsSignatureDocuments", Read(request, "src/signatureDocuments.ts"));
+        Assert.Contains("setTextDocumentLanguage", Read(request, "src/signatureRouting.ts"));
+        Assert.Contains("middleware: routing.middleware(strings.middleware", Read(request, "src/extension.ts"));
         Assert.Equal(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "editors", "vscode", "src", "csharpStrings.ts")),
             Read(request, "src/csharpStrings.ts"));
     }

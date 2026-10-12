@@ -203,6 +203,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     _refreshInlayHints = initialize?.Capabilities?.Workspace?.InlayHint?.RefreshSupport == true;
                     _refreshSemanticTokens = initialize?.Capabilities?.Workspace?.SemanticTokens?.RefreshSupport == true;
                     service.SkipEmbedded(initialize?.InitializationOptions?.SkipLanguages ?? []);
+                    service.ServeSignatureDocuments(initialize?.InitializationOptions?.SignatureDocuments ?? true);
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(

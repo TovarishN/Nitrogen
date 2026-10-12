@@ -16,6 +16,9 @@ public sealed partial class NitrogenLanguageService
     readonly Dictionary<string, LanguageDefinition> _signatureDefinitions = new(StringComparer.Ordinal);
     readonly HashSet<string> _signatureOwnedOpen = new(StringComparer.Ordinal);
     InputSnapshot? _signatureSnapshot;
+    bool _serveSignatureDocuments = true;
+
+    public void ServeSignatureDocuments(bool enabled) => _serveSignatureDocuments = enabled;
 
     IReadOnlyList<string> UpdateWithSignatures(string uri, int version, string text)
     {
@@ -39,6 +42,7 @@ public sealed partial class NitrogenLanguageService
 
     IReadOnlyList<string> RefreshSignedDocuments()
     {
+        if (!_serveSignatureDocuments) return [];
         string? root = _root ?? _signatureInputs.Values.Select(i => Path.GetDirectoryName(i.Path)).FirstOrDefault();
         if (root is null) return [];
         var inputs = WorkspaceInputReader.Read(root, _signatureInputs.Values);
