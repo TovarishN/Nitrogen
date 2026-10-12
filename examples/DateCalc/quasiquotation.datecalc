@@ -1,0 +1,6 @@
+// Fortnights is defined by rewrites <[ $Count * 2 weeks ]> in DateCalc.ngr.
+// Count retains its expression structure and resolves names in the calling program.
+let count = 3;
+count fortnights;                         // 42 days
+(1 + 2) fortnights;                       // 42 days
+2026-10-05 + 2 fortnights;                 // 2026-11-02 Mon

@@ -11,7 +11,7 @@ syntax module DateCalc
   token Digit      = ['0'..'9'];
   token Date       = Digit Digit Digit Digit "-" Digit Digit "-" Digit Digit;
   token Number     = Digit+ ("." Digit+)?;
-  token Identifier = ['a'..'z' 'A'..'Z' '_'] ['a'..'z' 'A'..'Z' '0'..'9' '_']* except "let" "days" "weeks" "in";
+  token Identifier = ['a'..'z' 'A'..'Z' '_'] ['a'..'z' 'A'..'Z' '0'..'9' '_']* except "let" "days" "weeks" "fortnights" "in";
 
   builtin value { pi e tau today }
   builtin function
@@ -55,6 +55,8 @@ syntax module DateCalc
       }
     | Days    = Amount:Expr "days"  precedence 30  lowers DateCalc.Days(Amount)  { Type = DateCalcLanguage.Duration; }
     | Weeks   = Amount:Expr "weeks" precedence 30  lowers DateCalc.Weeks(Amount) { Type = DateCalcLanguage.Duration; }
+    // Quasiquotation reuses multiplication and weeks; no new operation or evaluator handler.
+    | Fortnights = Count:Expr "fortnights" precedence 30 rewrites <[ $Count * 2 weeks ]>
     | InDays  = Span:Expr "in" "days"  precedence 5  lowers DateCalc.InDays(Span)  { Type = DateCalcLanguage.Number; }
     | Add     = Left:Expr "+" Right:Expr  precedence 10 left  lowers operation? Selected(Left, Right)
       {

@@ -43,6 +43,7 @@
     <None Include="..\examples\DateCalc\nitrogen.json;..\examples\DateCalc\DateCalc.ngr;..\examples\DateCalc\DateCalcLanguage.cs;..\examples\DateCalc\MathModule.cs;..\examples\DateCalc\DateCalcEvaluator.cs;..\examples\DateCalc\DateCalcFixes.cs"
           Link="DateCalcLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <!-- The tests' own copy of the example sample: the example is there to be edited. -->
+    <None Include="..\examples\DateCalc\quasiquotation.datecalc" Link="DateCalcLanguage\quasiquotation.datecalc" CopyToOutputDirectory="PreserveNewest" />
     <None Update="DateCalc\sample.datecalc" Link="DateCalcLanguage\sample.datecalc" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

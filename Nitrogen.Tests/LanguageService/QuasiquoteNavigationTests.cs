@@ -119,9 +119,6 @@ public sealed class QuasiquoteNavigationTests : IDisposable
             File.Copy(file, Path.Combine(_root, Path.GetFileName(file)), true);
         string path = Path.Combine(_root, "DateCalc.ngr");
         string text = File.ReadAllText(path);
-        const string alternative = "    | Fortnights = Count:Expr \"fortnights\" precedence 30 rewrites <[ $Count * 2 weeks ]>\n";
-        text = text.Insert(text.IndexOf("    | Days", StringComparison.Ordinal), alternative);
-        File.WriteAllText(path, text);
         using var service = new NitrogenLanguageService(LspCommand.Registry());
         service.ConfigureWorkspace(configured ? _root : Path.GetDirectoryName(_root)!);
         service.Open(Uri("DateCalc.ngr"), 1, text);
