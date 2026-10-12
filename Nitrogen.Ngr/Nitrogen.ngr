@@ -34,7 +34,21 @@ syntax module Nitrogen
   // qualified or used name from another module simply stays unresolved and unreported.
   symbols { module rule property }
 
-  syntax File           = Modules:Module*  lowers Grammar.File(sequence Grammar.Module Modules);
+  syntax File           = Languages:LanguageDeclaration? Modules:Module*  lowers Grammar.File(sequence Grammar.Module Modules, optional Grammar.LanguageDeclaration Languages);
+  syntax LanguageDeclaration = "language" Name:Identifier "{" Settings:LanguageSetting* "}"
+                          lowers Grammar.LanguageDeclaration(text Name, sequence Grammar.LanguageSetting Settings);
+  syntax LanguageSetting = LanguageNameSetting / LanguageStringSetting / LanguageUsingSetting / LanguagePresentationSetting;
+  syntax LanguageNameSetting = Kind:("start" / "namespace") Name:LanguageQualifiedName ";"
+                          lowers Grammar.LanguageNameSetting(text Kind, text Name);
+  syntax LanguageQualifiedName = Name:QualifiedName references? (module | rule) Name lowers text Core.Text Name;
+  syntax LanguageStringSetting = Kind:("grammars" / "sources" / "extensions") Values:(LanguageString; ",")+ ";"
+                          lowers Grammar.LanguageListSetting(text Kind, sequence Core.Text Values);
+  syntax LanguageString = Value:String lowers text Core.Text Value;
+  syntax LanguageUsingSetting = Kind:"usings" Values:(LanguageName; ",")+ ";"
+                          lowers Grammar.LanguageUsingSetting(text Kind, sequence Core.Text Values);
+  syntax LanguageName = Value:QualifiedName lowers text Core.Text Value;
+  syntax LanguagePresentationSetting = Kind:("tokens" / "types") Name:QualifiedName Value:String ";"
+                          lowers Grammar.LanguagePresentationSetting(text Kind, text Name, text Value);
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
                           lowers Grammar.Module(text Name, sequence Grammar.Member Members);
   syntax Member         = Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;

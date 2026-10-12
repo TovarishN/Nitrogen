@@ -15,7 +15,7 @@ public sealed record SignatureReadResult(EquatableArray<DocumentSignature> Signa
 public static class DocumentSignatures
 {
     const string Marker = "#!nitrogen";
-    public const string InvalidSignature = "NGR0301";
+    public const string InvalidSignature = "NGR0401";
 
     public static SignatureReadResult Read(string text)
     {

@@ -1,6 +1,6 @@
 namespace Nitrogen.Grammar;
 
-public sealed record GrammarFile(EquatableArray<ModuleDecl> Modules);
+public sealed record GrammarFile(EquatableArray<ModuleDecl> Modules, EquatableArray<LanguageDecl> Languages = default);
 
 public sealed record ModuleDecl(
     string Name,

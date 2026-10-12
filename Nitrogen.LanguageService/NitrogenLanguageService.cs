@@ -134,6 +134,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     {
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpNameAt(csharp, position) is { } found ? [found.Target] : [];
         if (QuoteAt(uri, position) is { } quote) return QuoteDefinitions(quote, quote.Document.Lines.OffsetOf(position));
+        if (GrammarDeclarationDefinition(uri, position) is { Count: > 0 } declarations) return declarations;
         if (GrammarHelperDefinition(uri, position) is { Count: > 0 } helpers) return helpers;
         if (AssistedNavigation(uri, position) is { } assisted) return assisted.Definitions;
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? Definition(inner.Uri, inner.Position) : [];

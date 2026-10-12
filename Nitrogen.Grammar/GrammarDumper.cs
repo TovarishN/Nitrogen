@@ -5,7 +5,10 @@ namespace Nitrogen.Grammar;
 /// <summary>Canonical S-expression dump of a grammar model, without spans. Used by tests and debugging.</summary>
 public static class GrammarDumper
 {
-    public static string Dump(GrammarFile file) => string.Join("\n", file.Modules.Select(m => Dump(m)));
+    public static string Dump(GrammarFile file) => string.Join("\n",
+        file.Languages.Select(l => "(language " + l.Name + " " + string.Join(" ", l.Settings.Select(s =>
+            "(" + s.Name + " " + string.Join(" ", s.Values.Select(v => Quote(v.Name, '\"'))) + ")")) + ")")
+            .Concat(file.Modules.Select(m => Dump(m))));
 
     public static string Dump(ModuleDecl module)
     {

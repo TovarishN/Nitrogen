@@ -12,6 +12,8 @@ public static class GrammarSemantics
     public static class Types
     {
         public static readonly SemanticType File = Named("File");
+        public static readonly SemanticType LanguageDeclaration = Named("LanguageDeclaration");
+        public static readonly SemanticType LanguageSetting = Named("LanguageSetting");
         public static readonly SemanticType Module = Named("Module");
         public static readonly SemanticType Member = Named("Member");
         public static readonly SemanticType Except = Named("Except");
@@ -32,7 +34,7 @@ public static class GrammarSemantics
 
         internal static readonly SemanticType[] All =
         [
-            File, Module, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
+            File, LanguageDeclaration, LanguageSetting, Module, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
             OperationSpec, LoweringArgument, Semantics, SemanticItem, Expression, Tail, ClassItem,
         ];
 
@@ -50,7 +52,12 @@ public static class GrammarSemantics
 
     static readonly OperationSignature[] s_operations =
     [
-        Op("File", Types.File, Seq(Types.Module)),
+        Op("File", Types.File, Seq(Types.Module), Opt(Types.LanguageDeclaration)),
+        Op("LanguageDeclaration", Types.LanguageDeclaration, Text, Seq(Types.LanguageSetting)),
+        Op("LanguageNameSetting", Types.LanguageSetting, Text, Text),
+        Op("LanguageListSetting", Types.LanguageSetting, Text, Seq(Text)),
+        Op("LanguageUsingSetting", Types.LanguageSetting, Text, Seq(Text)),
+        Op("LanguagePresentationSetting", Types.LanguageSetting, Text, Text, Text),
         Op("Module", Types.Module, Text, Seq(Types.Member)),
         Op("Using", Types.Member, Text),
         Op("Symbols", Types.Member, Seq(Text)),

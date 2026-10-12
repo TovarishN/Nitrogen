@@ -31,6 +31,10 @@ public static class NgrParser
         {
             return new GrammarParseResult(NgrProjector.File(LowerFile(result.Tree)), default);
         }
+        catch (LanguageDeclarationException error)
+        {
+            return Failure(error.Message, error.Span);
+        }
         catch (NgrMappingException error)
         {
             return Failure(error.Message, error.Span);

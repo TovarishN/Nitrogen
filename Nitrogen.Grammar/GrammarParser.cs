@@ -17,6 +17,11 @@ public static class GrammarParser
             var parser = new Parser(text);
             return new GrammarParseResult(parser.ParseFile(), default);
         }
+        catch (LanguageDeclarationException error)
+        {
+            return new GrammarParseResult(null, new[] {
+                new GrammarDiagnostic(GrammarCodes.Syntax, GrammarSeverity.Error, error.Message, error.Span) });
+        }
         catch (GrammarSyntaxException error)
         {
             var diagnostic = new GrammarDiagnostic(GrammarCodes.Syntax, GrammarSeverity.Error, error.Message, error.Span);
@@ -70,9 +75,61 @@ public static class GrammarParser
 
         public GrammarFile ParseFile()
         {
+            var languages = new List<LanguageDecl>();
+            if (AtKeyword("language")) languages.Add(ParseLanguage());
             var modules = new List<ModuleDecl>();
             while (!At(TokenKind.End)) modules.Add(ParseModule());
-            return new GrammarFile(modules.ToArray());
+            return new GrammarFile(modules.ToArray(), languages.ToArray());
+        }
+
+        LanguageDecl ParseLanguage()
+        {
+            int start = ExpectKeyword("language").Start;
+            string name = ExpectIdentifier("a language name");
+            Expect(TokenKind.LBrace, "'{'");
+            var settings = new List<LanguageSetting>();
+            while (!At(TokenKind.RBrace))
+            {
+                var key = Expect(TokenKind.Identifier, "a language setting");
+                var values = new List<NameDecl>();
+                if (key.Value is "start" or "namespace")
+                    ReadName();
+                else if (key.Value is "tokens" or "types")
+                {
+                    ReadName();
+                    ReadString();
+                }
+                else if (key.Value is "grammars" or "sources" or "extensions" or "usings")
+                {
+                    ReadValue();
+                    while (At(TokenKind.Comma))
+                    {
+                        Advance();
+                        ReadValue();
+                    }
+                }
+                else throw new GrammarSyntaxException("unknown language setting '" + key.Value + "'", key.Span);
+                var end = Expect(TokenKind.Semicolon, "';'");
+                settings.Add(new LanguageSetting(key.Value, values.ToArray(), GrammarSpan.FromBounds(key.Start, end.End)));
+
+                void ReadName()
+                {
+                    var token = Current;
+                    values.Add(new NameDecl(ExpectName("a qualified name"), token.Span));
+                }
+                void ReadString()
+                {
+                    var token = Expect(TokenKind.String, "a quoted string");
+                    values.Add(new NameDecl(token.Value, token.Span));
+                }
+                void ReadValue()
+                {
+                    if (key.Value == "usings") ReadName();
+                    else ReadString();
+                }
+            }
+            int finish = Advance().End;
+            return LanguageDeclarations.Build(name, settings.ToArray(), GrammarSpan.FromBounds(start, finish));
         }
 
         ModuleDecl ParseModule()
