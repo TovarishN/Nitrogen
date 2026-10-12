@@ -56,6 +56,9 @@ internal static class NitrogenCli
             return 2;
         }
 
+        if (options.Command == "check" || options.Command == "parse" && (options.Grammars.Count == 0 || DocumentCheckCommand.UsesSignatures(options)))
+            return await DocumentCheckCommand.RunAsync(options, output, cancel);
+
         using var session = new GrammarSession(options, output);
         return options.Command == "parse" ? session.Run() : await WatchAsync(session, output, cancel);
     }
