@@ -6,6 +6,13 @@ public sealed record AnalysisSelection(string Key, LanguageDefinition Definition
 public sealed record SourceProjection(string HostPath, string Text, int HostStart)
 {
     public AnalysisLocation Map(int start, int length) => new(HostPath, HostStart + start, length);
+    public AnalysisIssue Map(AnalysisIssue issue) => issue with
+    {
+        Location = MapLocal(issue.Location),
+        Related = issue.Related.Select(MapLocal).ToArray(),
+    };
+    AnalysisLocation MapLocal(AnalysisLocation location) => location.Path == HostPath
+        ? Map(location.Start, location.Length) : location;
 }
 public sealed record ProjectedInput(AnalysisSelection Selection, SourceProjection Projection);
 public sealed record ProjectionResult(IReadOnlyList<ProjectedInput> Inputs, IReadOnlyList<AnalysisIssue> Diagnostics);

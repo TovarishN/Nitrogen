@@ -1,4 +1,5 @@
 using Nitrogen.Binding;
+using Nitrogen.Grammar;
 using Nitrogen.Semantic;
 using Nitrogen.Semantics;
 
@@ -15,7 +16,7 @@ public sealed class Document : IDisposable
         Language = language;
         Start = start;
         Lines = new LineMap(text);
-        Parsed = language.Language.Parse(text, start);
+        Parsed = language.Language.Parse(DocumentSignatures.Read(text).MaskedText, start);
     }
 
     public string Uri { get; }
@@ -51,10 +52,10 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
 
     public LanguageRegistry Registry { get; } = registry;
 
-    public bool IsOpen(string uri) => _documents.ContainsKey(uri) || _hosts.ContainsKey(uri);
+    public bool IsOpen(string uri) => _documents.ContainsKey(uri) || _hosts.ContainsKey(uri) || _signatureOwnedOpen.Contains(uri);
 
     public int? VersionOf(string uri) =>
-        _hosts.TryGetValue(uri, out var host) ? host.Version : _documents.TryGetValue(uri, out var document) ? document.Version : null;
+        _hosts.TryGetValue(uri, out var host) ? host.Version : _documents.TryGetValue(uri, out var document) ? document.Version : _signatureOwnedOpen.Contains(uri) && _signatureInputs.TryGetValue(uri, out var input) ? (int)input.Version : null;
 
     /// <summary>The current text of an open document, C# host or open file of no served language; null otherwise. Tagged strings are not documents the editor changes.</summary>
     public string? TextOf(string uri) =>
@@ -64,13 +65,13 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         : null;
 
     /// <returns>Every open document whose diagnostics may have changed: this one and the others of its language. Empty when nobody serves the file type.</returns>
-    public IReadOnlyList<string> Open(string uri, int version, string text) => Visible(Update(uri, version, text));
+    public IReadOnlyList<string> Open(string uri, int version, string text) => UpdateWithSignatures(uri, version, text);
 
     /// <inheritdoc cref="Open"/>
-    public IReadOnlyList<string> Change(string uri, int version, string text) => Visible(Update(uri, version, text));
+    public IReadOnlyList<string> Change(string uri, int version, string text) => UpdateWithSignatures(uri, version, text);
 
     /// <returns>The other open documents of the closed document's language, and a grammar's samples when a grammar closes.</returns>
-    public IReadOnlyList<string> Close(string uri)
+    IReadOnlyList<string> CloseCore(string uri)
     {
         if (_hosts.ContainsKey(uri)) return Visible([.. CloseHost(uri), .. GrammarHook(uri)]);
         _inspection.Remove(uri);
@@ -91,7 +92,10 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     }
 
     /// <summary>The diagnostics of an open document, C# host or closed indexed file, or the compile diagnostics of a grammar; empty for any other file.</summary>
-    public IReadOnlyList<ServiceDiagnostic> Diagnostics(string uri)
+    public IReadOnlyList<ServiceDiagnostic> Diagnostics(string uri) =>
+        CoreDiagnostics(uri).Concat(SignedDiagnostics(uri)).DistinctBy(d => (d.Range, d.Code, d.Message)).ToArray();
+
+    IReadOnlyList<ServiceDiagnostic> CoreDiagnostics(string uri)
     {
         if (_hosts.TryGetValue(uri, out var host)) return HostDiagnostics(host);
         // A closed indexed file is checked like an open one; any other closed file has only its grammar compile diagnostics, if it is a grammar.
@@ -394,9 +398,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
 
     IReadOnlyList<string> Update(string uri, int version, string text)
     {
-        if (IsHost(uri)) return [.. UpdateHost(uri, version, text), .. GrammarHook(uri)];
+        if (IsHost(uri) && !_signaturePrimaries.ContainsKey(uri)) return [.. UpdateHost(uri, version, text), .. GrammarHook(uri)];
         _inspection.Remove(uri);
-        if (!Registry.TryFind(uri, out var language, out var start))
+        if (!TryLanguage(uri, out var language, out var start))
         {
             _unserved[uri] = (version, text); // served as soon as a workspace grammar for it compiles
             return [];
@@ -456,6 +460,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
 
     public void Dispose()
     {
+        _documentAnalysis.Dispose();
         _inspection.Clear();
         foreach (var semantics in _semantics.Values) semantics.Dispose();
         _semantics.Clear();

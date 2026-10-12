@@ -1,10 +1,11 @@
+using System.Collections.Concurrent;
 using Nitrogen.Binding;
 using Nitrogen.Grammar;
 using Nitrogen.Semantics;
 
 namespace Nitrogen.Workspace;
 
-public sealed record DocumentAnalysisResult(string Path, long Version, IReadOnlyList<AnalysisIssue> Diagnostics);
+public sealed record DocumentAnalysisResult(string Path, long Version, IReadOnlyList<AnalysisIssue> Diagnostics, ClassificationResult? Classification = null, long Epoch = 0);
 
 /// <summary>Shared checking with collectible compiled languages and explicit source input ownership.</summary>
 public sealed class DocumentAnalysisSession : IDisposable
@@ -13,6 +14,8 @@ public sealed class DocumentAnalysisSession : IDisposable
     readonly DocumentClassifier _classifier;
     readonly Dictionary<string, Compilation> _compiled = new(DefinitionPaths.Comparer);
     readonly SemaphoreSlim _gate = new(1);
+    readonly ConcurrentDictionary<string, long> _epochs = new(DefinitionPaths.Comparer);
+    long _nextEpoch;
     bool _disposed;
 
     public DocumentAnalysisSession(ILanguageDefinitionResolver? resolver = null) =>
@@ -36,6 +39,8 @@ public sealed class DocumentAnalysisSession : IDisposable
 
     public async Task<DocumentAnalysisResult> AnalyzeAsync(DocumentInput input, InputSnapshot inputs, CancellationToken cancellationToken)
     {
+        long epoch = Interlocked.Increment(ref _nextEpoch);
+        _epochs[input.Path] = epoch;
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -43,6 +48,13 @@ public sealed class DocumentAnalysisSession : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             var classification = _classifier.Classify(input, inputs);
             var issues = classification.Diagnostics.ToList();
+            if (DocumentSignatures.Read(input.Text).Signatures.Any(s => s.Mode == SignatureMode.Grammar))
+            {
+                var definition = new LastGoodResolver(inner: new LanguageDefinitionResolver(), compiled: _compiled)
+                    .Resolve(new LanguageReference(input.Path, true), input.Path, inputs);
+                issues.AddRange(definition.Diagnostics);
+                if (definition.Definition is { } grammar) Compile(grammar, inputs, issues);
+            }
             var projections = classification.Regions.ToList();
             foreach (var selection in classification.Selections.Where(s => s.Input == AnalysisInputMode.Document))
                 projections.Add(new(selection, new(input.Path, DocumentSignatures.Read(input.Text).MaskedText, 0)));
@@ -56,22 +68,30 @@ public sealed class DocumentAnalysisSession : IDisposable
                 using var parsed = language.Parse(projection.Projection.Text, start);
                 string source = "nitrogen:" + definition.Name;
                 foreach (var diagnostic in parsed.Diagnostics)
-                    issues.Add(new(diagnostic.Code.ToString(), parsed.FormatMessage(diagnostic),
-                        projection.Projection.Map(diagnostic.Span.Start, diagnostic.Span.Length), [], source, diagnostic.Severity == DiagnosticSeverity.Error));
+                    issues.Add(projection.Projection.Map(new AnalysisIssue(diagnostic.Code.ToString(), parsed.FormatMessage(diagnostic),
+                        new(input.Path, diagnostic.Span.Start, diagnostic.Span.Length), [], source, diagnostic.Severity == DiagnosticSeverity.Error, projection.Selection.Key)));
                 var project = new Project(language);
                 project.Set(input.Path, parsed.Tree);
                 foreach (var diagnostic in project.Diagnostics(input.Path))
-                    issues.Add(new(diagnostic.Code, diagnostic.Message, projection.Projection.Map(diagnostic.Span.Start, diagnostic.Span.Length), [], source, true));
+                    issues.Add(projection.Projection.Map(new AnalysisIssue(diagnostic.Code, diagnostic.Message, new(input.Path, diagnostic.Span.Start, diagnostic.Span.Length), [], source, true, projection.Selection.Key)));
                 var semantics = new ProjectSemantics(project)[input.Path];
                 foreach (var diagnostic in semantics.Diagnostics())
-                    issues.Add(new(diagnostic.Code, diagnostic.Message, projection.Projection.Map(diagnostic.Span.Start, diagnostic.Span.Length), [], source,
-                        !diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal)));
+                    issues.Add(projection.Projection.Map(new AnalysisIssue(diagnostic.Code, diagnostic.Message, new(input.Path, diagnostic.Span.Start, diagnostic.Span.Length), [], source,
+                        !diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal), projection.Selection.Key)));
             }
             cancellationToken.ThrowIfCancellationRequested();
-            return new(input.Path, input.Version, issues.DistinctBy(i => (i.Code, i.Message, i.Location, i.Source)).ToArray());
+            return new(input.Path, input.Version, issues.DistinctBy(i => (i.Code, i.Message, i.Location, i.Source)).ToArray(), classification, epoch);
         }
         finally { _gate.Release(); }
     }
+
+    public bool IsCurrent(DocumentAnalysisResult result) =>
+        !_disposed && _epochs.TryGetValue(result.Path, out long epoch) && epoch == result.Epoch;
+
+    /// <summary>Borrowed by the serial editor adapter; owned and disposed by this session.</summary>
+    internal LanguageDefinition? DefinitionFor(string id) => _compiled.GetValueOrDefault(id)?.Definition;
+
+    internal WorkspaceSnapshot? SnapshotFor(string id) => _compiled.GetValueOrDefault(id)?.Snapshot;
 
     Compilation? Compile(LanguageDefinition definition, InputSnapshot inputs, List<AnalysisIssue> issues)
     {

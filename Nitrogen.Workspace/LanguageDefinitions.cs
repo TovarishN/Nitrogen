@@ -6,7 +6,7 @@ public sealed record DocumentInput(string Path, string Text, long Version);
 public sealed record InputSnapshot(string Root, IReadOnlyDictionary<string, DocumentInput> Files, bool RegisteredInputsOnly);
 public sealed record AnalysisLocation(string Path, int Start, int Length);
 public sealed record AnalysisIssue(string Code, string Message, AnalysisLocation Location,
-    IReadOnlyList<AnalysisLocation> Related, string Source, bool IsError);
+    IReadOnlyList<AnalysisLocation> Related, string Source, bool IsError, string? Layer = null);
 public sealed record LanguageDefinition(string Id, string Name, string Start, string GeneratedNamespace,
     IReadOnlyList<DocumentInput> Grammars, IReadOnlyList<DocumentInput> Sources, IReadOnlyList<string> Usings,
     IReadOnlyList<string> Extensions, IReadOnlyList<LanguagePresentationOption> Presentation);

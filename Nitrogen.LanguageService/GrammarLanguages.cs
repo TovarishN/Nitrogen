@@ -64,11 +64,11 @@ public sealed partial class NitrogenLanguageService
     public IReadOnlyList<string> ConfigureWorkspace(string root)
     {
         _root = Path.GetFullPath(root);
-        return Visible(LoadConfiguration());
+        return Visible(LoadConfiguration().Concat(RefreshSignedDocuments()));
     }
 
     /// <summary>A file changed on disk (<c>workspace/didChangeWatchedFiles</c>): <c>nitrogen.json</c> or a closed grammar.</summary>
-    public IReadOnlyList<string> FileChanged(string path) => Visible(FileChangedCore(path));
+    public IReadOnlyList<string> FileChanged(string path) => Visible(FileChangedCore(path).Concat(RefreshSignedDocuments()));
 
     IReadOnlyList<string> FileChangedCore(string path)
     {
@@ -125,7 +125,9 @@ public sealed partial class NitrogenLanguageService
     {
         if (!System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile) return null;
         string path = Path.GetFullPath(parsed.LocalPath);
-        return _grammarLanguages.FirstOrDefault(l => l.Workspace.Paths.Contains(path, StringComparer.Ordinal))?.Snapshot?.Language?.SemanticCatalog;
+        return _signatureDefinitions.Values.FirstOrDefault(d => d.Grammars.Any(g => g.Path == path)) is { } definition
+            ? _documentAnalysis.SnapshotFor(definition.Id)?.Language?.SemanticCatalog
+            : _grammarLanguages.FirstOrDefault(l => l.Workspace.Paths.Contains(path, StringComparer.Ordinal))?.Snapshot?.Language?.SemanticCatalog;
     }
 
     IReadOnlyList<string> GrammarHook(string uri) =>

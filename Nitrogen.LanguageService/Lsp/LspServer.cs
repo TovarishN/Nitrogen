@@ -439,7 +439,8 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     }
 
     static LspDiagnostic[] Lsp(IEnumerable<ServiceDiagnostic> diagnostics) => diagnostics
-        .Select(d => new LspDiagnostic(Range(d.Range), (int)d.Severity, d.Code, "nitrogen", d.Message))
+        .Select(d => new LspDiagnostic(Range(d.Range), (int)d.Severity, d.Code, d.Source, d.Message,
+            d.Related is { Count: > 0 } ? d.Related.Select(r => new LspDiagnosticRelatedInformation(new(r.Uri, Range(r.Range)), "related source")).ToArray() : null))
         .ToArray();
 
     /// <summary>

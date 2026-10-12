@@ -30,6 +30,18 @@ public sealed class SourceProjectionTests
     }
 
     [Fact]
+    public void Related_body_locations_map_but_foreign_locations_stay_original()
+    {
+        var projection = new SourceProjection("Host.cs", "bad other", 40);
+        var issue = new AnalysisIssue("X", "bad", new("Host.cs", 0, 3),
+            new[] { new AnalysisLocation("Host.cs", 4, 5), new AnalysisLocation("Other.cs", 7, 2) }, "nitrogen", true);
+        var mapped = projection.Map(issue);
+        Assert.Equal(new AnalysisLocation("Host.cs", 40, 3), mapped.Location);
+        Assert.Equal(new AnalysisLocation("Host.cs", 44, 5), mapped.Related[0]);
+        Assert.Equal(new AnalysisLocation("Other.cs", 7, 2), mapped.Related[1]);
+    }
+
+    [Fact]
     public void Multiple_regions_keep_distinct_offsets_and_keys()
     {
         const string region = "/* #!nitrogen region \"./Calc.syntax\"\nbad\n#!nitrogen end\n*/";

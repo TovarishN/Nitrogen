@@ -16,7 +16,7 @@ internal sealed class GrammarHelperSourceIndex
         IReadOnlyList<string> sources, string generatedNamespace, IReadOnlyList<string> usings)
     {
         var generated = GrammarCompiler.Compile(grammars.Where(texts.ContainsKey)
-            .Select(path => new GrammarInput(path, texts[path], generatedNamespace)));
+            .Select(path => new GrammarInput(path, DocumentSignatures.Read(texts[path]).MaskedText, generatedNamespace)));
         if (generated.HasErrors) return;
         var options = new CSharpParseOptions(LanguageVersion.Latest);
         var generatedTrees = generated.Sources.Select(source => CSharpSyntaxTree.ParseText(source.Code, options, source.HintName)).ToArray();

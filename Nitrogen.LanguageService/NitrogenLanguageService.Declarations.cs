@@ -7,7 +7,7 @@ public sealed partial class NitrogenLanguageService
     IReadOnlyList<DocumentLocation> GrammarDeclarationDefinition(string uri, DocumentPosition position)
     {
         if (!TryDocument(uri, out var document) || document.Language.Name != "ngr") return [];
-        var file = GrammarParser.Parse(document.Text).File;
+        var file = GrammarParser.Parse(DocumentSignatures.Read(document.Text).MaskedText).File;
         if (file is null) return [];
         int offset = document.Lines.OffsetOf(position);
         foreach (var declaration in file.Languages)

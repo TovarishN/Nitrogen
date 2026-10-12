@@ -23,7 +23,10 @@ public sealed record DidChangeTextDocumentParams(VersionedTextDocumentIdentifier
 
 public sealed record DidCloseTextDocumentParams(TextDocumentIdentifier TextDocument);
 
-public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, string Source, string Message);
+public sealed record LspDiagnosticRelatedInformation(LspLocation Location, string Message);
+
+public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, string Source, string Message,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LspDiagnosticRelatedInformation[]? RelatedInformation = null);
 
 public sealed record PublishDiagnosticsParams(string Uri, int? Version, LspDiagnostic[] Diagnostics);
 
