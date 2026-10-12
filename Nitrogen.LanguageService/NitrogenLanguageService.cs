@@ -134,6 +134,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     {
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpNameAt(csharp, position) is { } found ? [found.Target] : [];
         if (QuoteAt(uri, position) is { } quote) return QuoteDefinitions(quote, quote.Document.Lines.OffsetOf(position));
+        if (GrammarHelperDefinition(uri, position) is { Count: > 0 } helpers) return helpers;
         if (AssistedNavigation(uri, position) is { } assisted) return assisted.Definitions;
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? Definition(inner.Uri, inner.Position) : [];
         return NameAt(uri, position) is { } name ? name.Symbols.Where(s => !s.IsBuiltin).Select(LocationOf).Select(OutOf).ToList() : [];
@@ -463,6 +464,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         _documents.Clear();
         DisposeClosed();
         _sourceIndexes.Clear();
+        _helperIndexes.Clear();
         DisposeGrammars();
         foreach (var cached in _quoteLanguages.Values) cached.Snapshot?.Dispose();
         _quoteLanguages.Clear();

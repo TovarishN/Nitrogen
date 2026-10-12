@@ -2,7 +2,8 @@ namespace Nitrogen.LanguageService;
 
 public sealed partial class NitrogenLanguageService
 {
-    sealed record NavigationScope(string Key, IReadOnlyList<string> Grammars, IReadOnlyList<string> Sources);
+    sealed record NavigationScope(string Key, IReadOnlyList<string> Grammars, IReadOnlyList<string> Sources,
+        string GeneratedNamespace = Nitrogen.Workspace.GrammarWorkspace.Namespace, IReadOnlyList<string>? Usings = null);
 
     readonly Dictionary<string, (Dictionary<string, string> Texts, SemanticSourceIndex Index)> _sourceIndexes = new(StringComparer.Ordinal);
 
@@ -34,6 +35,8 @@ public sealed partial class NitrogenLanguageService
         var entries = SourcesFor(scope).Entries.Where(e => SameName(e.Name, name)).ToList();
         // Unqualified types are allowed only when their short name has one identity in this source scope.
         if (!name.Id.Contains('.') && entries.Select(e => e.Name.Id).Distinct().Take(2).Count() > 1) return (scope, name, []);
+        if (entries.Count == 0 && name.Kind == AssistNameKind.Type && BuiltinTypeSources.Definition(name.Id) is { } builtin)
+            return (scope, name, [builtin]);
         if (entries.Count > 0) name = name with { Id = entries[0].Name.Id };
         return (scope, name, entries.Select(e => SourceLocation(e.Path, e.Name.Span)).Distinct().ToArray());
     }
@@ -109,7 +112,7 @@ public sealed partial class NitrogenLanguageService
     {
         foreach (var language in _grammarLanguages)
             if (language.Files().Contains(path, StringComparer.Ordinal) || language.SourceFiles().Contains(path, StringComparer.Ordinal))
-                return new NavigationScope("language:" + language.Name, language.Files(), language.SourceFiles());
+                return new NavigationScope("language:" + language.Name, language.Files(), language.SourceFiles(), language.Workspace.GeneratedNamespace, language.Usings);
         string? directory = Path.GetDirectoryName(path);
         if (directory is null || !Directory.Exists(directory)) return null;
         string project = directory;

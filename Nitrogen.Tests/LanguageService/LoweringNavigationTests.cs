@@ -120,6 +120,23 @@ public sealed class LoweringNavigationTests : IDisposable
         Assert.Equal(At(helpers, "\"Custom\""), location.Range.Start);
     }
 
+    [Theory]
+    [InlineData("Core.Scalar", "Scalar")]
+    [InlineData("Core.Bool", "Bool")]
+    [InlineData("Core.Text", "Text")]
+    [InlineData("Units.Angle", "Angle")]
+    public void Builtin_types_navigate_to_the_shipped_runtime_source(string type, string field)
+    {
+        using var service = Service();
+        string grammar = $"syntax module M {{ token Id = ['a'..'z']+; syntax R = Value:Id lowers literal {type} Value; }}";
+        service.Change(Uri("M.ngr"), 2, grammar);
+        var location = Assert.Single(service.Definition(Uri("M.ngr"), At(grammar, type, 2)));
+        string source = File.ReadAllText(new System.Uri(location.Uri).LocalPath);
+        Assert.Contains("public static class SemanticTypes", source);
+        Assert.Equal(At(source, field + " ="), location.Range.Start);
+        Assert.Equal(field.Length, location.Range.End.Character - location.Range.Start.Character);
+    }
+
     [Fact]
     public void The_actual_self_hosted_lowers_clause_navigates_to_GrammarSemantics()
     {

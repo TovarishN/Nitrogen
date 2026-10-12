@@ -6,6 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Keep built-in navigation available in installed/published servers without a repository checkout. -->
+    <EmbeddedResource Include="../Nitrogen.Runtime/Semantic/SemanticType.cs" LogicalName="Navigation.SemanticType.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Nitrogen.Runtime\Nitrogen.Runtime.csproj" />
     <ProjectReference Include="..\Nitrogen.Workspace\Nitrogen.Workspace.csproj" />
   </ItemGroup>

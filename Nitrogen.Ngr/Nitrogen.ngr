@@ -93,9 +93,10 @@ syntax module Nitrogen
   syntax LowersValue    = "value" Type:(ComputedType / FixedType) Field:Identifier  lowers Grammar.LowersValue(Type, text Field);
   syntax ComputedType   = "type" Property:Identifier  lowers Grammar.ComputedType(text Property);
   syntax FixedType      = Name:QualifiedName  lowers Grammar.FixedType(text Name);
-  syntax LowersReference = "reference" "type" Property:Identifier Initializer:InitializerSpec?
+  syntax LowersReference = "reference" "type" Property:PropertyReference Initializer:InitializerSpec?
                           lowers Grammar.LowersReference(text Property, optional Core.Text Initializer);
-  syntax InitializerSpec = "initializer" Name:Identifier  lowers text Core.Text Name;
+  syntax InitializerSpec = "initializer" Name:PropertyReference  lowers text Core.Text Name;
+  syntax PropertyReference = Name:Identifier  references? property Name  lowers text Core.Text Name;
   syntax LowersCall     = Operation:(ComputedOperation / FixedOperation) "(" Arguments:(LowersArgument; ",")* Close:")"
                           lowers Grammar.LowersCall(Operation, sequence Grammar.LoweringArgument Arguments);
   syntax ComputedOperation = "operation" Question:"?"? Property:Identifier  lowers Grammar.ComputedOperation(optional text Question, text Property);

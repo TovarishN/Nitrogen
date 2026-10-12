@@ -61,8 +61,8 @@ KindGroup: "(" Kinds:(Word; "|")+ ")"
   2 ")"  static  insert {":", Identifier}  sync {")"} @2, {Identifier} @1
 Lowers: "lowers" Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall)
   1 Form:(LowersLiteral / LowersText / LowersSequence / LowersValue / LowersReference / LowersRepeat / LowersTemplate / LowersExpand / LowersCall)  static  insert {";", "declares", "dynamic", "lowers", "references", "rewrites", "scope", "{", "|", "}"}  sync {"expand", "literal", "operation", "reference", "repeat", "sequence", "template", "text", "value", DottedName, Identifier} @1
-InitializerSpec: "initializer" Name:Identifier
-  1 Name:Identifier  static  insert {";", "declares", "dynamic", "lowers", "references", "rewrites", "scope", "{", "|", "}"}  sync {Identifier} @1
+InitializerSpec: "initializer" Name:PropertyReference
+  1 Name:PropertyReference  static  insert {";", "declares", "dynamic", "lowers", "references", "rewrites", "scope", "{", "|", "}"}  sync {Identifier} @1
 LowersCall: Operation:(ComputedOperation / FixedOperation) "(" Arguments:(LowersArgument; ",")* Close:")"
   1 "("  static  insert {")", "optional", "sequence", "text", Identifier}  sync {"("} @1, {"optional", "sequence", "text", Identifier} @2, {")"} @3
   3 Close:")"  static  insert {";", "declares", "dynamic", "lowers", "references", "rewrites", "scope", "{", "|", "}"}  sync {")"} @3, {"optional", "sequence", "text", Identifier} @2
