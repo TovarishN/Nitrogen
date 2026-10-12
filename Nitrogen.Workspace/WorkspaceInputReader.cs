@@ -68,7 +68,9 @@ public static class WorkspaceInputReader
                 path = Path.GetFullPath(path);
                 var info = new FileInfo(path);
                 if (!info.Exists || info.Length > MaxFileBytes) return false;
-                string text = File.ReadAllText(path, new UTF8Encoding(false, true));
+                // Unix FIFOs (including .NET debug pipes) report zero length but block on open.
+                // Empty candidates have no source text; retain empty regular files without opening either.
+                string text = info.Length == 0 ? "" : File.ReadAllText(path, new UTF8Encoding(false, true));
                 if (text.Contains('\0')) return false;
                 files[path] = new(path, text, info.LastWriteTimeUtc.Ticks);
                 return true;

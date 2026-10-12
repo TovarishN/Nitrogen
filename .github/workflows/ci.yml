@@ -24,10 +24,12 @@ jobs:
       - run: python3 eng/test-build-identity.py
       - run: dotnet build Nitrogen.slnx -warnaserror
       - run: dotnet Nitrogen.Cli/bin/Debug/net10.0/nitrogen.dll --version
-      - run: >-
+      - timeout-minutes: 4
+        run: >-
           dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build
           --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type mini
           --logger "console;verbosity=normal" --logger trx --results-directory TestResults
+          --diag TestResults/vstest.log
       - uses: actions/upload-artifact@v7
         if: failure() || cancelled()
         with:

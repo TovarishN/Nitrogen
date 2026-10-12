@@ -37,7 +37,8 @@ step "Build and test Nitrogen $version"
 dotnet build "$root/Nitrogen.slnx" -c Release -warnaserror -p:Version="$version"
 dotnet test "$root/Nitrogen.Tests/Nitrogen.Tests.csproj" -c Release --no-build \
     --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type mini \
-    --logger "console;verbosity=normal" --logger trx --results-directory "$artifacts/test-results"
+    --logger "console;verbosity=normal" --logger trx --results-directory "$artifacts/test-results" \
+    --diag "$artifacts/test-results/vstest.log"
 nitrogen=(dotnet "$root/Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll")
 identity="$("${nitrogen[@]}" --version)"
 step "Build identity: $identity"
