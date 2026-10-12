@@ -98,6 +98,33 @@ public sealed unsafe class ScopesModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Scopes.File", "Scopes.Unit", "Scopes.Item", "Scopes.Sequential", "Scopes.SequentialExport", "Scopes.Global", "Scopes.GlobalGen", "Scopes.Let", "Scopes.Use", "Scopes.Block", "Scopes.Gen", "Scopes.GenName", "Scopes.Expr" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] {  },
+        2 => new string[] {  },
+        3 => new string[] {  },
+        4 => new string[] {  },
+        5 => new string[] { "Scopes.File" },
+        6 => new string[] { "Scopes.Unit" },
+        7 => new string[] { "Scopes.Item", "Scopes.Sequential" },
+        8 => new string[] { "Scopes.Item", "Scopes.SequentialExport" },
+        9 => new string[] { "Scopes.Item", "Scopes.Global" },
+        10 => new string[] { "Scopes.Item", "Scopes.GlobalGen" },
+        11 => new string[] { "Scopes.Item", "Scopes.Let" },
+        12 => new string[] { "Scopes.Item", "Scopes.Use" },
+        13 => new string[] { "Scopes.Item", "Scopes.Block" },
+        14 => new string[] { "Scopes.Item", "Scopes.Gen" },
+        15 => new string[] { "Scopes.GenName" },
+        16 => new string[] { "Scopes.Expr" },
+        17 => new string[] { "Scopes.Expr" },
+        18 => new string[] { "Scopes.Expr" },
+        19 => new string[] { "Scopes.Expr" },
+        20 => new string[] { "Scopes.Expr" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static readonly global::Nitrogen.Binding.BindingRule?[] s_bindings =
     {
         null,
@@ -1007,13 +1034,13 @@ public sealed unsafe class ScopesModule : SyntaxModule
             var m = s.Mark();
             s.SkipTrivia();
             int before = s.Position;
-            if (!ParseUnit(ref s) || s.Position == before)
+            if (!(s.InTemplate && s.TryListHole("Scopes.Unit") || ParseUnit(ref s)) || s.Position == before)
             {
                 s.Reset(m);
                 break;
             }
         }
-        s.Close();
+        s.CloseTemplateList("Scopes.Unit", 0, null);
         return true;
     }
 
@@ -1052,14 +1079,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
             var m = s.Mark();
             s.SkipTrivia();
             int before = s.Position;
-            if (!ParseItem(ref s) || s.Position == before)
+            if (!(s.InTemplate && s.TryListHole("Scopes.Item") || ParseItem(ref s)) || s.Position == before)
             {
                 s.Reset(m);
                 if (s.Recovering && s.RecoverInList(s_repair2)) continue;
                 break;
             }
         }
-        s.Close();
+        s.CloseTemplateList("Scopes.Item", 0, null);
         return true;
     }
 
@@ -1235,14 +1262,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
             var m = s.Mark();
             s.SkipTrivia();
             int before = s.Position;
-            if (!ParseItem(ref s) || s.Position == before)
+            if (!(s.InTemplate && s.TryListHole("Scopes.Item") || ParseItem(ref s)) || s.Position == before)
             {
                 s.Reset(m);
                 if (s.Recovering && s.RecoverInList(s_repair22)) continue;
                 break;
             }
         }
-        s.Close();
+        s.CloseTemplateList("Scopes.Item", 0, null);
         return true;
     }
 
@@ -1288,7 +1315,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     static bool P4(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
-        if (s.ParseExtensible(Instance.Expr, 0))
+        if ((s.InTemplate && s.TryListHole("Scopes.Expr") || s.ParseExtensible(Instance.Expr, 0)))
         {
             while (true)
             {
@@ -1300,14 +1327,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
                     break;
                 }
                 s.SkipTrivia();
-                if (!s.ParseExtensible(Instance.Expr, 0))
+                if (!(s.InTemplate && s.TryListHole("Scopes.Expr") || s.ParseExtensible(Instance.Expr, 0)))
                 {
                     s.Reset(m);
                     break;
                 }
             }
         }
-        s.Close();
+        s.CloseTemplateList("Scopes.Expr", 0, ",");
         return true;
     }
 

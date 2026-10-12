@@ -35,6 +35,10 @@ public sealed class SyntaxTree : IDisposable
         _skippedCount = skippedCount;
     }
 
+    internal IReadOnlyDictionary<int, TemplateListShape> TemplateLists { get; init; } = new Dictionary<int, TemplateListShape>();
+
+    internal Guid? QuotationIdentity { get; set; }
+
     public string Text { get; }
 
     public Language? Language { get; }

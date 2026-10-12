@@ -54,6 +54,8 @@ public static class GrammarCodes
     public const string HoleNotARule = "NGR0136";
     public const string TemplateDoesNotParse = "NGR0137";
     public const string TemplateDeclares = "NGR0138";
+    public const string HoleShapeMismatch = "NGR0139";
+    public const string UnsupportedHoleShape = "NGR0140";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

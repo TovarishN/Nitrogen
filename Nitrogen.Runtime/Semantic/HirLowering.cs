@@ -135,7 +135,7 @@ public static class HirLowering
     }
 
     public static LoweringResult Lower(FileSemantics file, SemanticCatalog catalog) =>
-        Lower(file, catalog, Guid.NewGuid());
+        Lower(file, catalog, file.Tree.QuotationIdentity ?? Guid.NewGuid());
 
     /// <summary>Lower selected declarative syntax kinds in source order, without adding registered
     /// roots from other language regions. Unsupported selected nodes receive a diagnostic.</summary>

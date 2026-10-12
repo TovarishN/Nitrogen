@@ -49,6 +49,7 @@ internal static class TreeFreezer
         // Preorder copy. Each node reserves one contiguous child slice; its children fill their
         // slots when they are visited. A Missing node keeps its diagnostic text index in the arena's
         // ChildStart; a Skipped marker child becomes a repair and flags its parent.
+        var listShapes = new Dictionary<int, TemplateListShape>();
         int next = 0, cursor = 0;
         Push(a, ref sp, root, -1);
         while (sp > 0)
@@ -56,6 +57,7 @@ internal static class TreeFreezer
             sp--;
             int old = a.ScratchNode[sp], slot = a.ScratchSlot[sp];
             int n = next++;
+            if (a.TemplateLists?.TryGetValue(old, out var shape) == true) listShapes[n] = shape;
             kind[n] = a.Kind[old];
             start[n] = a.Start[old];
             length[n] = a.Length[old];
@@ -113,7 +115,7 @@ internal static class TreeFreezer
         }
 
         return new SyntaxTree(text, language, next, kind, start, length, flags,
-            childStart, childCount, children, trivia, triviaCount, skipped, skippedCount);
+            childStart, childCount, children, trivia, triviaCount, skipped, skippedCount) { TemplateLists = listShapes };
     }
 
     public static SyntaxTree ErrorTree(string text, Language? language)

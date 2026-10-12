@@ -35,6 +35,14 @@ public sealed unsafe class ClashModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Expr" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] { "Calc.Expr" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static bool Fail(ref ParserState s, scoped in ParseMark mark)
     {
         s.Reset(mark);
@@ -102,7 +110,7 @@ public sealed unsafe class ClashModule : SyntaxModule
     static bool P1(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
-        if (s.ParseExtensible(CalcModule.Instance.Expr, 0))
+        if ((s.InTemplate && s.TryListHole("Calc.Expr") || s.ParseExtensible(CalcModule.Instance.Expr, 0)))
         {
             while (true)
             {
@@ -114,14 +122,14 @@ public sealed unsafe class ClashModule : SyntaxModule
                     break;
                 }
                 s.SkipTrivia();
-                if (!s.ParseExtensible(CalcModule.Instance.Expr, 0))
+                if (!(s.InTemplate && s.TryListHole("Calc.Expr") || s.ParseExtensible(CalcModule.Instance.Expr, 0)))
                 {
                     s.Reset(m);
                     break;
                 }
             }
         }
-        s.Close();
+        s.CloseTemplateList("Calc.Expr", 0, ",");
         return true;
     }
 

@@ -80,10 +80,13 @@ internal sealed class BuildArena
     public int[] ScratchNode = new int[64];
     public int[] ScratchSlot = new int[64];
 
+    internal Dictionary<int, TemplateListShape>? TemplateLists;
+
     public BuildArena() => Clear();
 
     public void Clear()
     {
+        TemplateLists?.Clear();
         NodeCount = ChildLogCount = ChildStackCount = FrameCount = 0;
         MemoWrites = MemoHits = MemoMisses = 0;
         FurthestPosition = -1;
@@ -102,6 +105,7 @@ internal sealed class BuildArena
     {
         if (NodeCount == Kind.Length) GrowNodes();
         int n = NodeCount++;
+        TemplateLists?.Remove(n);
         Kind[n] = kind;
         Start[n] = start;
         Length[n] = length;

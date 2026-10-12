@@ -4,7 +4,7 @@ namespace Nitrogen.LanguageService;
 
 /// <summary>
 /// What a language's editor knows beyond its grammar's binding, semantics and lowering: colour,
-/// completion, hover and diagnostics for text those do not describe, such as the lowering clauses of a
+/// completion, hover, navigation and diagnostics for text those do not describe, such as the lowering clauses of a
 /// .ngr grammar. Offsets are UTF-16 offsets into the document; the service maps them to positions.
 /// Its tokens and hover win over the generic ones; its completions come first.
 /// </summary>
@@ -17,6 +17,10 @@ public interface ILanguageAssist
     AssistHover? Hover(AssistDocument document, int offset);
 
     IEnumerable<AssistDiagnostic> Diagnostics(AssistDocument document);
+
+    /// <summary>References outside the grammar's binding model, identified by their semantic catalog ID.</summary>
+    IEnumerable<AssistName> NavigationNames(AssistDocument document) => [];
+
 }
 
 /// <param name="Catalog">The semantic catalog the document's text refers to: for a grammar of a workspace language, that language's last good catalog; null otherwise.</param>
@@ -29,3 +33,7 @@ public sealed record AssistCompletion(string Label, CompletionKind Kind, string 
 public sealed record AssistHover(string Markdown, TextSpan Span);
 
 public sealed record AssistDiagnostic(TextSpan Span, ServiceSeverity Severity, string Code, string Message);
+
+public enum AssistNameKind { Operation, Type }
+
+public sealed record AssistName(TextSpan Span, string Id, AssistNameKind Kind);

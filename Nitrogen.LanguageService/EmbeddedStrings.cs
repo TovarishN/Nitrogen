@@ -12,12 +12,31 @@ namespace Nitrogen.LanguageService;
 /// </summary>
 internal sealed record EmbeddedString(string Tag, string Value, int[] Map, int End)
 {
+    internal sealed record Part(int ValueStart, int[] Map);
+    internal IReadOnlyList<Part>? Parts { get; init; }
+    internal IEnumerable<Part> SourceParts => Parts ?? [new Part(0, Map)];
+
+    internal TextSpan? SourceSpan(TextSpan value)
+    {
+        foreach (var part in SourceParts)
+            if (value.Start >= part.ValueStart && value.End < part.ValueStart + part.Map.Length)
+            {
+                int from = part.Map[value.Start - part.ValueStart], to = part.Map[value.End - part.ValueStart];
+                return new(from, to - from);
+            }
+        return null; // One editor replacement cannot span independent C# literals.
+    }
+
     /// <summary>The value offset at a source offset, or null when the offset is outside the value.</summary>
     public int? ValueOffset(int source)
     {
-        if (source < Map[0] || source > Map[^1]) return null;
-        int index = Array.BinarySearch(Map, source);
-        return index >= 0 ? index : ~index; // inside an escape: the character it spells
+        foreach (var part in SourceParts)
+        {
+            if (source < part.Map[0] || source > part.Map[^1]) continue;
+            int index = Array.BinarySearch(part.Map, source);
+            return part.ValueStart + (index >= 0 ? index : ~index);
+        }
+        return null;
     }
 }
 
@@ -85,6 +104,9 @@ internal static partial class EmbeddedStrings
         }
         return found;
     }
+
+    internal static EmbeddedString? Decode(string text, int start) => Literal(text, start) is { Value: { } value } literal
+        ? new EmbeddedString("quote", value.Text, value.Map, literal.End) : null;
 
     static string? Tag(string comment) => TagPattern().Match(comment) is { Success: true } match ? match.Groups[1].Value : null;
 

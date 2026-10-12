@@ -112,6 +112,97 @@ Limits of this version:
   it; otherwise it parses as the rule itself, so it can only be a hole or a use of the same rule. List
   such a rule in one alias.
 
+## List splices and C# syntax quotation
+
+A list-valued field is inserted with `..$Args`. For example, in a language whose `Expr` category has
+`f(...)` calls:
+
+```text
+| Forward = "forward" "(" Args:(Expr; ";")* ")"
+    rewrites <[ f(1, ..$Args, 2) ]>
+```
+
+`forward(3; 4)` expands to the syntax of `f(1, 3, 4, 2)`. The destination supplies the commas;
+source separators are not copied. An empty splice disappears along with its boundary separator.
+Several splices, including repeated uses of one field, are allowed. An empty `*` list is valid;
+an empty `+` result reports NH0010 at the rewrite use. Fixed destination items can satisfy `+`
+even when a splice is empty. Inserted items keep their original semantic evaluation and diagnostics.
+
+Supported source fields and destinations are direct syntax references in `Expr*`, `Expr+`,
+`(Expr; ",")*`, and `(Expr; ",")+`. Imported and alias categories work through the grammar resolver.
+Optional fields, token elements, tuple elements, and nonliteral separators are excluded. A scalar
+field used with `..$`, or a list field used with `$`, reports NGR0139; unsupported list fields report
+NGR0140. Placeholder occurrences are confirmed by parsing the template, so dollar text inside
+opaque tokens and comments remains ordinary text.
+
+C# helpers use the same parser through `Language.CompileQuote`. No C# preprocessing is required.
+The following assumes `language` contains the `QuoteLists.Expr` grammar used by the quotation tests:
+
+```csharp
+using Nitrogen;
+using Nitrogen.Binding;
+using Nitrogen.Semantic;
+using Nitrogen.Semantics;
+
+using var input = language.ParseTemplate("1 + 2", "QuoteLists.Expr",
+    new Dictionary<string, string>());
+using var compiled = language.CompileQuote("QuoteLists.Expr", """f(..$Args, $Value * 2)""",
+    new Dictionary<string, QuoteHole>
+    {
+        ["Args"] = QuoteHole.List("QuoteLists.Expr"),
+        ["Value"] = QuoteHole.Node("QuoteLists.Expr"),
+    });
+if (!input.Success || !compiled.Success)
+    return; // Report the input/compilation diagnostics.
+
+using var result = compiled.Template!.Instantiate(new Dictionary<string, QuoteArgument>
+{
+    ["Args"] = QuoteArgument.List(Array.Empty<QuoteNode>()),
+    ["Value"] = QuoteArgument.Node(new QuoteNode(input.Tree, input.Tree.Root)),
+});
+if (!result.Success)
+    return; // Report result.Diagnostics.
+
+var project = new Project(language);
+project.Set("generated.quote", result.Tree!);
+using var semantics = new ProjectSemantics(project);
+var lowered = HirLowering.Lower(semantics["generated.quote"], language.SemanticCatalog);
+var mapped = result.Remap(lowered);
+```
+
+The inserted addition remains one operand of multiplication. Construction copies the tree structure;
+it never substitutes text and reparses it. `Tree.Text` is a synthesized coordinate buffer, **not a
+round-trip syntax printer**: an inserted addition's text need not gain parentheses even though its
+structural precedence remains intact. Node spans index that buffer. Internal operand trivia is kept;
+expanded lists use deterministic separators and spaces.
+
+The compilation owns the parsed template until it is disposed. Each instantiation owns fresh storage
+and survives disposal of the compilation and source trees. Keep a result alive while a destination
+project uses its tree; dispose it afterwards. All declared hole arguments are required, even if a
+particular template does not use one. Dictionaries and input lists are copied when consumed.
+Invalid arguments return diagnostics and no partial tree: NQ0002 for names/shapes, NQ0003 for invalid,
+disposed, recovered or ambiguous nodes, NQ0004 for category/language snapshot mismatches, and NQ0005
+for empty required lists. Malformed templates/unsupported categories report NQ0001; template-authored
+declarations report NQ0006. Handwritten modules must provide quotation category metadata.
+
+Inserted names bind freshly through the destination `Project`; construction captures no symbols and
+performs no automatic binding, checking or execution. A `QuoteNode` can carry an explicit `SourceOrigin`.
+`result.Origins`, `MapOrigin`, `MapRange(generatedPath, span)` and `Remap(lowered)` expose those identities.
+Descendants conservatively map to the supplied subtree identity; offsets and descendant identities
+are not invented. Locations without supplied identities stay in the generated document. Use the
+`QuoteOptions` overload for an explicit template identity. Default lowering uses the constructed
+tree's identity; lowering with a custom snapshot ID uses `Remap(lowered, generatedPath, snapshotId)`.
+
+Grammar quotes offer definition/declaration, hover, usages and completion on scalar/list fields and
+syntax keywords. In C# helpers, the server recognizes the actual `Language.CompileQuote` method,
+constant categories/templates, and inline `Dictionary<string, QuoteHole>` initializers using
+`QuoteHole.Node`/`List`. Regular, verbatim and raw strings, named arguments and constant concatenations
+are supported. Each editable range stays within one C# literal. Dynamic templates/dictionaries and
+ambiguous workspace language categories receive no guessed interpretation.
+
+The executable examples are covered by `QuoteApiTests`, `QuoteOwnershipTests`, `QuoteOriginTests`,
+`TemplateListInstantiationTests`, and the grammar/C# quotation navigation tests.
+
 ## Editor support for lowered languages
 
 The language server uses what a document lowers to as well as its syntax:

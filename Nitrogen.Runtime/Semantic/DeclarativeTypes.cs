@@ -563,6 +563,11 @@ public sealed class DeclarativeTypes
         }
         if (_file.Instance(node) is not { } instance)
         {
+            if (_file.RewriteError(node) is { } error)
+            {
+                context.Report(error.Code == "NQ0005" ? "NH0010" : "NH0009", use, error.Message);
+                return null;
+            }
             string reason = _file.Tree.Language!.RewriteTemplate(rule).Error ?? "it has no template";
             context.Report("NH0009", use, $"This rule's rewrite template can't be used: {reason}.");
             return null;

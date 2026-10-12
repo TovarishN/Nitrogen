@@ -25,7 +25,9 @@ public static class SyntaxKinds
     /// <summary>A template's hole (<c>$Name</c>): a leaf standing for a node of the rule the hole names (spec: quasiquote rewrites).</summary>
     public const int Hole = 8;
 
-    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole"];
+    public const int ListHole = 9;
+
+    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole", "ListHole"];
 
     public static int ModuleOf(int kind) => kind >>> 16;
 

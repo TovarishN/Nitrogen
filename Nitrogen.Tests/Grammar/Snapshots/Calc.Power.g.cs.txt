@@ -35,6 +35,14 @@ public sealed unsafe class PowerModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Expr" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] { "Calc.Expr" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static bool Fail(ref ParserState s, scoped in ParseMark mark)
     {
         s.Reset(mark);

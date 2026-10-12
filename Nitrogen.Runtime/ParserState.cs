@@ -10,7 +10,7 @@ public readonly record struct ParseMark(
 /// elements (calling <see cref="SkipTrivia"/> between elements of a <c>syntax</c> rule), and
 /// either closes and returns true, or resets to its mark and returns false.
 /// </summary>
-public unsafe ref struct ParserState
+public unsafe ref partial struct ParserState
 {
     readonly ReadOnlySpan<char> _text;
     readonly delegate*<ReadOnlySpan<char>, int, int> _trivia;
@@ -22,7 +22,7 @@ public unsafe ref struct ParserState
     internal Language? Language { get; init; }
 
     /// <summary>A template parse's holes: hole name → qualified rule (spec: quasiquote rewrites). Null in a normal parse, so a normal parse never matches one.</summary>
-    internal IReadOnlyDictionary<string, string>? Holes { get; init; }
+    internal IReadOnlyDictionary<string, QuoteHole>? Holes { get; init; }
 
     /// <summary>The extension point a template parse starts at, when its category is an extensible rule.</summary>
     internal ExtensionPointDecl? TemplateStart { get; init; }
@@ -45,7 +45,7 @@ public unsafe ref struct ParserState
         if (at >= _text.Length || _text[at] != '$') return false;
         int end = at + 1;
         while (end < _text.Length && IsIdentifierPart(_text[end])) end++;
-        if (end == at + 1 || !Holes!.TryGetValue(_text[(at + 1)..end].ToString(), out var holeRule) || holeRule != rule) return false;
+        if (end == at + 1 || !Holes!.TryGetValue(_text[(at + 1)..end].ToString(), out var holeRule) || (holeRule.IsList || holeRule.Category != rule)) return false;
         Position = at;
         PushLeaf(SyntaxKinds.Hole, end);
         return true;

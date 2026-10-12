@@ -396,16 +396,23 @@ public static class GrammarValidator
                     Report(GrammarCodes.InvalidTemplateClause,
                         $"an expansion needs a references clause on its field '{clause.Field}'", clause.FieldSpan, module);
                 if (clause.Kind == BindingClauseKind.Rewrites)
-                    foreach (System.Text.RegularExpressions.Match hole in System.Text.RegularExpressions.Regex.Matches(clause.Target!.Name, @"\$([A-Za-z_][A-Za-z0-9_]*)"))
+                    foreach (var hole in QuotationWriter.Holes(clause.Target!.Name, _analysis, QuotationWriter.Category(_analysis, module, owner, implicitModule)))
                     {
-                        string name = hole.Groups[1].Value;
-                        var span = new GrammarSpan(clause.Target.Span.Start + hole.Index, hole.Length);
+                        string name = hole.Name;
+                        var span = new GrammarSpan(clause.Target.Span.Start + hole.Start, hole.Length);
                         var field = SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>().FirstOrDefault(element => element.Label == name);
                         if (field is null)
                             Report(GrammarCodes.UnknownHole, $"'${name}' is not a field of {(string.IsNullOrEmpty(alternative) ? owner.Name : alternative)}", span, module);
-                        else if (field.Inner is not ReferenceExpr reference ||
-                                 _analysis.Resolve(reference.Name, reference.Span, module, implicitModule)?.Rule is not (SyntaxRule or ExtensibleRule))
-                            Report(GrammarCodes.HoleNotARule, $"'${name}' must be a field of a syntax or extensible rule to be a hole", span, module);
+                        else
+                        {
+                            var shape = QuotationWriter.Shape(field.Inner);
+                            if (shape.Item is not { } reference ||
+                                _analysis.Resolve(reference.Name, reference.Span, module, implicitModule)?.Rule is not (SyntaxRule or ExtensibleRule))
+                                Report(hole.IsList ? GrammarCodes.UnsupportedHoleShape : GrammarCodes.HoleNotARule,
+                                    $"'${name}' must name a supported syntax {(hole.IsList ? "list" : "field")}", span, module);
+                            else if (hole.IsList != shape.IsList)
+                                Report(GrammarCodes.HoleShapeMismatch, $"'${name}' has the wrong scalar/list shape", span, module);
+                        }
                     }
                 if (clause.OperationProperty is { } operationName)
                 {

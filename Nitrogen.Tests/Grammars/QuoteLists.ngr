@@ -1,0 +1,21 @@
+syntax module QuoteLists
+{
+    token Number = ['0'..'9']+;
+    token Delimiter = ",";
+    syntax Program = Expr ";";
+    extensible syntax Expr
+    {
+        | Num = Value:Number lowers literal Core.Scalar Value
+        | Add = Left:Expr "+" Right:Expr precedence 10 left lowers Test.Add(Left, Right)
+        | Mul = Left:Expr "*" Right:Expr precedence 20 left lowers Test.Mul(Left, Right)
+        | TokenSeparated = "tokenlist" "(" Args:(Expr; Delimiter)* ")"
+        | Call = "f" "(" Args:(Expr; ",")* ")" lowers Test.Call(sequence Core.Scalar Args)
+        | Required = "required" "(" Args:(Expr; ",")+ ")" lowers Test.Call(sequence Core.Scalar Args)
+        | Space = "space" "[" Args:Expr* "]" lowers Test.Call(sequence Core.Scalar Args)
+        | Forward = "forward" "(" Args:(Expr; ";")* ")" rewrites <[ f(1, ..$Args, 2) ]>
+        | Twice = "twice" "(" Args:(Expr; ";")* ")" rewrites <[ f(..$Args, ..$Args) ]>
+        | Need = "need" "(" Args:(Expr; ";")* ")" rewrites <[ required(..$Args) ]>
+        | Ends = "ends" "(" Args:(Expr; ";")* ")" rewrites <[ f(..$Args, 1, ..$Args) ]>
+        | Semi = "semi" "(" Args:(Expr; ";")* ")" lowers Test.Call(sequence Core.Scalar Args)
+    }
+}

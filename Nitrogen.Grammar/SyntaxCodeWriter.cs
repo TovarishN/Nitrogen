@@ -154,6 +154,25 @@ internal sealed class SyntaxCodeWriter
         return flags == 0 ? "" : ", " + flags;
     }
 
+    string? ListCategory(Expr item, ModuleDecl module, string? implicitModule)
+    {
+        if (item is not ReferenceExpr reference) return null;
+        var symbol = _model.Resolve(reference.Name, module, implicitModule);
+        return symbol.Rule is SyntaxRule or ExtensibleRule ? symbol.Module.Name + "." + symbol.Rule.Name : null;
+    }
+
+    string ListItem(Expr item, ModuleDecl module, string? implicitModule)
+    {
+        string ordinary = Element(item, module, implicitModule, 0);
+        return ListCategory(item, module, implicitModule) is { } category
+            ? $"(s.InTemplate && s.TryListHole({CSharpText.Literal(category)}) || {ordinary})" : ordinary;
+    }
+
+    string ListClose(Expr item, ModuleDecl module, string? implicitModule, int minimum, Expr? separator)
+        => ListCategory(item, module, implicitModule) is { } category && (separator is null or LiteralExpr)
+            ? $"s.CloseTemplateList({CSharpText.Literal(category)}, {minimum}, {(separator is LiteralExpr literal ? CSharpText.Literal(literal.Value) : "null")});"
+            : "s.Close();";
+
     string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null)
     {
         string name = "P" + (++_counter);
@@ -166,7 +185,8 @@ internal sealed class SyntaxCodeWriter
                 break;
             case RepeatExpr repeat:
             {
-                string item = Element(repeat.Inner, module, implicitModule, 0);
+                string item = ListItem(repeat.Inner, module, implicitModule);
+                string close = ListClose(repeat.Inner, module, implicitModule, repeat.Kind == RepeatKind.OneOrMore ? 1 : 0, null);
                 if (repeat.Kind == RepeatKind.OneOrMore)
                     body.Append("        var start = s.Mark();\n        s.Open(SyntaxKinds.List);\n")
                         .Append($"        if (!{item}) return Fail(ref s, start);\n");
@@ -178,12 +198,13 @@ internal sealed class SyntaxCodeWriter
                     .Append("            {\n                s.Reset(m);\n")
                     .Append(listRepair is null ? "" : $"                if (s.Recovering && s.RecoverInList({listRepair})) continue;\n")
                     .Append("                break;\n            }\n        }\n")
-                    .Append("        s.Close();\n        return true;\n");
+                    .Append($"        {close}\n        return true;\n");
                 break;
             }
             case SeparatedListExpr list:
             {
-                string item = Element(list.Item, module, implicitModule, 0);
+                string item = ListItem(list.Item, module, implicitModule);
+                string close = ListClose(list.Item, module, implicitModule, list.AtLeastOne ? 1 : 0, list.Separator);
                 string separator = Element(list.Separator, module, implicitModule, 0);
                 if (list.AtLeastOne) body.Append("        var start = s.Mark();\n");
                 body.Append("        s.Open(SyntaxKinds.List);\n");
@@ -197,7 +218,7 @@ internal sealed class SyntaxCodeWriter
                         .Append($"                if (!{item})\n                {{\n                    s.Reset(m);\n                    break;\n                }}\n")
                         .Append("            }\n        }\n");
                     if (list.AtLeastOne) body.Append("        else\n        {\n            return Fail(ref s, start);\n        }\n");
-                    body.Append("        s.Close();\n        return true;\n");
+                    body.Append($"        {close}\n        return true;\n");
                     break;
                 }
                 // Recovery (Plan 3b): re-enter after a bad item, insert a missing separator. The
@@ -214,7 +235,7 @@ internal sealed class SyntaxCodeWriter
                     .Append($"            if ({item}) continue;\n")
                     .Append($"            if (s.Recovering && s.RecoverInList({listRepair})) goto item;\n")
                     .Append("            s.Reset(m);\n            break;\n        }\n")
-                    .Append("    done:\n        s.Close();\n        return true;\n");
+                    .Append($"    done:\n        {close}\n        return true;\n");
                 break;
             }
             case ChoiceExpr choice:

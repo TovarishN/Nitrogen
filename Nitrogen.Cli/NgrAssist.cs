@@ -28,6 +28,18 @@ internal sealed partial class NgrAssist : ILanguageAssist
 
     static readonly string[] Forms = ["literal", "text", "sequence", "value", "reference", "repeat", "template", "expand", "operation"];
 
+    public IEnumerable<AssistName> NavigationNames(AssistDocument document)
+    {
+        foreach (var name in Names(document))
+        {
+            if (name.Role == Role.Operation)
+                yield return new AssistName(name.Span, name.Text, AssistNameKind.Operation);
+            else if (name.Role == Role.Type)
+                yield return new AssistName(name.Span, Resolve(document.Catalog ?? Builtins, name.Text)?.Id ?? name.Text,
+                    AssistNameKind.Type);
+        }
+    }
+
     public IEnumerable<AssistToken> Tokens(AssistDocument document)
     {
         foreach (var name in Names(document))

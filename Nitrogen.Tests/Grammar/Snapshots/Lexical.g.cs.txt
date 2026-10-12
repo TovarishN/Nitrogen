@@ -59,6 +59,24 @@ public sealed unsafe class LexicalModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lexical.Document", "Lexical.Item", "Lexical.Block", "Lexical.Pick", "Lexical.Tagged" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] { "Lexical.Item" },
+        2 => new string[] { "Lexical.Item" },
+        3 => new string[] { "Lexical.Item" },
+        4 => new string[] { "Lexical.Item" },
+        5 => new string[] { "Lexical.Item" },
+        6 => new string[] { "Lexical.Item" },
+        7 => new string[] { "Lexical.Item" },
+        8 => new string[] { "Lexical.Document" },
+        9 => new string[] { "Lexical.Item", "Lexical.Block" },
+        10 => new string[] { "Lexical.Item", "Lexical.Pick" },
+        11 => new string[] { "Lexical.Item", "Lexical.Tagged" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static bool Fail(ref ParserState s, scoped in ParseMark mark)
     {
         s.Reset(mark);
@@ -425,7 +443,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
     {
         var start = s.Mark();
         s.Open(SyntaxKinds.List);
-        if (!ParseItem(ref s) && !(s.Recovering && s.RecoverInList(s_repair0) && ParseItem(ref s)))
+        if (!(s.InTemplate && s.TryListHole("Lexical.Item") || ParseItem(ref s)) && !(s.Recovering && s.RecoverInList(s_repair0) && (s.InTemplate && s.TryListHole("Lexical.Item") || ParseItem(ref s))))
             return Fail(ref s, start);
         while (true)
         {
@@ -439,13 +457,13 @@ public sealed unsafe class LexicalModule : SyntaxModule
             }
             s.SkipTrivia();
         item:
-            if (ParseItem(ref s)) continue;
+            if ((s.InTemplate && s.TryListHole("Lexical.Item") || ParseItem(ref s))) continue;
             if (s.Recovering && s.RecoverInList(s_repair0)) goto item;
             s.Reset(m);
             break;
         }
     done:
-        s.Close();
+        s.CloseTemplateList("Lexical.Item", 1, ",");
         return true;
     }
 

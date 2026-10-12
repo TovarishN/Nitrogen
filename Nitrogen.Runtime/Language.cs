@@ -3,7 +3,7 @@ using Nitrogen.Semantic;
 namespace Nitrogen;
 
 /// <summary>An immutable composition of syntax modules. Thread-safe; parse from any thread.</summary>
-public sealed unsafe class Language
+public sealed unsafe partial class Language
 {
     readonly ExtensionPoint?[] _points;
     readonly SyntaxModule?[] _modulesById;
@@ -124,6 +124,9 @@ public sealed unsafe class Language
     /// rule it maps to (spec: quasiquote rewrites). The fast pass only: a template either parses or doesn't.
     /// </summary>
     public ParseResult ParseTemplate(string text, string category, IReadOnlyDictionary<string, string> holes)
+        => ParseTemplate(text, category, holes.ToDictionary(h => h.Key, h => QuoteHole.Node(h.Value)));
+
+    public ParseResult ParseTemplate(string text, string category, IReadOnlyDictionary<string, QuoteHole> holes)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(holes);
@@ -152,6 +155,23 @@ public sealed unsafe class Language
         }
     }
 
+    /// <summary>What the template parser expects at its first failure, for completion inside a quasiquote.</summary>
+    public (int Position, IReadOnlyList<(string Text, bool IsLiteral)> Items) ExpectedTemplate(
+        string text, string category, IReadOnlyDictionary<string, string> holes)
+    {
+        using var result = ParseTemplate(text, category, holes);
+        return result.Success || result.Diagnostics.Length == 0 ? (-1, [])
+            : (result.Diagnostics[0].Span.Start, result.ExpectedItems());
+    }
+
+    public (int Position, IReadOnlyList<(string Text, bool IsLiteral)> Items) ExpectedTemplate(
+        string text, string category, IReadOnlyDictionary<string, QuoteHole> holes)
+    {
+        using var result = ParseTemplate(text, category, holes);
+        return result.Success || result.Diagnostics.Length == 0 ? (-1, [])
+            : (result.Diagnostics[0].Span.Start, result.ExpectedItems());
+    }
+
     readonly System.Collections.Concurrent.ConcurrentDictionary<DeclarativeRule, Lazy<RewriteTemplate>> _rewrites = new();
 
     /// <summary>The document path of a template's instantiation: a URI no document has (spec: quasiquote rewrites).</summary>
@@ -172,7 +192,7 @@ public sealed unsafe class Language
     {
         var spec = rule.Rewrite ?? throw new ArgumentException("Not a rewrite rule.", nameof(rule));
         string text = spec.Text.Trim();
-        var holes = spec.Holes.ToDictionary(h => h.Name, h => h.Rule);
+        var holes = spec.Holes.ToDictionary(h => h.Name, h => new QuoteHole(h.Rule, h.IsList));
         ParseResult parsed;
         try { parsed = ParseTemplate(text, spec.Category, holes); }
         catch (ArgumentException error) { return new RewriteTemplate(null, error.Message); }
@@ -195,7 +215,7 @@ public sealed unsafe class Language
     static bool ParseTemplateStart(ref ParserState s) => s.ParseExtensible(s.TemplateStart!, 0);
 
     bool Run(string text, Rule start, ParseContext context, bool recovering,
-        IReadOnlyDictionary<string, string>? holes = null, ExtensionPointDecl? templateStart = null)
+        IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null)
     {
         var arena = context.Arena;
         arena.Clear();
@@ -203,6 +223,7 @@ public sealed unsafe class Language
         arena.Recovering = recovering;
         arena.CallFlagMask = recovering ? 3 : 0;
         var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart };
+        if (holes is not null) state.SkipTrivia();
         var parse = start.Parse;
         if (!parse(ref state)) return false;
         state.SkipTrivia();
