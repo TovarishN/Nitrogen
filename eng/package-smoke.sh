@@ -16,7 +16,7 @@ if [[ $# -eq 2 ]]; then
 else
     feed="$work/feed"
     version="0.0.0-smoke"
-    for project in Nitrogen.Runtime Nitrogen.Generator Nitrogen.Cli; do
+    for project in Nitrogen.Runtime Nitrogen.Generator Nitrogen.Cli Nitrogen.Build; do
         dotnet pack "$root/$project/$project.csproj" -c Release -p:Version="$version" -o "$feed"
     done
 fi
@@ -99,5 +99,7 @@ dotnet tool install Nitrogen.Cli --version "$version" --tool-path "$work/tool" -
 for file in bundle/server/nitrogen.dll bundle/server/nitrogen.runtimeconfig.json bundle/language/nitrogen.json package.json; do
     [[ -f "$work/vscode/$file" ]] || { echo "error: generated extension has no $file" >&2; exit 1; }
 done
+
+"$root/eng/build-signature-smoke.sh" "$feed" "$version"
 
 step "Packages OK"

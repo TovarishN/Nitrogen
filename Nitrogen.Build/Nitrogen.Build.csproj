@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>Nitrogen.Build</PackageId>
+    <Description>Opt-in Nitrogen grammar generation and source-text diagnostics during .NET builds.</Description>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <NoWarn>$(NoWarn);NU5128;NU5100</NoWarn>
+    <NuspecFile>Nitrogen.Build.nuspec</NuspecFile>
+    <NuspecBasePath>$(MSBuildProjectDirectory)</NuspecBasePath>
+    <TargetsForTfmSpecificContentInPackage>$(TargetsForTfmSpecificContentInPackage);BundleNitrogenChecker</TargetsForTfmSpecificContentInPackage>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.14.28" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.14.28" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" PrivateAssets="all" />
+    <ProjectReference Include="../Nitrogen.Workspace/Nitrogen.Workspace.csproj" PrivateAssets="all" />
+    <None Include="build/Nitrogen.Build.props;build/Nitrogen.Build.targets" Pack="true" PackagePath="build" />
+  </ItemGroup>
+  <Target Name="SetNitrogenNuspecProperties" BeforeTargets="GenerateNuspec">
+    <PropertyGroup><NuspecProperties>version=$(PackageVersion);configuration=$(Configuration)</NuspecProperties></PropertyGroup>
+  </Target>
+  <Target Name="BundleNitrogenChecker">
+    <MSBuild Projects="../Nitrogen.Cli/Nitrogen.Cli.csproj" Targets="Publish"
+             Properties="Configuration=$(Configuration);Version=$(Version);PublishDir=$(MSBuildProjectDirectory)/obj/$(Configuration)/checker/;SelfContained=false" />
+    <ItemGroup>
+      <TfmSpecificPackageFile Include="$(MSBuildProjectDirectory)/obj/$(Configuration)/checker/**/*" PackagePath="tools/net10.0/any/%(RecursiveDir)" />
+      <TfmSpecificPackageFile Include="$(TargetDir)*.dll" PackagePath="tasks/net10.0/" />
+      <TfmSpecificPackageFile Include="$(TargetDir)*.deps.json" PackagePath="tasks/net10.0/" />
+    </ItemGroup>
+  </Target>
+</Project>

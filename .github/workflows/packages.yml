@@ -23,7 +23,7 @@ jobs:
       - name: Pack
         run: |
           version="${GITHUB_REF_NAME#v}"
-          for project in Nitrogen.Runtime Nitrogen.Generator Nitrogen.Cli; do
+          for project in Nitrogen.Runtime Nitrogen.Generator Nitrogen.Cli Nitrogen.Build; do
             dotnet pack "$project/$project.csproj" -c Release -p:Version="$version" -o packages
           done
       - run: eng/package-smoke.sh packages "${GITHUB_REF_NAME#v}"

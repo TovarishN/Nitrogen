@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+  <metadata>
+    <id>Nitrogen.Build</id><version>$version$</version><authors>Nitrogen contributors</authors>
+    <description>Opt-in Nitrogen grammar generation and source-text diagnostics during .NET builds. Requires the .NET 10 runtime.</description>
+    <license type="expression">MIT</license>
+    <repository type="git" url="https://github.com/TovarishN/Nitrogen" />
+    <dependencies><group targetFramework="net10.0">
+      <dependency id="Nitrogen.Runtime" version="[$version$]" />
+      <dependency id="Nitrogen.Generator" version="[$version$]" />
+    </group></dependencies>
+  </metadata>
+  <files>
+    <file src="build/*.props" target="build" />
+    <file src="build/*.targets" target="build" />
+    <file src="bin/$configuration$/net10.0/*.dll" target="tasks/net10.0" />
+    <file src="bin/$configuration$/net10.0/*.deps.json" target="tasks/net10.0" />
+    <file src="obj/$configuration$/checker/**/*" target="tools/net10.0/any" />
+  </files>
+</package>
