@@ -45,4 +45,32 @@ public sealed class DocumentAnalysisConcurrencyTests
         }
         finally { resolver.Release.TrySetResult(); }
     }
+    [Fact]
+    public async Task A_name_rename_queued_during_analysis_invalidates_the_old_selection()
+    {
+        string root = Path.GetFullPath(Path.GetTempPath());
+        string grammar = Path.Combine(root, "NameConcurrency.syntax"), path = Path.Combine(root, "NameConcurrency.txt");
+        var inputs = new InputSnapshot(root, new Dictionary<string, DocumentInput> {
+            [grammar] = new(grammar, "#!nitrogen grammar\nlanguage Calc { start M.R; } syntax module M { syntax R = \"ok\"; }", 1) }, true);
+        var resolver = new BlockingResolver();
+        using var session = new DocumentAnalysisSession(resolver);
+        var input = new DocumentInput(path, "#!nitrogen language Calc\nbad", 1);
+        var first = Task.Run(() => session.AnalyzeAsync(input, inputs, CancellationToken.None));
+        await resolver.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        try
+        {
+            var renamed = inputs with { Files = new Dictionary<string, DocumentInput> {
+                [grammar] = inputs.Files[grammar] with { Text = inputs.Files[grammar].Text.Replace("language Calc", "language Calendar"), Version = 2 } } };
+            var second = session.AnalyzeAsync(input with { Version = 2 }, renamed, CancellationToken.None);
+            resolver.Release.SetResult();
+            Assert.False(session.IsCurrent(await first));
+            var current = await second;
+            Assert.True(session.IsCurrent(current));
+            Assert.Empty(current.Classification!.Selections);
+            Assert.Contains(current.Diagnostics, d => d.Code == "NGR0402");
+            Assert.DoesNotContain(current.Diagnostics, d => d.Code == "NGR0405");
+        }
+        finally { resolver.Release.TrySetResult(); }
+    }
+
 }

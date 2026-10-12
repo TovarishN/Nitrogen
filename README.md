@@ -13,7 +13,7 @@ language Greeting { start Greeting.Hello; }
 syntax module Greeting { syntax Hello = "hello"; }
 ```
 
-Save that as `Greeting.syntax`, then put `#!nitrogen language "./Greeting.syntax"` before `hello` in a file of any extension. The main VS Code extension recognizes it automatically; `nitrogen parse sample.txt` infers the start rule. `nitrogen check <file|directory>` checks selected programs and native source augmentations. A `Nitrogen.Build` PackageReference adds generation and checks to .NET builds. See the [runnable signature examples](examples/Signatures/README.md) for commented native signatures, regions, glob augmentation and registered build inputs.
+Save that as `Greeting.syntax`, then put `#!nitrogen language "./Greeting.syntax"` before `hello` in a file of any extension. The main VS Code extension recognizes it automatically; `nitrogen parse sample.txt` infers the start rule. `nitrogen check <file|directory>` checks selected programs and native source augmentations. A bare name such as `#!nitrogen language Greeting` discovers a unique signed grammar in the workspace; ambiguous names list candidates and require a quoted path. A `Nitrogen.Build` PackageReference adds generation and checks to .NET builds. See the [runnable signature examples](examples/Signatures/README.md) for commented native signatures, regions, glob augmentation and registered build inputs.
 
 ## Build a language with an IDE
 

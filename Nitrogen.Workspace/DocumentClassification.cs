@@ -27,8 +27,8 @@ public sealed class DocumentClassifier(ILanguageDefinitionResolver? resolver = n
                 ? d with { Location = new(input.Path, signature.Start, signature.Length) } : d));
             if (resolved.Definition is { } definition) Select(definition, signature.Input, signature.Mode == SignatureMode.Language);
         }
-        var configuration = DefinitionPaths.Find(inputs, Path.Combine(inputs.Root, "nitrogen.json"));
-        if (configuration is not null)
+        foreach (var configuration in DefinitionPaths.RootsOf(inputs).Where(root => DefinitionPaths.Under(input.Path, root))
+            .Select(root => DefinitionPaths.Find(inputs, Path.Combine(root, "nitrogen.json"))).OfType<DocumentInput>())
         {
             var augmentations = AugmentationConfiguration.Parse(configuration.Path, configuration.Text);
             issues.AddRange(augmentations.Diagnostics);

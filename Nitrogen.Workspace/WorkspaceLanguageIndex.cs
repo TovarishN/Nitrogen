@@ -16,6 +16,7 @@ public sealed class WorkspaceLanguageIndex
         var issues = new List<AnalysisIssue>();
         foreach (var input in inputs.Files.Values.DistinctBy(i => DefinitionPaths.Canonical(i.Path), DefinitionPaths.Comparer))
         {
+            if (!inputs.RegisteredInputsOnly && !DefinitionPaths.RootsOf(inputs).Any(root => DefinitionPaths.Under(input.Path, root))) continue;
             if (!input.Text.Contains("#!nitrogen", StringComparison.Ordinal)) continue;
             var header = DocumentSignatures.Read(input.Text);
             if (!header.Signatures.Any(s => s.Mode == SignatureMode.Grammar)) continue;

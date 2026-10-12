@@ -16,6 +16,13 @@ public sealed partial class NitrogenLanguageService
     readonly Dictionary<string, LanguageDefinition> _signatureDefinitions = new(StringComparer.Ordinal);
     readonly HashSet<string> _signatureOwnedOpen = new(StringComparer.Ordinal);
     InputSnapshot? _signatureSnapshot;
+    string[]? _signatureRoots;
+
+    internal IReadOnlyList<string> SetSignatureRoots(IEnumerable<string> roots)
+    {
+        _signatureRoots = roots.Select(Path.GetFullPath).Distinct().ToArray();
+        return _root is null ? [] : RefreshSignedDocuments();
+    }
     bool _serveSignatureDocuments = true;
 
     public void ServeSignatureDocuments(bool enabled) => _serveSignatureDocuments = enabled;
@@ -43,9 +50,14 @@ public sealed partial class NitrogenLanguageService
     IReadOnlyList<string> RefreshSignedDocuments()
     {
         if (!_serveSignatureDocuments) return [];
-        string? root = _root ?? _signatureInputs.Values.Select(i => Path.GetDirectoryName(i.Path)).FirstOrDefault();
+        string? root = _signatureRoots?.FirstOrDefault() ?? _root ?? _signatureInputs.Values.Select(i => Path.GetDirectoryName(i.Path)).FirstOrDefault();
         if (root is null) return [];
-        var inputs = WorkspaceInputReader.Read(root, _signatureInputs.Values);
+        var roots = _signatureRoots ?? [root];
+        var files = new Dictionary<string, DocumentInput>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        foreach (string folder in roots)
+            foreach (var pair in WorkspaceInputReader.Read(folder, _signatureInputs.Values).Files)
+                if (files.ContainsKey(pair.Key) || files.Count < WorkspaceInputReader.MaxFiles) files[pair.Key] = pair.Value;
+        var inputs = new InputSnapshot(root, files, false, roots);
         var previousUris = _signatureResults.Keys.Concat(_signaturePrimaries.Keys).ToHashSet(StringComparer.Ordinal);
         _signatureResults.Clear();
         _signaturePrimaryLayers.Clear();
@@ -53,9 +65,9 @@ public sealed partial class NitrogenLanguageService
         var oldPrimaries = _signaturePrimaries.ToDictionary(p => p.Key, p => p.Value);
         _signaturePrimaries.Clear();
         _signatureSnapshot = inputs;
-        var config = inputs.Files.GetValueOrDefault(Path.Combine(root, "nitrogen.json"));
-        bool augmentation = config is not null && AugmentationConfiguration.Parse(config.Path, config.Text).Rules.Count > 0;
-        var candidates = inputs.Files.Values.Where(input => augmentation || HasSignature(input)).ToList();
+        bool augmentation = roots.Select(folder => inputs.Files.GetValueOrDefault(Path.Combine(folder, "nitrogen.json"))).OfType<DocumentInput>()
+            .Any(config => AugmentationConfiguration.Parse(config.Path, config.Text).Rules.Count > 0);
+        var candidates = inputs.Files.Values.Where(input => augmentation || HasSignature(input) || Path.GetFileName(input.Path) == "nitrogen.json").ToList();
         // Existing signed inputs continue to reclassify when their signature is removed.
         candidates.AddRange(_signatureInputs.Values.Where(i => previousUris.Contains(new Uri(i.Path).AbsoluteUri)));
         foreach (var input in candidates.DistinctBy(i => i.Path))
@@ -157,7 +169,7 @@ public sealed partial class NitrogenLanguageService
     {
         if (!System.Uri.TryCreate(uri, UriKind.Absolute, out var file) || !file.IsFile) return [];
         string path = Path.GetFullPath(file.LocalPath);
-        string? text = TextOf(uri) ?? _signatureSnapshot?.Files.GetValueOrDefault(path)?.Text;
+        string? text = _signatureInputs.GetValueOrDefault(uri)?.Text ?? TextOf(uri) ?? _signatureSnapshot?.Files.GetValueOrDefault(path)?.Text;
         if (text is null) return [];
         var lines = new LineMap(text);
         return _signatureResults.Values.SelectMany(r => r.Diagnostics)

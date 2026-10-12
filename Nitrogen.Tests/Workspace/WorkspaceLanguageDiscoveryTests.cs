@@ -48,6 +48,18 @@ public sealed class WorkspaceLanguageDiscoveryTests
     }
 
     [Fact]
+    public void External_explicit_dependencies_are_not_name_discovered_but_registered_inputs_are()
+    {
+        string external = Path.GetFullPath(Path.Combine(Root, "..", "external.syntax"));
+        var files = new Dictionary<string, DocumentInput> { [external] = new(external, Grammar(), 1) };
+        var inputs = new InputSnapshot(Root, files, false);
+        var resolver = new LanguageDefinitionResolver();
+        Assert.Null(resolver.Resolve(new("Calc", false), PathOf("sample.txt"), inputs).Definition);
+        Assert.NotNull(resolver.Resolve(new(external, true), PathOf("sample.txt"), inputs).Definition);
+        Assert.NotNull(resolver.Resolve(new("Calc", false), PathOf("sample.txt"), inputs with { RegisteredInputsOnly = true }).Definition);
+    }
+
+    [Fact]
     public void Resolver_observes_new_snapshots_and_missing_names_are_explicit()
     {
         var resolver = new LanguageDefinitionResolver();

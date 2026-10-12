@@ -22,6 +22,9 @@ public sealed class LanguageDiscoveryCliTests
             var output = new StringWriter();
             Assert.Equal(0, await NitrogenCli.RunAsync(["parse", sample], output, CancellationToken.None));
             Assert.Equal(0, await NitrogenCli.RunAsync(["check", root], output, CancellationToken.None));
+            File.WriteAllText(host, "/* #!nitrogen region Calc\nbad\n#!nitrogen end\n*/");
+            Assert.Equal(1, await NitrogenCli.RunAsync(["check", host], output, CancellationToken.None));
+            Assert.Contains("[nitrogen:Calc]", output.ToString());
             string manifest = Path.Combine(root, "inputs.json");
             File.WriteAllText(manifest, JsonSerializer.Serialize(new { root, files = new[] { sample }, documents = new[] { sample } }));
             Assert.Equal(1, await NitrogenCli.RunAsync(["check", "--inputs", manifest], output, CancellationToken.None));

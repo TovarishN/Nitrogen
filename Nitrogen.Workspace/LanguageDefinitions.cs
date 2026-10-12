@@ -3,7 +3,7 @@ using Nitrogen.Grammar;
 namespace Nitrogen.Workspace;
 
 public sealed record DocumentInput(string Path, string Text, long Version);
-public sealed record InputSnapshot(string Root, IReadOnlyDictionary<string, DocumentInput> Files, bool RegisteredInputsOnly);
+public sealed record InputSnapshot(string Root, IReadOnlyDictionary<string, DocumentInput> Files, bool RegisteredInputsOnly, IReadOnlyList<string>? Roots = null);
 public sealed record AnalysisLocation(string Path, int Start, int Length);
 public sealed record AnalysisIssue(string Code, string Message, AnalysisLocation Location,
     IReadOnlyList<AnalysisLocation> Related, string Source, bool IsError, string? Layer = null);
@@ -20,6 +20,10 @@ public interface ILanguageDefinitionResolver
 internal static class DefinitionPaths
 {
     internal static StringComparer Comparer { get; } = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+    internal static bool Under(string path, string root) => Comparer.Equals(path, root) || path.StartsWith(
+        root.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar,
+        OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    internal static IEnumerable<string> RootsOf(InputSnapshot inputs) => inputs.Roots ?? [inputs.Root];
     internal static string Canonical(string path) => Path.GetFullPath(path);
     internal static string RelativeTo(string reference, string origin) =>
         reference.Contains("://", StringComparison.Ordinal)

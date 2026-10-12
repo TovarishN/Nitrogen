@@ -44,6 +44,20 @@ public sealed class DocumentAnalysisTests
     }
 
     [Fact]
+    public async Task Bare_name_regions_and_json_selection_check_each_region_once()
+    {
+        const string text = "// #!nitrogen augment Calc regions\n/* #!nitrogen region Calc\nbad\n#!nitrogen end\n*/";
+        var inputs = Inputs(("nitrogen.json", """
+            { "augmentations":[{"language":"Calc","files":["**/*.cs"],"input":"regions"}] }
+            """));
+        using var session = new DocumentAnalysisSession();
+        var result = await session.AnalyzeAsync(Document("Host.cs", text), inputs, CancellationToken.None);
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Code == "QC0001");
+        Assert.Equal("nitrogen:Calc", diagnostic.Source);
+        Assert.Equal(text.IndexOf("bad", StringComparison.Ordinal), diagnostic.Location.Start);
+    }
+
+    [Fact]
     public async Task Regions_map_each_body_and_ignore_surrounding_native_source()
     {
         const string region = "/* #!nitrogen region \"./Calc.syntax\"\r\nbad\r\n#!nitrogen end\r\n*/";

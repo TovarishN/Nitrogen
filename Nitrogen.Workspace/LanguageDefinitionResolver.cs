@@ -26,6 +26,8 @@ public sealed class LanguageDefinitionResolver(WorkspaceLanguageIndex? index = n
                         return new(null, [DefinitionPaths.Error(originPath, $"ambiguous workspace language '{reference.Value}': {string.Join(", ", candidates)}; use a quoted local path")]);
                     path = candidates[0];
                 }
+            if (DefinitionPaths.Find(inputs, path) is null)
+                return new(null, [DefinitionPaths.Error(originPath, $"missing registered grammar input '{path}'")], path);
             return LanguageDefinitionLoader.Load(path, inputs) with { CandidateId = path };
         }
         catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException)

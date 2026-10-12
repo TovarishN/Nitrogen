@@ -69,16 +69,16 @@ internal static class DocumentCheckCommand
             }
             foreach (var issue in issues.DistinctBy(i => (i.Code, i.Message, i.Location, i.Source)))
             {
-                WriteIssue(issue.Location, issue.IsError ? "error" : "warning", issue.Code, issue.Message);
-                foreach (var related in issue.Related) WriteIssue(related, "warning", issue.Code, "related source: " + issue.Message);
+                WriteIssue(issue.Location, issue.IsError ? "error" : "warning", issue.Code, issue.Message, issue.Source);
+                foreach (var related in issue.Related) WriteIssue(related, "warning", issue.Code, "related source: " + issue.Message, issue.Source);
             }
             return issues.Any(i => i.IsError) ? 1 : 0;
 
-            void WriteIssue(AnalysisLocation location, string severity, string code, string message)
+            void WriteIssue(AnalysisLocation location, string severity, string code, string message, string source)
             {
                 string text = inputs.Files.GetValueOrDefault(location.Path)?.Text ?? "";
                 var position = new LineMap(text).PositionOf(location.Start);
-                output.WriteLine($"{location.Path}({position.Line + 1},{position.Character + 1}): {severity} {code}: {message}");
+                output.WriteLine($"{location.Path}({position.Line + 1},{position.Character + 1}): {severity} {code}: {message} [{source}]");
             }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or ArgumentException or NotSupportedException)

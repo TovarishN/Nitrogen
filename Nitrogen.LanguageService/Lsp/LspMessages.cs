@@ -31,6 +31,9 @@ public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, st
 public sealed record PublishDiagnosticsParams(string Uri, int? Version, LspDiagnostic[] Diagnostics);
 
 /// <param name="TextDocumentSync">2: incremental, each change carrying the range it replaces.</param>
+public sealed record WorkspaceFoldersServerCapabilities(bool Supported = true, bool ChangeNotifications = true);
+public sealed record ServerWorkspaceCapabilities(WorkspaceFoldersServerCapabilities WorkspaceFolders);
+
 public sealed record ServerCapabilities(
     int TextDocumentSync,
     SemanticTokensOptions? SemanticTokensProvider = null,
@@ -50,7 +53,8 @@ public sealed record ServerCapabilities(
     bool? WorkspaceSymbolProvider = null,
     bool? DocumentFormattingProvider = null,
     bool? DocumentRangeFormattingProvider = null,
-    DocumentOnTypeFormattingOptions? DocumentOnTypeFormattingProvider = null);
+    DocumentOnTypeFormattingOptions? DocumentOnTypeFormattingProvider = null,
+    ServerWorkspaceCapabilities? Workspace = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
