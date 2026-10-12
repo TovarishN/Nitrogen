@@ -23,7 +23,7 @@ export function languagesIn(json: string): string[] {
 /**
  * The languages other installed Nitrogen extensions carry in their bundle (generated plugins: `nitrogen.nitrogen-*`
  * with bundle/language/nitrogen.json). A server that reads the workspace's nitrogen.json leaves their tagged C#
- * strings to them (`skipLanguages`), so those strings are not served twice.
+ * strings to them (`skipLanguages`) and excludes their files from its document selector.
  */
 export function languagesOfOtherExtensions(all: readonly InstalledExtension[], ownId: string): string[] {
   const languages = all
@@ -33,4 +33,18 @@ export function languagesOfOtherExtensions(all: readonly InstalledExtension[], o
       return fs.existsSync(config) ? languagesIn(fs.readFileSync(config, 'utf8')) : [];
     });
   return [...new Set(languages)];
+}
+
+/** Workspace files served by the generic client, excluding languages owned by generated plugins. */
+export function workspaceFileExtensions(json: string, claimedLanguages: readonly string[]): string[] {
+  const claimed = new Set(claimedLanguages.map(name => name.replace(/^\./, '').toLowerCase()));
+  try {
+    const config = JSON.parse(json) as { languages?: { name?: string; extensions?: string[] }[] };
+    return [...new Set((config.languages ?? []).flatMap(language =>
+      language.name && claimed.has(language.name.toLowerCase()) ? [] :
+        (language.extensions ?? []).filter(extension => !claimed.has(extension.replace(/^\./, '').toLowerCase())),
+    ))];
+  } catch {
+    return [];
+  }
 }

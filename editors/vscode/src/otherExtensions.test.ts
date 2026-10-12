@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { languagesIn, languagesOfOtherExtensions } from './otherExtensions';
+import { languagesIn, languagesOfOtherExtensions, workspaceFileExtensions } from './otherExtensions';
 
 const dateCalc = JSON.stringify({
   languages: [{ name: 'DateCalc', extensions: ['.datecalc', '.dc'], grammars: ['DateCalc.ngr'], namespace: 'DateCalc.Syntax' }],
@@ -30,4 +30,19 @@ test('only other Nitrogen extensions with a bundled language count', () => {
   ];
   assert.deepEqual(languagesOfOtherExtensions(all, 'nitrogen.nitrogen'), ['DateCalc', 'datecalc', 'dc']);
   fs.rmSync(root, { recursive: true });
+});
+
+test('workspace files claimed by a generated extension have only that provider', () => {
+  const config = JSON.stringify({ languages: [
+    { name: 'DateCalc', extensions: ['.datecalc', '.dc'] },
+    { name: 'Calc', extensions: ['.calc'] },
+  ] });
+  assert.deepEqual(workspaceFileExtensions(config, languagesIn(dateCalc)), ['.calc']);
+  assert.deepEqual(workspaceFileExtensions(config, []), ['.datecalc', '.dc', '.calc']);
+});
+
+test('ownership matches language names and file extensions without case sensitivity', () => {
+  assert.deepEqual(workspaceFileExtensions(dateCalc, ['DATECALC']), []);
+  assert.deepEqual(workspaceFileExtensions(dateCalc, ['dc']), ['.datecalc']);
+  assert.deepEqual(workspaceFileExtensions('not json', []), []);
 });
