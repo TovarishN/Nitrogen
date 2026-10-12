@@ -145,8 +145,10 @@ public sealed class GrammarLoopTests : IDisposable
         Assert.Empty(service.Diagnostics(sample));
     }
 
-    [Fact]
-    public async Task The_workspace_root_and_watched_grammar_changes_over_the_protocol()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_workspace_root_and_watched_grammar_changes_over_the_protocol(bool fixedConfig)
     {
         Write("nitrogen.json", Config);
         string grammar = Write("grammars/greet.ngr", WorkspaceTests.Greet);
@@ -163,7 +165,7 @@ public sealed class GrammarLoopTests : IDisposable
             (Action)(() => File.WriteAllText(grammar, WorkspaceTests.Greet.Replace("Name:Word;", "Name:Word \"!\";"))),
             watched, "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"shutdown\"}", "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
         var output = new MemoryStream();
-        var server = new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null);
+        var server = new LspServer(new JsonRpcConnection(input, output), service, TextWriter.Null, fixedConfig ? _root : null);
         input.Idle = server.Idle;
         await server.RunAsync(CancellationToken.None);
 

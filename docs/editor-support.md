@@ -107,6 +107,36 @@ nitrogen package --config nitrogen.json --output dist --rider    # dist/<id>-<ve
 
 Each plugin carries the grammar, helper sources, and a portable Nitrogen server, and runs it with the user's .NET 10 runtime (`dotnet`), so it works in any folder and on any OS. The server is started as `nitrogen lsp --config <bundled nitrogen.json>`, which ignores any `nitrogen.json` in the opened folder. Install the `.vsix` with **Extensions: Install from VSIX...**, and the ZIP with Rider's **Settings → Plugins → ⚙ → Install Plugin from Disk**. Packaging needs npm for VS Code, and Gradle with JDK 25 for Rider; the bundled server is the `nitrogen` that runs `package`, or `--server <directory>` for another framework-dependent build. `nitrogen generate vscode` and `nitrogen generate rider --self-contained` write the projects without building them. The optional `"version"` field of a language entry sets the plugin version (default: the Nitrogen CLI release version).
 
+### Development mode for generated VS Code extensions
+
+Generated extensions normally use the grammar bundled when they were packaged.
+To work on the grammar, regenerate and install an extension with development-mode
+support, open the language project folder containing `nitrogen.json`, and enable
+`nitrogen-<plugin-id>.developmentMode` in workspace settings. For DateCalc:
+
+```json
+{ "nitrogen-datecalc.developmentMode": true }
+```
+
+Reload the window once to apply this setting. The plugin then starts its server
+against the workspace configuration instead of the bundled copy. Saving `.ngr`,
+configured C# helper files, or `nitrogen.json` recompiles the language and updates
+open language files without restarting LSP. Diagnostics, completion, navigation,
+semantic coloring, and value hints reflect the new grammar. Invalid grammar edits
+keep the last working language until corrected.
+
+The configuration must declare the generated plugin's language and file extensions.
+Exactly one workspace folder must have `nitrogen.json` at its root; missing or
+ambiguous configurations are reported instead of using the bundled grammar. Files
+being watched must be within the workspace folders. For the example, open
+`examples/DateCalc` rather than the Nitrogen repository root.
+
+Development mode still uses the plugin's bundled server. To test a different
+Nitrogen build, set `nitrogen-datecalc.server.path` to its executable. Changing
+these settings requires a window reload; subsequent grammar saves do not. Turn
+development mode off and reload to return to the packaged grammar. Rider plugins
+continue to use their bundled configuration.
+
 ## Helper sources
 
 A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or

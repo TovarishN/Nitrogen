@@ -26,7 +26,8 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     string? _configRoot;      // whose nitrogen.json configures the languages: --config's directory, else the workspace
     bool _watchDynamically;
     bool _refreshInlayHints;  // the client takes workspace/inlayHint/refresh
-    int _languagesSeen;       // service.LanguagesVersion when the client last had current hints
+    bool _refreshSemanticTokens; // the client takes workspace/semanticTokens/refresh
+    int _languagesSeen;       // service.LanguagesVersion when the client last had current language data
     int _refreshes;
     readonly object _gate = new();            // orders the reader's enqueue against the loop's idle check
     readonly ManualResetEventSlim _idle = new(false);
@@ -149,7 +150,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             }
         }
         await PublishAsync(affected.Distinct().Where(service.IsOpen).ToList(), cancel);
-        await RefreshInlayHintsAsync(cancel);
+        await RefreshLanguageAsync(cancel);
         return null;
     }
 
@@ -200,6 +201,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     if (root is not null && System.Uri.TryCreate(root, UriKind.Absolute, out var uri) && uri.IsFile) _workspaceRoot = uri.LocalPath;
                     _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
                     _refreshInlayHints = initialize?.Capabilities?.Workspace?.InlayHint?.RefreshSupport == true;
+                    _refreshSemanticTokens = initialize?.Capabilities?.Workspace?.SemanticTokens?.RefreshSupport == true;
                     service.SkipEmbedded(initialize?.InitializationOptions?.SkipLanguages ?? []);
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
@@ -548,12 +550,13 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             w.WriteEndObject();
         }, cancel);
 
-    /// <summary>Asks the client to request inlay hints again once a language was recompiled, if it can.</summary>
-    Task RefreshInlayHintsAsync(CancellationToken cancel)
+    /// <summary>Refreshes hints and coloring after a language is recompiled, when supported by the client.</summary>
+    async Task RefreshLanguageAsync(CancellationToken cancel)
     {
-        if (!_refreshInlayHints || service.LanguagesVersion == _languagesSeen) return Task.CompletedTask;
+        if (service.LanguagesVersion == _languagesSeen) return;
         _languagesSeen = service.LanguagesVersion;
-        return SendInlayHintRefreshAsync(cancel);
+        if (_refreshInlayHints) await SendInlayHintRefreshAsync(cancel);
+        if (_refreshSemanticTokens) await SendRefreshAsync("workspace/semanticTokens/refresh", cancel);
     }
 
     /// <summary>The wait for the next local midnight, when the client takes refreshes and a served language reads the clock; null otherwise.</summary>
@@ -565,15 +568,17 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     }
 
     /// <summary>Asks the client to request inlay hints again (<c>workspace/inlayHint/refresh</c>).</summary>
-    Task SendInlayHintRefreshAsync(CancellationToken cancel)
+    Task SendInlayHintRefreshAsync(CancellationToken cancel) => SendRefreshAsync("workspace/inlayHint/refresh", cancel);
+
+    Task SendRefreshAsync(string method, CancellationToken cancel)
     {
         int number = ++_refreshes;
         return connection.WriteAsync(w =>
         {
             w.WriteStartObject();
             w.WriteString("jsonrpc", "2.0");
-            w.WriteString("id", $"nitrogen-inlay-refresh-{number}");
-            w.WriteString("method", "workspace/inlayHint/refresh");
+            w.WriteString("id", $"nitrogen-refresh-{number}");
+            w.WriteString("method", method);
             w.WriteEndObject();
         }, cancel);
     }

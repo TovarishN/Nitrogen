@@ -50,8 +50,27 @@ public sealed class VsCodeGenerationTests : IDisposable
         Assert.Equal("nitrogen-catalog", (string?)language["id"]);
         Assert.Equal(".ncat", (string?)language["extensions"]![0]);
         var properties = package["contributes"]!["configuration"]!["properties"]!.AsObject();
-        Assert.Equal(new[] { "nitrogen-catalog.dotnetPath", "nitrogen-catalog.server.path" }, properties.Select(p => p.Key));
+        Assert.Equal(new[] { "nitrogen-catalog.dotnetPath", "nitrogen-catalog.server.path", "nitrogen-catalog.developmentMode" }, properties.Select(p => p.Key));
         Assert.NotNull(package["dependencies"]!["vscode-languageclient"]);
+    }
+
+    [Fact]
+    public void Development_mode_is_opt_in_and_watches_workspace_grammar_and_helpers()
+    {
+        var request = Request();
+        VsCodeRenderer.Render(request, CancellationToken.None);
+        var package = JsonNode.Parse(Read(request, "package.json"))!;
+        var setting = package["contributes"]!["configuration"]!["properties"]!["nitrogen-catalog.developmentMode"]!;
+        Assert.False((bool)setting["default"]!);
+        Assert.Equal("boolean", (string?)setting["type"]);
+        string extension = Read(request, "src/extension.ts");
+        Assert.Contains("languageConfig(", extension);
+        Assert.Contains("get<boolean>('developmentMode')", extension);
+        Assert.Contains("workspace.createFileSystemWatcher('**/{*.ngr,*.cs,nitrogen.json}')", extension);
+        Assert.Contains("fileEvents: watcher", extension);
+        Assert.Contains("languageConfig", Read(request, "src/developmentConfig.ts"));
+        Assert.Contains("nitrogen-catalog.developmentMode", Read(request, "README.md"));
+        Assert.Contains("without restarting", Read(request, "README.md"));
     }
 
     [Fact]
