@@ -37,9 +37,19 @@ step "Build and test Nitrogen $version"
 dotnet build "$root/Nitrogen.slnx" -c Release -warnaserror -p:Version="$version"
 dotnet test "$root/Nitrogen.Tests/Nitrogen.Tests.csproj" -c Release --no-build
 nitrogen=(dotnet "$root/Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll")
+identity="$("${nitrogen[@]}" --version)"
+step "Build identity: $identity"
+node - "$artifacts/build-info.json" "$version" "$identity" <<'JS'
+const fs = require('node:fs');
+const [file, version, identity] = process.argv.slice(2);
+const match = /\+build\.(\d+)\.(.+)$/.exec(identity);
+if (!match) throw new Error(`Invalid build identity: ${identity}`);
+fs.writeFileSync(file, JSON.stringify({ version, buildNumber: Number(match[1]), commit: match[2], identity }, null, 2) + '\n');
+JS
 
 # The portable server the plugins carry: the Release build of Nitrogen.Cli.
 server_build="$root/Nitrogen.Cli/bin/Release/net10.0"
+cp "$artifacts/build-info.json" "$server_build/build-info.json"
 
 # Copies the portable server as LanguageBundle.CopyServer does: the build folder's files and its runtimes folder.
 copy_server() {

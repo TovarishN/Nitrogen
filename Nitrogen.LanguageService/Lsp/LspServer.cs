@@ -212,7 +212,9 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true,
                         DocumentFormattingProvider: true, DocumentRangeFormattingProvider: true,
                         DocumentOnTypeFormattingProvider: new DocumentOnTypeFormattingOptions("}")),
-                    new ServerInfo("nitrogen", "0.1")), LspJson.Default.InitializeResult, cancel);
+                    new ServerInfo("nitrogen", typeof(LspServer).Assembly
+                        .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+                        .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion)), LspJson.Default.InitializeResult, cancel);
                 break;
             case "shutdown":
                 _shutdown = true;
