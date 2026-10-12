@@ -98,7 +98,9 @@ public sealed partial class NitrogenLanguageService
         if (!File.Exists(file)) return affected;
 
         using var json = JsonDocument.Parse(File.ReadAllText(file));
-        foreach (var entry in json.RootElement.GetProperty("languages").EnumerateArray())
+        if (!json.RootElement.TryGetProperty("languages", out var configuredLanguages))
+            return affected.Concat(Reindex()).Distinct().ToList();
+        foreach (var entry in configuredLanguages.EnumerateArray())
         {
             var styles = new Dictionary<string, SymbolStyle>();
             if (entry.TryGetProperty("tokens", out var tokens))
