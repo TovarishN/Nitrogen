@@ -1,5 +1,6 @@
 <Project>
-  <!-- Consumers list grammars as <AdditionalFiles Include="X.ngr" Namespace="..." />. The generator reads
+  <!-- Consumers list grammars as <AdditionalFiles Include="X.ngr" Namespace="..." /> or signed files of any extension.
+       Register every grammar dependency as AdditionalFiles; the generator never reads undeclared files. The generator reads
        that Namespace metadata, falling back to RootNamespace. -->
   <ItemGroup>
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
