@@ -205,7 +205,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(
                     new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
-                        DefinitionProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
+                        DefinitionProvider: true, DeclarationProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
                         SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
@@ -231,6 +231,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 await RespondAsync(id, service.DocumentSymbols(uri).Select(Symbol).ToArray(), LspJson.Default.LspDocumentSymbolArray, cancel);
                 break;
             }
+            case "textDocument/declaration":
             case "textDocument/definition":
             {
                 var (uri, position) = At(parameters);

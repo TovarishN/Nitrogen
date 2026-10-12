@@ -33,6 +33,7 @@ public sealed record ServerCapabilities(
     SemanticTokensOptions? SemanticTokensProvider = null,
     bool? DocumentSymbolProvider = null,
     bool? DefinitionProvider = null,
+    bool? DeclarationProvider = null,
     bool? ReferencesProvider = null,
     bool? DocumentHighlightProvider = null,
     bool? HoverProvider = null,

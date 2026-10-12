@@ -36,6 +36,7 @@
   <ItemGroup>
     <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Nitrogen.Ngr\GrammarSemantics.cs" Link="NavigationSources\GrammarSemantics.cs" CopyToOutputDirectory="PreserveNewest" />
     <!-- Geometry as a nitrogen.json language: its grammar, helper sources and config, served by the workspace. -->
     <None Include="..\Nitrogen.Geometry\nitrogen.json;..\Nitrogen.Geometry\Geometry.ngr;..\Nitrogen.Geometry\BoxMeshModule.cs;..\Nitrogen.Geometry\GeometryValues.cs"
           Link="GeometryLanguage\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
@@ -48,6 +49,7 @@
   <!-- The runtime tests run against modules generated from these grammars. -->
   <ItemGroup>
     <ProjectReference Include="..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="Grammars\QuoteLists.ngr" Namespace="Nitrogen.Tests.QuoteLists" />
     <AdditionalFiles Include="Grammars\Calc.ngr" Namespace="Nitrogen.Tests.Calc" />
     <AdditionalFiles Include="Grammars\InitializedRefs.ngr" Namespace="Nitrogen.Tests.InitializedRefs" />
     <AdditionalFiles Include="Grammars\Counted.ngr" Namespace="Nitrogen.Tests.Counted" />

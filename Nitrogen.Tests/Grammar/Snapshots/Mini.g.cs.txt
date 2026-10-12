@@ -57,6 +57,19 @@ public sealed unsafe class MiniModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Mini.Pair", "Mini.Choice", "Mini.Ab", "Mini.Ac", "Mini.If", "Mini.Maybe" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] {  },
+        2 => new string[] { "Mini.Pair" },
+        3 => new string[] { "Mini.Choice", "Mini.Ab" },
+        4 => new string[] { "Mini.Choice", "Mini.Ac" },
+        5 => new string[] { "Mini.If" },
+        6 => new string[] { "Mini.Maybe" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static bool Fail(ref ParserState s, scoped in ParseMark mark)
     {
         s.Reset(mark);

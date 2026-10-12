@@ -132,6 +132,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Where the name at <paramref name="position"/> is declared; built-ins have no location.</summary>
     public IReadOnlyList<DocumentLocation> Definition(string uri, DocumentPosition position)
     {
+        if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpNameAt(csharp, position) is { } found ? [found.Target] : [];
+        if (QuoteAt(uri, position) is { } quote) return QuoteDefinitions(quote, quote.Document.Lines.OffsetOf(position));
+        if (AssistedNavigation(uri, position) is { } assisted) return assisted.Definitions;
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? Definition(inner.Uri, inner.Position) : [];
         return NameAt(uri, position) is { } name ? name.Symbols.Where(s => !s.IsBuiltin).Select(LocationOf).Select(OutOf).ToList() : [];
     }
@@ -139,6 +142,10 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Every reference to what the name at <paramref name="position"/> names, across the project; declarations first when asked.</summary>
     public IReadOnlyList<DocumentLocation> References(string uri, DocumentPosition position, bool includeDeclaration)
     {
+        if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpQuoteReferences(csharp, position, includeDeclaration);
+        if (QuoteAt(uri, position) is { } quote) return QuoteReferences(quote, quote.Document.Lines.OffsetOf(position), includeDeclaration);
+        if (AssistedNavigation(uri, position) is { } assisted)
+            return AssistedReferences(assisted.Scope, assisted.Name, includeDeclaration ? assisted.Definitions : []);
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? References(inner.Uri, inner.Position, includeDeclaration) : [];
         if (NameAt(uri, position) is not { } name) return [];
         var locations = new List<DocumentLocation>();
@@ -174,6 +181,11 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// </summary>
     public HoverInfo? Hover(string uri, DocumentPosition position)
     {
+        if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpNameAt(csharp, position) is { } quoteName
+            ? new HoverInfo(quoteName.Description, csharp.Host.Lines.RangeOf(quoteName.Span)) : null;
+        if (QuoteAt(uri, position) is { } quote)
+            return QuoteNameAt(quote, quote.Document.Lines.OffsetOf(position)) is { } name
+                ? new HoverInfo(name.Description, quote.Document.Lines.RangeOf(name.Span)) : null;
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner && Hover(inner.Uri, inner.Position) is { } found
                 ? found with { Range = OutOf(inner.Uri, found.Range) }
@@ -283,6 +295,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Names visible at the cursor of the kinds the grammar allows there (those of the expected type first), then the keywords it expects; empty when not open.</summary>
     public IReadOnlyList<CompletionItem> Completion(string uri, DocumentPosition position)
     {
+        if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpQuoteCompletion(csharp, position);
+        if (QuoteAt(uri, position) is { } quote) return QuoteCompletion(quote, quote.Document.Lines.OffsetOf(position));
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner
                 ? Completion(inner.Uri, inner.Position).Select(i => i with { Replace = OutOf(inner.Uri, i.Replace) }).ToList()
@@ -421,7 +435,10 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     {
         var project = _projects[language];
         if (!_semantics.TryGetValue(language, out var semantics) || semantics.Project != project)
+        {
+            semantics?.Dispose();
             _semantics[language] = semantics = new ProjectSemantics(project);
+        }
         return semantics;
     }
 
@@ -438,11 +455,17 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     public void Dispose()
     {
         _inspection.Clear();
+        foreach (var semantics in _semantics.Values) semantics.Dispose();
+        _semantics.Clear();
+        _csharpQuotes.Clear();
         DisposeHosts();
         foreach (var document in _documents.Values) document.Dispose();
         _documents.Clear();
         DisposeClosed();
+        _sourceIndexes.Clear();
         DisposeGrammars();
+        foreach (var cached in _quoteLanguages.Values) cached.Snapshot?.Dispose();
+        _quoteLanguages.Clear();
         DisposeClosedGrammars();
     }
 }

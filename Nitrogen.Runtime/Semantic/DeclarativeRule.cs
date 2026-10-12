@@ -21,7 +21,7 @@ public enum DeclarativeForm
 }
 
 /// <summary>A rewrite template's hole: the field it names, that field's child index in a use, and the qualified rule it stands for.</summary>
-public sealed record RewriteHole(string Name, int Child, string Rule);
+public sealed record RewriteHole(string Name, int Child, string Rule, bool IsList = false, int Stride = 1);
 
 /// <summary>A rule's rewrite: the template text (verbatim), the qualified rule it parses as, and its holes.</summary>
 public sealed record RewriteSpec(string Text, string Category, IReadOnlyList<RewriteHole> Holes);

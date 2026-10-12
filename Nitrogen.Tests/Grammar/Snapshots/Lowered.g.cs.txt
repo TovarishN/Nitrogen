@@ -83,6 +83,27 @@ public sealed unsafe class LoweredModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lowered.File", "Lowered.Item", "Lowered.Input", "Lowered.Fixed", "Lowered.Plain", "Lowered.Statement", "Lowered.Value", "Lowered.Add", "Lowered.Turn", "Lowered.Wrap", "Lowered.Num", "Lowered.Ref" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] {  },
+        2 => new string[] {  },
+        3 => new string[] {  },
+        4 => new string[] {  },
+        5 => new string[] { "Lowered.File" },
+        6 => new string[] { "Lowered.Item", "Lowered.Input" },
+        7 => new string[] { "Lowered.Item", "Lowered.Fixed" },
+        8 => new string[] { "Lowered.Item", "Lowered.Plain" },
+        9 => new string[] { "Lowered.Item", "Lowered.Statement" },
+        10 => new string[] { "Lowered.Value", "Lowered.Add" },
+        11 => new string[] { "Lowered.Value", "Lowered.Turn" },
+        12 => new string[] { "Lowered.Value", "Lowered.Wrap" },
+        13 => new string[] { "Lowered.Value", "Lowered.Num" },
+        14 => new string[] { "Lowered.Value", "Lowered.Ref" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static readonly global::Nitrogen.Binding.BindingRule?[] s_bindings =
     {
         null,
@@ -794,13 +815,13 @@ public sealed unsafe class LoweredModule : SyntaxModule
             var m = s.Mark();
             s.SkipTrivia();
             int before = s.Position;
-            if (!ParseItem(ref s) || s.Position == before)
+            if (!(s.InTemplate && s.TryListHole("Lowered.Item") || ParseItem(ref s)) || s.Position == before)
             {
                 s.Reset(m);
                 break;
             }
         }
-        s.Close();
+        s.CloseTemplateList("Lowered.Item", 0, null);
         return true;
     }
 

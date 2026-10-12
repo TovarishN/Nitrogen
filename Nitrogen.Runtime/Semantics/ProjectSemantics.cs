@@ -7,7 +7,7 @@ namespace Nitrogen.Semantics;
 /// per path and resolves symbol properties in the file that declares the symbol. Any project change
 /// (its <see cref="Project.Version"/> moves) drops everything; evaluation is lazy, so that is cheap.
 /// </summary>
-public sealed class ProjectSemantics(Project project)
+public sealed class ProjectSemantics(Project project) : IDisposable
 {
     readonly Dictionary<string, FileSemantics> _files = new(StringComparer.Ordinal);
     readonly Dictionary<(Symbol Symbol, SymbolProperty Property), object?> _symbols = new();
@@ -44,9 +44,16 @@ public sealed class ProjectSemantics(Project project)
         return value;
     }
 
+    public void Dispose()
+    {
+        foreach (var file in _files.Values) file.ReleaseQuotes();
+        _files.Clear();
+    }
+
     void Sync()
     {
         if (_version == Project.Version) return;
+        foreach (var file in _files.Values) file.ReleaseQuotes();
         _files.Clear();
         _symbols.Clear();
         _computing.Clear();

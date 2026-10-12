@@ -70,6 +70,26 @@ public sealed unsafe class CalcModule : SyntaxModule
         _ => null,
     };
 
+    public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Program", "Calc.Statement", "Calc.Assign", "Calc.ExprStatement", "Calc.Expr" };
+
+    public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
+    {
+        1 => new string[] {  },
+        2 => new string[] {  },
+        3 => new string[] { "Calc.Program" },
+        4 => new string[] { "Calc.Statement", "Calc.Assign" },
+        5 => new string[] { "Calc.Statement", "Calc.ExprStatement" },
+        6 => new string[] { "Calc.Expr" },
+        7 => new string[] { "Calc.Expr" },
+        8 => new string[] { "Calc.Expr" },
+        9 => new string[] { "Calc.Expr" },
+        10 => new string[] { "Calc.Expr" },
+        11 => new string[] { "Calc.Expr" },
+        12 => new string[] { "Calc.Expr" },
+        13 => new string[] { "Calc.Expr" },
+        _ => global::System.Array.Empty<string>(),
+    };
+
     static bool Fail(ref ParserState s, scoped in ParseMark mark)
     {
         s.Reset(mark);
@@ -422,13 +442,13 @@ public sealed unsafe class CalcModule : SyntaxModule
             var m = s.Mark();
             s.SkipTrivia();
             int before = s.Position;
-            if (!ParseStatement(ref s) || s.Position == before)
+            if (!(s.InTemplate && s.TryListHole("Calc.Statement") || ParseStatement(ref s)) || s.Position == before)
             {
                 s.Reset(m);
                 break;
             }
         }
-        s.Close();
+        s.CloseTemplateList("Calc.Statement", 0, null);
         return true;
     }
 
@@ -451,7 +471,7 @@ public sealed unsafe class CalcModule : SyntaxModule
     static bool P2(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
-        if (s.ParseExtensible(Instance.Expr, 0))
+        if ((s.InTemplate && s.TryListHole("Calc.Expr") || s.ParseExtensible(Instance.Expr, 0)))
         {
             while (true)
             {
@@ -463,14 +483,14 @@ public sealed unsafe class CalcModule : SyntaxModule
                     break;
                 }
                 s.SkipTrivia();
-                if (!s.ParseExtensible(Instance.Expr, 0))
+                if (!(s.InTemplate && s.TryListHole("Calc.Expr") || s.ParseExtensible(Instance.Expr, 0)))
                 {
                     s.Reset(m);
                     break;
                 }
             }
         }
-        s.Close();
+        s.CloseTemplateList("Calc.Expr", 0, ",");
         return true;
     }
 

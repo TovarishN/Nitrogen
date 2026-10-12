@@ -56,6 +56,7 @@ internal static class ModuleWriter
         foreach (var rule in rules.OfType<SyntaxRule>())
             b.Append($"        {CSharpText.Literal(rule.Name)} => {CSharpText.Identifier(rule.Name)},\n");
         b.Append("        _ => null,\n    };\n\n");
+        QuotationWriter.Write(b, model, info);
         BindingWriter.Write(b, info);
         if (hasSemantics) semantics.WriteMembers(b);
         DeclarativeWriter.Write(b, model, info);

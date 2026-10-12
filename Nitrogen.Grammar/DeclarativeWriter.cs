@@ -86,14 +86,15 @@ internal static class DeclarativeWriter
             string implicitModule = kind.ImplicitModule ?? info.Module.Name;
             string Qualified(GrammarSymbol symbol) => symbol.Module.Name + "." + symbol.Rule.Name;
             var holes = new List<string>();
-            foreach (var name in System.Text.RegularExpressions.Regex.Matches(lowers.Target!.Name, @"\$([A-Za-z_][A-Za-z0-9_]*)")
-                         .Cast<System.Text.RegularExpressions.Match>().Select(m => m.Groups[1].Value).Distinct())
+            foreach (var field in elements.OfType<LabeledExpr>())
             {
-                var field = elements.OfType<LabeledExpr>().First(element => element.Label == name);
-                var rule = model.Resolve(((ReferenceExpr)field.Inner).Name, info.Module, implicitModule);
-                holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(name)}, {BindingWriter.ChildIndex(elements, name)}, {CSharpText.Literal(Qualified(rule))})");
+                var shape = QuotationWriter.Shape(field.Inner);
+                if (shape.Item is not { } reference || model.Resolve(reference.Name, info.Module, implicitModule) is not { Rule: SyntaxRule or ExtensibleRule } rule) continue;
+                string name = field.Label;
+                string extra = shape.IsList ? $", true, {shape.Stride}" : "";
+                holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(name)}, {BindingWriter.ChildIndex(elements, name)}, {CSharpText.Literal(Qualified(rule))}{extra})");
             }
-            extraArguments += $", rewrite: new global::Nitrogen.Semantic.RewriteSpec({CSharpText.Literal(lowers.Target.Name)}, " +
+            extraArguments += $", rewrite: new global::Nitrogen.Semantic.RewriteSpec({CSharpText.Literal(lowers.Target!.Name)}, " +
                 $"{CSharpText.Literal(Category(model, info, kind))}, new global::Nitrogen.Semantic.RewriteHole[] {{ {string.Join(", ", holes)} }})";
         }
         else if (lowers is not null)
@@ -159,13 +160,8 @@ internal static class DeclarativeWriter
     /// </summary>
     static string Category(EmitModel model, ModuleInfo info, KindInfo kind)
     {
-        if (kind.Point is { } point) return point.Module.Name + "." + point.Rule.Name;
-        var rule = (SyntaxRule)kind.Rule!;
-        var aliases = info.Module.Rules.OfType<SyntaxRule>().Where(EmitModel.IsAlias)
-            .Where(alias => (alias.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { alias.Body })
-                .Any(alternative => alternative is ReferenceExpr reference && reference.Name == rule.Name))
-            .ToList();
-        return info.Module.Name + "." + (aliases.Count == 1 ? aliases[0].Name : rule.Name);
+        if (kind.Point is { } point) return point.Key;
+        return QuotationWriter.Category(model.Analysis, info.Module, kind.Rule!, null).Key;
     }
 
     static string Ints(IEnumerable<int> values)

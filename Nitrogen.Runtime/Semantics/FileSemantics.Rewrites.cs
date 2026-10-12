@@ -11,6 +11,16 @@ public sealed partial class FileSemantics
 
     readonly Dictionary<int, RewriteInstance?> _instances = new();
     readonly HashSet<int> _cyclic = new();
+    readonly Dictionary<int, QuoteDiagnostic> _instanceErrors = new();
+    readonly List<QuoteInstantiation> _ownedQuotes = [];
+    internal QuoteDiagnostic? RewriteError(int node) => _instanceErrors.GetValueOrDefault(node);
+
+    internal void ReleaseQuotes()
+    {
+        foreach (var instance in _instances.Values) instance?.File.ReleaseQuotes();
+        foreach (var quote in _ownedQuotes) quote.Dispose();
+        _ownedQuotes.Clear();
+    }
     List<SemanticDiagnostic>? _expansions;
 
     /// <summary>In an instantiation: the rules being expanded around it, to stop a rewrite that reaches itself.</summary>
@@ -35,19 +45,29 @@ public sealed partial class FileSemantics
         if (_chain.Contains(rule)) _cyclic.Add(node);
         else if (_language.RewriteTemplate(rule).Tree is { } template)
         {
+            var arguments = new Dictionary<string, QuoteArgument>();
+            foreach (var hole in spec.Holes)
+            {
+                int child = Tree.Child(node, hole.Child);
+                arguments[hole.Name] = hole.IsList
+                    ? QuoteArgument.List(Enumerable.Range(0, (Tree.ChildCount(child) + hole.Stride - 1) / hole.Stride)
+                        .Select(i => new QuoteNode(Tree, Tree.Child(child, i * hole.Stride))).ToArray())
+                    : QuoteArgument.Node(new QuoteNode(Tree, child));
+            }
+            var constructed = new QuoteInstantiator(template, arguments, proxies: true).Build();
+            if (!constructed.Success)
+            {
+                _instanceErrors[node] = constructed.Diagnostics[0];
+                _instances[node] = null;
+                return null;
+            }
+            _ownedQuotes.Add(constructed);
             var project = new Nitrogen.Binding.Project(_language);
-            project.Set(Language.RewritePath, template);
+            project.Set(Language.RewritePath, constructed.Tree!);
             var file = new ProjectSemantics(project)[Language.RewritePath];
-            var children = new Dictionary<int, int>();
-            for (int hole = 0; hole < template.NodeCount; hole++)
-                if (template.Kind(hole) == SyntaxKinds.Hole)
-                {
-                    string name = template.GetText(hole)[1..].ToString();
-                    children[hole] = Tree.Child(node, spec.Holes.First(h => h.Name == name).Child);
-                }
-            file.Holes = (this, children);
+            file.Holes = (this, constructed.Proxies);
             file._chain = _chain.Add(rule);
-            instance = new RewriteInstance(file, template.Root, rule);
+            instance = new RewriteInstance(file, constructed.Tree!.Root, rule);
         }
         _instances[node] = instance;
         return instance;
