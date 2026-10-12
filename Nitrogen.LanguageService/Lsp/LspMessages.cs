@@ -57,8 +57,10 @@ public sealed record DidChangeWatchedFilesClientCapabilities(bool? DynamicRegist
 
 public sealed record InlayHintWorkspaceClientCapabilities(bool? RefreshSupport);
 
+public sealed record SemanticTokensWorkspaceClientCapabilities(bool? RefreshSupport);
+
 public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapabilities? DidChangeWatchedFiles,
-    InlayHintWorkspaceClientCapabilities? InlayHint = null);
+    InlayHintWorkspaceClientCapabilities? InlayHint = null, SemanticTokensWorkspaceClientCapabilities? SemanticTokens = null);
 
 public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
 

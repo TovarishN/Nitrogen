@@ -106,6 +106,23 @@ The [feature matrix](docs/editor-support.md#feature-matrix) shows what works whe
 Your own language takes the same pieces: a grammar, a `nitrogen.json`, and as much C# as its semantics
 need. The [language guide](docs/language-guide.md) covers the grammar language.
 
+### Editing a language in VS Code
+
+Generated VS Code extensions use their bundled grammar by default. To develop the
+language, open its folder containing `nitrogen.json`, enable development mode in
+workspace settings, and reload the window once. For DateCalc, open `examples/DateCalc`
+and set:
+
+```json
+{ "nitrogen-datecalc.developmentMode": true }
+```
+
+Saving `.ngr` or configured helper `.cs` files then updates open `.datecalc` files
+without restarting LSP: diagnostics, completion, navigation, semantic coloring and
+value hints use the recompiled language. If a grammar edit fails to compile, the
+last working language stays active. See [development mode](docs/editor-support.md#development-mode-for-generated-vs-code-extensions)
+for setup and workspace requirements.
+
 ## Agentic direction
 
 Nitrogen is aimed at agents that assemble small, domain-specific programs from capabilities a host

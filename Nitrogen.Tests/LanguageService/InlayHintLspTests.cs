@@ -87,4 +87,19 @@ public sealed class InlayHintLspTests : IDisposable
 
         Assert.Equal(refreshes, messages.Count(m => m.TryGetProperty("method", out var method) && method.GetString() == "workspace/inlayHint/refresh"));
     }
+    [Theory]
+    [InlineData("""{"workspace":{"semanticTokens":{"refreshSupport":true}}}""", 1)]
+    [InlineData("{}", 0)]
+    public async Task A_recompiled_language_refreshes_coloring_when_the_client_supports_it(string capabilities, int refreshes)
+    {
+        string watched = JsonSerializer.Serialize(new
+        {
+            jsonrpc = "2.0", method = "workspace/didChangeWatchedFiles",
+            @params = new { changes = new[] { new { uri = Uri("DateCalc.ngr"), type = 2 } } },
+        });
+        var messages = await Session(Initialize(capabilities), Initialized, watched, Shutdown, Exit);
+        Assert.Equal(refreshes, messages.Count(m => m.TryGetProperty("method", out var method) &&
+            method.GetString() == "workspace/semanticTokens/refresh"));
+    }
+
 }
