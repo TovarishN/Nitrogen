@@ -11,7 +11,7 @@ the language-workbench idea of [JetBrains' Nitra](https://github.com/JetBrains/N
 
 ### The language
 
-[DateCalc.ngr](examples/DateCalc/DateCalc.ngr) (84 lines) gives the syntax. Each rule says what it
+[DateCalc.ngr](examples/DateCalc/DateCalc.ngr) gives the syntax. Each rule says what it
 lowers to, and `check` rules report source errors:
 
 ```text
@@ -24,6 +24,17 @@ token Date = Digit Digit Digit Digit "-" Digit Digit "-" Digit Digit;
   }
 | Add = Left:Expr "+" Right:Expr  precedence 10 left  lowers operation? Selected(Left, Right)
 ```
+
+Quasiquotation defines derived syntax through existing operations:
+
+```text
+| Fortnights = Count:Expr "fortnights" precedence 30 rewrites <[ $Count * 2 weeks ]>
+```
+
+`2 fortnights` evaluates to `28 days`; no new semantic operation or evaluator handler is needed.
+[quasiquotation.datecalc](examples/DateCalc/quasiquotation.datecalc) demonstrates counts, expressions,
+and date arithmetic. In the grammar quote, navigate from `$Count` to its field or from `weeks` to the
+`Weeks` rule.
 
 The rest is ordinary C#:
 

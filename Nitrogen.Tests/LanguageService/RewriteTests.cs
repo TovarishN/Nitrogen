@@ -11,7 +11,6 @@ public sealed class RewriteTests : IDisposable
     readonly string _root = Directory.CreateTempSubdirectory("nitrogen-rewrites-").FullName;
 
     internal const string Alternatives = """
-            | Fortnights = Count:Expr "fortnights" precedence 30  rewrites <[ $Count * 2 weeks ]>
             | NextDay    = Date:Expr "next" "day" precedence 30  rewrites <[ $Date + 1 days ]>
             | Doubled    = Value:Expr "doubled" precedence 30  rewrites <[ $Value + $Value ]>
             | Monthish   = Count:Expr "monthish" precedence 30  rewrites <[ $Count * 2 fortnights ]>

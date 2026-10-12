@@ -26,6 +26,31 @@ public sealed class DateCalcTests
         ], lines);
     }
 
+    [Fact]
+    public void Quasiquotation_sample_runs()
+    {
+        string sample = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage", "quasiquotation.datecalc"));
+        Assert.Equal(
+        [
+            new(3, "3"),
+            new(4, "42 days"),
+            new(5, "42 days"),
+            new(6, "2026-11-02 Mon"),
+        ], DateCalcEvaluator.Run(sample));
+    }
+
+    [Theory]
+    [InlineData("2 fortnights;", "28 days")]
+    [InlineData("(1 + 2) fortnights;", "42 days")]
+    [InlineData("let count = 3; count fortnights;", "42 days")]
+    [InlineData("2026-10-05 + 2 fortnights;", "2026-11-02 Mon")]
+    public void Quasiquoted_fortnights_use_existing_duration_operations(string source, string expected)
+    {
+        var lines = DateCalcEvaluator.Run(source);
+        Assert.All(lines, line => Assert.False(line.IsError, line.Text));
+        Assert.Equal(expected, lines[^1].Text);
+    }
+
     [Theory]
     [InlineData("1 + 2 * 3;", "7")]
     [InlineData("(1 + 2) * 3;", "9")]
