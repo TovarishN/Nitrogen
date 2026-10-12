@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <NitrogenEnabled Condition="'$(NitrogenEnabled)' == ''">true</NitrogenEnabled>
+    <NitrogenDotNetHost Condition="'$(NitrogenDotNetHost)' == '' and '$(DotNetHostPath)' != ''">$(DotNetHostPath)</NitrogenDotNetHost>
+    <NitrogenDotNetHost Condition="'$(NitrogenDotNetHost)' == ''">dotnet</NitrogenDotNetHost>
+    <AllowUnsafeBlocks Condition="'$(NitrogenEnabled)' == 'true'">true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
+    <CompilerVisibleProperty Include="RootNamespace" />
+  </ItemGroup>
+</Project>

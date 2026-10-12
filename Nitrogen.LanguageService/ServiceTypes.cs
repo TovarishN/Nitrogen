@@ -14,7 +14,7 @@ public enum ServiceSeverity
 }
 
 /// <summary>A parse diagnostic (code: the runtime's DiagnosticCode name) or a binding diagnostic (NBxxxx).</summary>
-public sealed record ServiceDiagnostic(DocumentRange Range, ServiceSeverity Severity, string Code, string Message);
+public sealed record ServiceDiagnostic(DocumentRange Range, ServiceSeverity Severity, string Code, string Message, string Source = "nitrogen", IReadOnlyList<DocumentLocation>? Related = null);
 
 /// <summary>One coloured stretch of a single line.</summary>
 public readonly record struct SemanticToken(DocumentPosition Start, int Length, TokenType Type, TokenModifiers Modifiers);

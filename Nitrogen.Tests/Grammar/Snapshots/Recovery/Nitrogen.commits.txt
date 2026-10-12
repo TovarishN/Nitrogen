@@ -1,4 +1,21 @@
-// commit points: 59 committed elements (0 composed) in 24 sequences
+// commit points: 71 committed elements (0 composed) in 29 sequences
+LanguageDeclaration: "language" Name:Identifier "{" Settings:LanguageSetting* "}"
+  1 Name:Identifier  static  insert {"{"}  sync {Identifier} @1, {"{"} @2, {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings"} @3, {"}"} @4
+  2 "{"  static  insert {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings", "}"}  sync {"{"} @2, {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings"} @3, {"}"} @4
+  4 "}"  static  insert {"syntax", $}  sync {"}"} @4, {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings"} @3
+LanguageNameSetting: Kind:("start" / "namespace") Name:LanguageQualifiedName ";"
+  1 Name:LanguageQualifiedName  static  insert {";"}  sync {DottedName, Identifier} @1, {";"} @2
+  2 ";"  static  insert {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings", "}"}  sync {";"} @2
+LanguageStringSetting: Kind:("grammars" / "sources" / "extensions") Values:(LanguageString; ",")+ ";"
+  1 Values:(LanguageString; ",")+  static  insert {";"}  sync {String} @1, {";"} @2
+  2 ";"  static  insert {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings", "}"}  sync {";"} @2, {String} @1
+LanguageUsingSetting: Kind:"usings" Values:(LanguageName; ",")+ ";"
+  1 Values:(LanguageName; ",")+  static  insert {";"}  sync {DottedName, Identifier} @1, {";"} @2
+  2 ";"  static  insert {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings", "}"}  sync {";"} @2, {DottedName, Identifier} @1
+LanguagePresentationSetting: Kind:("tokens" / "types") Name:QualifiedName Value:String ";"
+  1 Name:QualifiedName  static  insert {String}  sync {DottedName, Identifier} @1, {String} @2, {";"} @3
+  2 Value:String  static  insert {";"}  sync {String} @2, {";"} @3
+  3 ";"  static  insert {"extensions", "grammars", "namespace", "sources", "start", "tokens", "types", "usings", "}"}  sync {";"} @3
 Module: "syntax" "module" Name:QualifiedName "{" Members:Member* "}"
   1 "module"  static  insert {DottedName, Identifier}  sync {"module"} @1, {DottedName, Identifier} @2, {"{"} @3, {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using"} @4, {"}"} @5
   2 Name:QualifiedName  static  insert {"{"}  sync {DottedName, Identifier} @2, {"{"} @3, {"builtin", "extend", "extensible", "symbol", "symbols", "syntax", "token", "using"} @4, {"}"} @5

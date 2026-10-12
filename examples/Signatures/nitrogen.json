@@ -1,0 +1,10 @@
+{
+  "augmentations": [
+    {
+      "language": "./NativeChecks.syntax",
+      "files": ["*.cs", "*.razor"],
+      "exclude": ["**/bin/**", "**/obj/**"],
+      "input": "document"
+    }
+  ]
+}

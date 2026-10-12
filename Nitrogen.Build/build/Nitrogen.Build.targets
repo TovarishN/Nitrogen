@@ -1,0 +1,30 @@
+<Project>
+  <PropertyGroup>
+    <_NitrogenPackageRoot>$(MSBuildThisFileDirectory)..</_NitrogenPackageRoot>
+    <_NitrogenChecker>$(_NitrogenPackageRoot)/tools/net10.0/any/nitrogen.dll</_NitrogenChecker>
+  </PropertyGroup>
+  <UsingTask TaskName="Nitrogen.Build.WriteAnalysisManifest" AssemblyFile="$(_NitrogenPackageRoot)/tasks/net10.0/Nitrogen.Build.dll" />
+  <Target Name="NitrogenPrepareInputs" BeforeTargets="CoreCompile"
+          Condition="'$(NitrogenEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_NitrogenManifest>$(IntermediateOutputPath)nitrogen-inputs.json</_NitrogenManifest>
+      <_NitrogenStamp>$(IntermediateOutputPath)nitrogen-check.stamp</_NitrogenStamp>
+    </PropertyGroup>
+    <ItemGroup><_NitrogenCandidates Include="@(Compile);@(None);@(Content);@(AdditionalFiles);@(NitrogenInput)" /></ItemGroup>
+    <Nitrogen.Build.WriteAnalysisManifest Root="$(MSBuildProjectDirectory)" ManifestPath="$(_NitrogenManifest)" Inputs="@(_NitrogenCandidates)">
+      <Output TaskParameter="HasAnalysis" PropertyName="_NitrogenHasAnalysis" />
+      <Output TaskParameter="GeneratorInputs" ItemName="_NitrogenGeneratorInputs" />
+    </Nitrogen.Build.WriteAnalysisManifest>
+    <ItemGroup>
+      <AdditionalFiles Include="@(_NitrogenGeneratorInputs)" Exclude="@(AdditionalFiles)" />
+      <FileWrites Include="$(_NitrogenManifest);$(_NitrogenStamp)" />
+    </ItemGroup>
+  </Target>
+  <Target Name="NitrogenCheckSources" BeforeTargets="CoreCompile" DependsOnTargets="NitrogenPrepareInputs"
+          Condition="'$(NitrogenEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true' and '$(_NitrogenHasAnalysis)' == 'true'"
+          Inputs="@(_NitrogenCandidates);$(_NitrogenManifest);$(MSBuildProjectFullPath)" Outputs="$(_NitrogenStamp)">
+    <Message Text="Nitrogen source check" Importance="normal" />
+    <Exec Command="&quot;$(NitrogenDotNetHost)&quot; &quot;$(_NitrogenChecker)&quot; check --inputs &quot;$(_NitrogenManifest)&quot;" />
+    <Touch Files="$(_NitrogenStamp)" AlwaysCreate="true" />
+  </Target>
+</Project>

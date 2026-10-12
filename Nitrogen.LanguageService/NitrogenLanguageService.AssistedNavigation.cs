@@ -12,10 +12,10 @@ public sealed partial class NitrogenLanguageService
         if (IsEmbedded(uri)) return null;
         if (!System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile) return null;
         string path = Path.GetFullPath(parsed.LocalPath);
-        if (!path.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) return null;
+        if (!IsGrammarDocument(uri) && !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) return null;
         AssistName? name;
         NavigationScope? scope = null;
-        if (path.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase))
+        if (IsGrammarDocument(uri))
         {
             if (!TryDocument(uri, out var document) || AssistOf(document) is not { } assist) return null;
             int offset = document.Lines.OffsetOf(position);
@@ -53,7 +53,7 @@ public sealed partial class NitrogenLanguageService
                 Add(open);
                 continue;
             }
-            if (ReadNavigationText(path) is not { } text || !Registry.TryFind(uri, out var language, out var start)) continue;
+            if (ReadNavigationText(path) is not { } text || !TryLanguage(uri, out var language, out var start)) continue;
             using var document = new Document(uri, 0, text, language, start);
             Add(document);
         }
@@ -110,6 +110,10 @@ public sealed partial class NitrogenLanguageService
 
     NavigationScope? NavigationScopeFor(string path)
     {
+        foreach (var definition in _signatureDefinitions.Values)
+            if (definition.Grammars.Concat(definition.Sources).Any(f => f.Path == path))
+                return new NavigationScope("signature:" + definition.Id, definition.Grammars.Select(g => g.Path).ToArray(),
+                    definition.Sources.Select(s => s.Path).ToArray(), definition.GeneratedNamespace, definition.Usings);
         foreach (var language in _grammarLanguages)
             if (language.Files().Contains(path, StringComparer.Ordinal) || language.SourceFiles().Contains(path, StringComparer.Ordinal))
                 return new NavigationScope("language:" + language.Name, language.Files(), language.SourceFiles(), language.Workspace.GeneratedNamespace, language.Usings);

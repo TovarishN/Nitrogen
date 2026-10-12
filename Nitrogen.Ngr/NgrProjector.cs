@@ -21,8 +21,33 @@ internal static class NgrProjector
     public static GrammarFile File(HirNode root)
     {
         var modules = new List<ModuleDecl>();
-        foreach (var module in Items(Expect(root, "File").Arguments[0])) modules.Add(Module(module));
-        return new GrammarFile(modules.ToArray());
+        var file = Expect(root, "File");
+        foreach (var module in Items(file.Arguments[0])) modules.Add(Module(module));
+        var languages = new List<LanguageDecl>();
+        if (Value(file.Arguments[1]) is { } declaration)
+        {
+            var language = Expect(declaration, "LanguageDeclaration");
+            var settings = new List<LanguageSetting>();
+            foreach (var item in Items(language.Arguments[1]))
+            {
+                var setting = (HirOperation)item;
+                var args = setting.Arguments;
+                string key = Text(args[0]);
+                var values = new List<NameDecl>();
+                if (Kind(setting) is "LanguageListSetting" or "LanguageUsingSetting")
+                    foreach (var value in Items(args[1]))
+                        values.Add(new NameDecl(key == "usings" ? Text(value) : Unquote(Text(value)), Span(value)));
+                else
+                {
+                    values.Add(new NameDecl(Text(args[1]), Span(args[1])));
+                    if (Kind(setting) == "LanguagePresentationSetting")
+                        values.Add(new NameDecl(Unquote(Text(args[2])), Span(args[2])));
+                }
+                settings.Add(new LanguageSetting(key, values.ToArray(), Span(setting)));
+            }
+            languages.Add(LanguageDeclarations.Build(Text(language.Arguments[0]), settings.ToArray(), Span(language)));
+        }
+        return new GrammarFile(modules.ToArray(), languages.ToArray());
     }
 
     static ModuleDecl Module(HirNode node)

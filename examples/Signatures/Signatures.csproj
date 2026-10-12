@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Nitrogen.Build" Version="0.10.0" />
+    <NitrogenInput Include="../DateCalc/DateCalc.ngr" />
+    <Compile Include="../DateCalc/DateCalcLanguage.cs;../DateCalc/MathModule.cs;../DateCalc/DateCalcEvaluator.cs;../DateCalc/DateCalcFixes.cs" />
+  </ItemGroup>
+</Project>

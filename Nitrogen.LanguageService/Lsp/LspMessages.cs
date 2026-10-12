@@ -23,11 +23,17 @@ public sealed record DidChangeTextDocumentParams(VersionedTextDocumentIdentifier
 
 public sealed record DidCloseTextDocumentParams(TextDocumentIdentifier TextDocument);
 
-public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, string Source, string Message);
+public sealed record LspDiagnosticRelatedInformation(LspLocation Location, string Message);
+
+public sealed record LspDiagnostic(LspRange Range, int Severity, string Code, string Source, string Message,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LspDiagnosticRelatedInformation[]? RelatedInformation = null);
 
 public sealed record PublishDiagnosticsParams(string Uri, int? Version, LspDiagnostic[] Diagnostics);
 
 /// <param name="TextDocumentSync">2: incremental, each change carrying the range it replaces.</param>
+public sealed record WorkspaceFoldersServerCapabilities(bool Supported = true, bool ChangeNotifications = true);
+public sealed record ServerWorkspaceCapabilities(WorkspaceFoldersServerCapabilities WorkspaceFolders);
+
 public sealed record ServerCapabilities(
     int TextDocumentSync,
     SemanticTokensOptions? SemanticTokensProvider = null,
@@ -47,7 +53,8 @@ public sealed record ServerCapabilities(
     bool? WorkspaceSymbolProvider = null,
     bool? DocumentFormattingProvider = null,
     bool? DocumentRangeFormattingProvider = null,
-    DocumentOnTypeFormattingOptions? DocumentOnTypeFormattingProvider = null);
+    DocumentOnTypeFormattingOptions? DocumentOnTypeFormattingProvider = null,
+    ServerWorkspaceCapabilities? Workspace = null);
 
 public sealed record RenameOptions(bool PrepareProvider);
 
@@ -65,7 +72,7 @@ public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapa
 public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
 
 /// <param name="SkipLanguages">Languages, by name or extension without the dot, whose tagged C# strings this server leaves to another (an editor plugin that carries the language).</param>
-public sealed record InitializationOptions(string[]? SkipLanguages);
+public sealed record InitializationOptions(string[]? SkipLanguages, bool SignatureDocuments = true);
 
 public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders, ClientCapabilities? Capabilities = null,
     InitializationOptions? InitializationOptions = null);

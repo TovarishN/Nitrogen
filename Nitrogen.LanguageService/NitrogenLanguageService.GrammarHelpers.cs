@@ -9,7 +9,7 @@ public sealed partial class NitrogenLanguageService
     IReadOnlyList<DocumentLocation> GrammarHelperDefinition(string uri, DocumentPosition position)
     {
         if (!System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || !parsed.IsFile ||
-            !parsed.LocalPath.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase)) return [];
+            !IsGrammarDocument(uri)) return [];
         string path = Path.GetFullPath(parsed.LocalPath);
         if (NavigationScopeFor(path) is not { } scope) return [];
         var texts = new Dictionary<string, string>(StringComparer.Ordinal);

@@ -1,0 +1,8 @@
+#!nitrogen grammar
+language SourceRules { start SourceRules.Document; }
+syntax module SourceRules {
+  token Content = .+;
+  syntax Document = Body:Content {
+    check NC1001 !Body.Text.Contains("NITROGEN_FORBIDDEN") : "remove the forbidden source marker" at Body;
+  }
+}

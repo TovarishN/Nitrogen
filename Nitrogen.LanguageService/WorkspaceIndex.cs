@@ -29,6 +29,8 @@ public sealed partial class NitrogenLanguageService
 
     /// <summary>The files whose diagnostics are published while closed: the closed indexed files and the workspace languages' grammars, minus the open documents; by URI.</summary>
     public IReadOnlyList<string> ClosedDiagnosticFiles() => _closed.Keys
+        .Concat(_signatureResults.Keys)
+        .Concat(_signatureResults.Values.SelectMany(r => r.Diagnostics).Select(d => new Uri(d.Location.Path).AbsoluteUri))
         .Concat(_grammarLanguages.SelectMany(l => l.Files()).Select(path => new Uri(path).AbsoluteUri))
         .Where(uri => !IsOpen(uri))
         .Distinct(StringComparer.Ordinal)

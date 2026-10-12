@@ -2,12 +2,18 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: ["main"]
   pull_request:
+
+# PR branches run through pull_request; only main also runs on push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
   dotnet:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -18,10 +24,23 @@ jobs:
       - run: python3 eng/test-build-identity.py
       - run: dotnet build Nitrogen.slnx -warnaserror
       - run: dotnet Nitrogen.Cli/bin/Debug/net10.0/nitrogen.dll --version
-      - run: dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build
+      - timeout-minutes: 4
+        run: >-
+          dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build
+          --blame-hang --blame-hang-timeout 2m --blame-hang-dump-type mini
+          --logger "console;verbosity=normal" --logger trx --results-directory TestResults
+          --diag TestResults/vstest.log
+      - uses: actions/upload-artifact@v7
+        if: failure() || cancelled()
+        with:
+          name: dotnet-test-diagnostics
+          path: TestResults/
+          if-no-files-found: ignore
+          retention-days: 7
 
   vscode:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: editors/vscode
@@ -40,6 +59,7 @@ jobs:
 
   links:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,6 +68,7 @@ jobs:
 
   packages:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:

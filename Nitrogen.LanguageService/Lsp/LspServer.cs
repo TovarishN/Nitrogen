@@ -22,6 +22,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     public const int RequestCancelled = -32800;
 
     bool _shutdown;
+    readonly HashSet<string> _workspaceFolders = new(StringComparer.Ordinal);
     string? _workspaceRoot;   // the client's folder: its files are indexed
     string? _configRoot;      // whose nitrogen.json configures the languages: --config's directory, else the workspace
     bool _watchDynamically;
@@ -199,10 +200,16 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     var initialize = parameters.Deserialize(LspJson.Default.InitializeParams);
                     string? root = initialize?.RootUri ?? initialize?.WorkspaceFolders?.FirstOrDefault()?.Uri;
                     if (root is not null && System.Uri.TryCreate(root, UriKind.Absolute, out var uri) && uri.IsFile) _workspaceRoot = uri.LocalPath;
+                    foreach (var folder in initialize?.WorkspaceFolders ?? [])
+                        if (System.Uri.TryCreate(folder.Uri, UriKind.Absolute, out var folderUri) && folderUri.IsFile) _workspaceFolders.Add(folderUri.LocalPath);
+                    if (_workspaceFolders.Count == 0 && _workspaceRoot is not null) _workspaceFolders.Add(_workspaceRoot);
+                    if (_workspaceFolders.Count > 0 || initialize?.WorkspaceFolders is not null)
+                        service.SetSignatureRoots(_workspaceFolders);
                     _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
                     _refreshInlayHints = initialize?.Capabilities?.Workspace?.InlayHint?.RefreshSupport == true;
                     _refreshSemanticTokens = initialize?.Capabilities?.Workspace?.SemanticTokens?.RefreshSupport == true;
                     service.SkipEmbedded(initialize?.InitializationOptions?.SkipLanguages ?? []);
+                    service.ServeSignatureDocuments(initialize?.InitializationOptions?.SignatureDocuments ?? true);
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(
@@ -213,7 +220,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
                         FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true,
                         DocumentFormattingProvider: true, DocumentRangeFormattingProvider: true,
-                        DocumentOnTypeFormattingProvider: new DocumentOnTypeFormattingOptions("}")),
+                        DocumentOnTypeFormattingProvider: new DocumentOnTypeFormattingOptions("}"), Workspace: new(new())),
                     new ServerInfo("nitrogen", typeof(LspServer).Assembly
                         .GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
                         .Cast<System.Reflection.AssemblyInformationalVersionAttribute>().Single().InformationalVersion)), LspJson.Default.InitializeResult, cancel);
@@ -414,6 +421,16 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 if (_watchDynamically) await RegisterWatchersAsync(service.IndexedExtensions(), cancel);
                 return affected;
             }
+            case "workspace/didChangeWorkspaceFolders":
+            {
+                var folders = parameters.GetProperty("event");
+                foreach (var removed in folders.GetProperty("removed").EnumerateArray())
+                    if (System.Uri.TryCreate(removed.GetProperty("uri").GetString(), UriKind.Absolute, out var uri) && uri.IsFile) _workspaceFolders.Remove(uri.LocalPath);
+                foreach (var added in folders.GetProperty("added").EnumerateArray())
+                    if (System.Uri.TryCreate(added.GetProperty("uri").GetString(), UriKind.Absolute, out var uri) && uri.IsFile) _workspaceFolders.Add(uri.LocalPath);
+                _closedStale = true;
+                return service.SetSignatureRoots(_workspaceFolders);
+            }
             case "workspace/didChangeWatchedFiles":
             {
                 var affected = new List<string>();
@@ -439,7 +456,8 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     }
 
     static LspDiagnostic[] Lsp(IEnumerable<ServiceDiagnostic> diagnostics) => diagnostics
-        .Select(d => new LspDiagnostic(Range(d.Range), (int)d.Severity, d.Code, "nitrogen", d.Message))
+        .Select(d => new LspDiagnostic(Range(d.Range), (int)d.Severity, d.Code, d.Source, d.Message,
+            d.Related is { Count: > 0 } ? d.Related.Select(r => new LspDiagnosticRelatedInformation(new(r.Uri, Range(r.Range)), "related source")).ToArray() : null))
         .ToArray();
 
     /// <summary>

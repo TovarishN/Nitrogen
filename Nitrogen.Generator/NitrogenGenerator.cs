@@ -22,21 +22,27 @@ public sealed class NitrogenGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var compiled = context.AdditionalTextsProvider
-            .Where(static file => file.Path.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase))
             .Combine(context.AnalyzerConfigOptionsProvider)
             .Select(static (pair, cancellation) => ToInput(pair.Left, pair.Right, cancellation))
             .Collect()
-            .Select(static (inputs, _) => new Compiled(inputs.ToArray(), GrammarCompiler.Compile(inputs)));
+            .Select(static (inputs, _) => Compile(inputs));
 
         context.RegisterSourceOutput(compiled, static (output, result) => Emit(output, result));
     }
 
-    static GrammarInput ToInput(AdditionalText file, AnalyzerConfigOptionsProvider options, CancellationToken cancellation)
+    static Compiled Compile(IEnumerable<RegisteredGrammarInputs.Input> inputs)
+    {
+        var result = RegisteredGrammarInputs.Compile(inputs);
+        return new(result.Inputs, result.Compilation);
+    }
+
+    static RegisteredGrammarInputs.Input ToInput(AdditionalText file, AnalyzerConfigOptionsProvider options, CancellationToken cancellation)
     {
         string text = file.GetText(cancellation)?.ToString() ?? "";
         options.GetOptions(file).TryGetValue("build_metadata.AdditionalFiles.Namespace", out string? ns);
+        string? explicitNamespace = ns;
         if (string.IsNullOrWhiteSpace(ns)) options.GlobalOptions.TryGetValue("build_property.RootNamespace", out ns);
-        return new GrammarInput(file.Path, text, string.IsNullOrWhiteSpace(ns) ? "Nitrogen.Generated" : ns!.Trim());
+        return new(file.Path, text, string.IsNullOrWhiteSpace(ns) ? "Nitrogen.Generated" : ns!.Trim(), explicitNamespace?.Trim());
     }
 
     static void Emit(SourceProductionContext output, Compiled compiled)

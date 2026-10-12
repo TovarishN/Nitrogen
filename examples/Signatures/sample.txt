@@ -1,0 +1,4 @@
+#!nitrogen language "./DateCalc.syntax"
+let count = 3;
+count fortnights;
+2026-10-05 + 2 fortnights;
