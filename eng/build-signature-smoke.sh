@@ -90,6 +90,26 @@ expect_failure
 grep -q 'missing registered grammar input' "$work/build.log"
 cp "$work/Rules.original" "$consumer/Rules.syntax"
 build || { cat "$work/build.log"; exit 1; }
+# Primary programs share exported declarations in the packaged checker.
+cat > "$consumer/Names.syntax" <<'NGR'
+#!nitrogen grammar
+language Names { start Names.Program; }
+syntax module Names {
+ symbols { value }
+ token Id = ['a'..'z']+ except "let" "use";
+ syntax Program = Items:Statement*;
+ syntax Statement = Declare / Reference;
+ syntax Declare = "let" Name:Id ";" declares value Name in file export;
+ syntax Reference = "use" Name:Id ";" references value Name;
+}
+NGR
+printf '#!nitrogen language Names\nlet item;\n' > "$consumer/defs.txt"
+printf '#!nitrogen language Names\nuse item;\n' > "$consumer/use.txt"
+build || { cat "$work/build.log"; exit 1; }
+printf '#!nitrogen language Names\nuse missing;\n' > "$consumer/use.txt"
+expect_failure
+grep -q 'NB0001' "$work/build.log"
+rm "$consumer/Names.syntax" "$consumer/defs.txt" "$consumer/use.txt"
 printf 'public static class Checks { public static bool Allowed(string text) => false; }\n' > "$consumer/Checks.cs"
 rm "$consumer/Use.cs"
 build -p:NitrogenEnabled=false || { cat "$work/build.log"; exit 1; }
@@ -98,4 +118,4 @@ rm "$consumer/Rules.syntax" "$consumer/nitrogen.json"
 printf 'public sealed class App {}\n' > "$consumer/Host.cs"
 build || { cat "$work/build.log"; exit 1; }
 ! grep -q 'Nitrogen source check' "$work/build.log"
-echo 'Signed build consumer: native compile, source mapping, helper reload, quoted paths, disabled and unconfigured modes passed.'
+echo 'Signed build consumer: native compile, source mapping, helper reload, cross-file binding, quoted paths, disabled and unconfigured modes passed.'

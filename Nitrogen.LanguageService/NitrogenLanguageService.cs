@@ -93,7 +93,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
 
     /// <summary>The diagnostics of an open document, C# host or closed indexed file, or the compile diagnostics of a grammar; empty for any other file.</summary>
     public IReadOnlyList<ServiceDiagnostic> Diagnostics(string uri) =>
-        CoreDiagnostics(uri).Concat(SignedDiagnostics(uri)).DistinctBy(d => (d.Range, d.Code, d.Message)).ToArray();
+        CoreDiagnostics(uri).Concat(SignedDiagnostics(uri)).DistinctBy(d => (d.Range, d.Code, d.Message, d.Source)).ToArray();
 
     IReadOnlyList<ServiceDiagnostic> CoreDiagnostics(string uri)
     {

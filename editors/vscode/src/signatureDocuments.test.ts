@@ -22,3 +22,9 @@ test('the main extension owns signatures with mixed installations', () => {
   assert.equal(ownsSignatureDocuments('nitrogen.nitrogen-datecalc', ['nitrogen.nitrogen-datecalc']), true);
   assert.equal(ownsSignatureDocuments('nitrogen.nitrogen-z', ['nitrogen.nitrogen-z', 'nitrogen.nitrogen-a']), false);
 });
+
+for (const newline of ['\n', '\r\n', '\r']) {
+  test(`comment prose before a signature uses server header semantics (${JSON.stringify(newline)})`, () => {
+    assert.equal(signatureDocumentMode(['/*', 'Documentation', '#!nitrogen language "./Calc.syntax"', '*/'].join(newline)), 'language');
+  });
+}

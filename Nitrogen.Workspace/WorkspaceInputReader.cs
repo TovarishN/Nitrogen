@@ -29,6 +29,7 @@ public static class WorkspaceInputReader
                 if (!visited.Add(input.Path)) continue;
                 var dependencies = new List<string>();
                 var header = DocumentSignatures.Read(input.Text);
+                dependencies.AddRange(RegionExtractor.References(input).Where(r => r.IsPath).Select(r => r.Value));
                 dependencies.AddRange(header.Signatures.Where(s => s.Reference is { IsPath: true }).Select(s => s.Reference!.Value));
                 if (Path.GetExtension(input.Path).Equals(".ngr", StringComparison.OrdinalIgnoreCase) || header.Signatures.Any(s => s.Mode == SignatureMode.Grammar))
                 {

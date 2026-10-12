@@ -21,7 +21,7 @@ export class SignatureRouting implements Disposable {
   }
 
   private async classify(document: TextDocument): Promise<void> {
-    if (document.uri.scheme !== 'file') return;
+    if (document.uri.scheme !== 'file' && document.uri.scheme !== 'untitled') return;
     const key = document.uri.toString();
     if (this.changing.has(key)) return;
     const mode = signatureDocumentMode(document.getText());

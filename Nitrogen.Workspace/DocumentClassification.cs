@@ -61,6 +61,7 @@ public sealed class DocumentClassifier(ILanguageDefinitionResolver? resolver = n
         if (!primary && !selected.Values.Any(s => s.IsPrimary))
             foreach (var candidate in inputs.Files.Values)
             {
+                if (!inputs.RegisteredInputsOnly && !DefinitionPaths.RootsOf(inputs).Any(root => DefinitionPaths.Under(candidate.Path, root))) continue;
                 if (!candidate.Text.Contains("#!nitrogen", StringComparison.Ordinal)) continue;
                 var candidateHeader = DocumentSignatures.Read(candidate.Text);
                 if (!candidateHeader.Signatures.Any(s => s.Mode == SignatureMode.Grammar)) continue;

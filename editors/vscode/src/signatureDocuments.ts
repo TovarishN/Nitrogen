@@ -10,10 +10,10 @@ export function signatureDocumentMode(text: string): SignatureDocumentMode | und
       const mode = /^#!nitrogen\s+(grammar|language|augment)\b/.exec(rest)?.[1] as SignatureDocumentMode | undefined;
       if (mode === 'grammar' || mode === 'language') return mode;
       if (mode === 'augment') augmentation = true;
-      const end = rest.indexOf('\n');
+      const end = rest.search(/[\r\n]/);
       rest = end < 0 ? '' : rest.slice(end + 1);
     } else if (rest.startsWith('//')) {
-      const end = rest.indexOf('\n');
+      const end = rest.search(/[\r\n]/);
       const line = end < 0 ? rest : rest.slice(0, end);
       const mode = signatureDocumentMode(line.slice(2));
       if (mode && mode !== 'augment') return mode;
@@ -23,7 +23,9 @@ export function signatureDocumentMode(text: string): SignatureDocumentMode | und
       const html = rest.startsWith('<!--');
       const end = rest.indexOf(html ? '-->' : '*/');
       if (end < 0) break;
-      const mode = signatureDocumentMode(rest.slice(html ? 4 : 2, end));
+      const modes = rest.slice(html ? 4 : 2, end).split(/\r\n|\r|\n/)
+        .map(line => /^\s*#!nitrogen\s+(grammar|language|augment)\b/.exec(line)?.[1] as SignatureDocumentMode | undefined);
+      const mode = modes.find(value => value === 'grammar' || value === 'language') ?? modes.find(value => value === 'augment');
       if (mode && mode !== 'augment') return mode;
       augmentation ||= mode === 'augment';
       rest = rest.slice(end + (html ? 3 : 2));

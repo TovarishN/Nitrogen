@@ -24,7 +24,7 @@ public static class HostCommentExtractor
     {
         var comments = new List<SourceProjection>();
         var closers = new Stack<char>();
-        bool inTag = false, implicitCode = false, controlBody = false;
+        bool inTag = false, implicitCode = false, controlBody = false, directiveArguments = false;
         int markupDepth = 0, markupCodeDepth = 0, tagStart = -1;
         string tagName = "";
         bool closingTag = false;
@@ -51,7 +51,7 @@ public static class HostCommentExtractor
                 if (i < text.Length) i++;
                 continue;
             }
-            if (closers.Count > markupCodeDepth && LiteralAt(i))
+            if ((closers.Count > markupCodeDepth || directiveArguments) && LiteralAt(i))
             {
                 var token = SyntaxFactory.ParseTokens(text[i..], options: Options).First();
                 i += Math.Max(token.Span.End, 1);
@@ -69,12 +69,14 @@ public static class HostCommentExtractor
                 while (i < text.Length && (char.IsLetterOrDigit(text[i]) || text[i] == '_')) i++;
                 string keyword = text[start..i];
                 controlBody = keyword is "code" or "functions" or "if" or "foreach" or "for" or "while" or "switch" or "try";
+                directiveArguments = keyword is "attribute" or "page" or "inject" or "model" or "inherits" or
+                    "implements" or "typeparam" or "using" or "namespace" or "layout" or "rendermode";
                 implicitCode = keyword.Length > 0;
                 continue;
             }
-            if (!inTag && (closers.Count > 0 || implicitCode || controlBody))
+            if (!inTag && (closers.Count > 0 || implicitCode || controlBody || directiveArguments))
             {
-                if (text[i] == '(' || text[i] == '{') closers.Push(text[i] == '(' ? ')' : '}');
+                if (text[i] is '(' or '{' or '[') closers.Push(text[i] switch { '(' => ')', '[' => ']', _ => '}' });
                 else if (closers.Count > 0 && text[i] == closers.Peek()) closers.Pop();
             }
             if (text[i] == '<' && i + 1 < text.Length && (char.IsLetter(text[i + 1]) || text[i + 1] == '/') &&
@@ -99,6 +101,7 @@ public static class HostCommentExtractor
                 }
                 if (markupDepth == 0) markupCodeDepth = 0;
             }
+            if (text[i] is '\r' or '\n' && closers.Count == 0) directiveArguments = false;
             if (char.IsWhiteSpace(text[i])) implicitCode = false;
             if (text[i] == '}' && closers.Count == 0) controlBody = false;
             i++;

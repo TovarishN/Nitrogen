@@ -41,11 +41,12 @@ internal static class DocumentCheckCommand
             }
             using var session = new DocumentAnalysisSession();
             var issues = new List<AnalysisIssue>();
-            foreach (string path in documents)
+            var selected = documents.Select(path => inputs.Files.TryGetValue(path, out var input) ? input
+                : throw new ArgumentException($"document '{path}' is missing, unreadable, binary, or exceeds the input size limit")).ToArray();
+            foreach (var result in await session.AnalyzeManyAsync(selected, inputs, cancellationToken))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!inputs.Files.TryGetValue(path, out var input)) throw new ArgumentException($"document '{path}' is missing, unreadable, binary, or exceeds the input size limit");
-                var result = await session.AnalyzeAsync(input, inputs, cancellationToken);
+                var input = inputs.Files[result.Path];
+                string path = input.Path;
                 issues.AddRange(result.Diagnostics);
                 if (options.Command != "parse") continue;
                 var primary = result.Classification?.Selections.FirstOrDefault(s => s.IsPrimary);

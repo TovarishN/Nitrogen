@@ -19,6 +19,21 @@ public sealed record ProjectionResult(IReadOnlyList<ProjectedInput> Inputs, IRea
 
 public static class RegionExtractor
 {
+    internal static IEnumerable<LanguageReference> References(DocumentInput input)
+    {
+        foreach (var comment in HostCommentExtractor.Read(input.Path, input.Text))
+            foreach (string line in comment.Text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
+            {
+                string text = line.Trim();
+                if (text.StartsWith("/*", StringComparison.Ordinal)) text = text[2..].TrimStart();
+                else if (text.StartsWith("<!--", StringComparison.Ordinal)) text = text[4..].TrimStart();
+                if (!IsDirective(text, "region")) continue;
+                var header = DocumentSignatures.Read("#!nitrogen language" + text["#!nitrogen region".Length..]);
+                if (header.Diagnostics.Count == 0 && header.Signatures.FirstOrDefault()?.Reference is { } reference)
+                    yield return reference;
+            }
+    }
+
     public static ProjectionResult Extract(DocumentInput input, ILanguageDefinitionResolver resolver, InputSnapshot inputs)
     {
         var regions = new List<ProjectedInput>();

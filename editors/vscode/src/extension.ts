@@ -39,15 +39,15 @@ export async function activate(context: ExtensionContext): Promise<void> {
     { scheme: 'file', language: 'ngr' },
     { scheme: 'file', language: 'nitrogen-signature' },
     { scheme: 'file', pattern: '**/*' },
+    { scheme: 'untitled' },
     ...workspaceExtensions(claimedLanguages).map(extension => ({ scheme: 'file', pattern: `**/*${extension}` })),
     ...csharpSelector,
   ];
   strings = new CSharpStrings(() => client);
-  const selectedExtensions = workspaceExtensions(claimedLanguages);
   const routing = new SignatureRouting(true);
   const clientOptions: LanguageClientOptions = {
     documentSelector: selector,
-    middleware: routing.middleware(strings.middleware, document => document.languageId === 'ngr' || document.languageId === 'nitrogen-signature' || document.languageId === 'csharp' || selectedExtensions.some(extension => document.uri.fsPath.endsWith(extension))),
+    middleware: routing.middleware(strings.middleware, document => (document.uri.scheme === 'file' || document.uri.scheme === 'untitled') && !claimedLanguages.some(name => document.languageId.toLowerCase() === name.toLowerCase() || document.uri.path.toLowerCase().endsWith('.' + name.toLowerCase()))),
     // Generated extensions own their language files and tagged C# strings; this client still serves .ngr.
     initializationOptions: { skipLanguages: claimedLanguages },
     synchronize: { fileEvents: workspace.createFileSystemWatcher('**/*') },

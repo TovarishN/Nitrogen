@@ -48,3 +48,13 @@ test('startup, insertion, and removal route documents in both roots and preserve
   assert.equal(new SignatureRouting(false).middleware({}, () => true).provideDefinition!(a as any, null as any, null as any, (() => ++calls) as any), null);
   routing.dispose();
 });
+
+test('signed untitled documents route and restore their original mode', async () => {
+  const { SignatureRouting } = await import('./signatureRouting');
+  const document = {uri:{scheme:'untitled',toString:()=> 'untitled:Untitled-1'},languageId:'plaintext',text:'#!nitrogen language L\ntext',getText(){return this.text;}};
+  documents.push(document);
+  const routing = new SignatureRouting(true);routing.start({subscriptions:[]} as any);await settle();
+  assert.equal(document.languageId,'nitrogen-signature');
+  document.text='plain';for(const callback of changed)callback({document});await settle();
+  assert.equal(document.languageId,'plaintext');routing.dispose();
+});

@@ -248,8 +248,8 @@ export async function activate(context: ExtensionContext): Promise<void> {
   if (watcher) context.subscriptions.push(watcher);
   strings = new CSharpStrings(() => client);
   const clientOptions: LanguageClientOptions = {
-    documentSelector: [{ scheme: 'file', language: LANGUAGE }, { scheme: 'untitled', language: LANGUAGE }, ...csharpSelector, ...(signatureOwner ? [{ scheme: 'file', pattern: '**/*' }, { scheme: 'file', language: 'nitrogen-signature' }] : [])],
-    middleware: routing.middleware(strings.middleware, document => document.languageId === LANGUAGE || document.languageId === 'csharp' || document.languageId === 'nitrogen-signature' || document.languageId === 'ngr'),
+    documentSelector: [{ scheme: 'file', language: LANGUAGE }, { scheme: 'untitled', language: LANGUAGE }, ...csharpSelector, ...(signatureOwner ? [{ scheme: 'file', pattern: '**/*' }, { scheme: 'file', language: 'nitrogen-signature' }, { scheme: 'untitled' }] : [])],
+    middleware: routing.middleware(strings.middleware, document => signatureOwner && (document.uri.scheme === 'file' || document.uri.scheme === 'untitled') || document.languageId === LANGUAGE || document.languageId === 'csharp' || document.languageId === 'nitrogen-signature' || document.languageId === 'ngr'),
     initializationOptions: { signatureDocuments: signatureOwner },
     synchronize: watcher ? { fileEvents: watcher } : undefined,
   };
