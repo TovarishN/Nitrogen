@@ -25,3 +25,7 @@ A workspace grammar language:
 ```
 
 For a single language, `nitrogen package` builds a self-contained extension instead; see [installable plugins for a language](https://github.com/TovarishN/Nitrogen/blob/main/docs/editor-support.md#installable-plugins-for-a-language).
+
+Signed grammars (`#!nitrogen grammar`) and programs (`#!nitrogen language "./Calc.syntax"`) are recognized at startup and as you edit, regardless of filename extension. No configuration or generated plugin is required. Removing a primary signature restores the previous language mode. The main extension owns signatures when generated Nitrogen extensions are also installed.
+
+Use `// #!nitrogen augment "./Rules.syntax"` in C#, or `<!-- #!nitrogen augment "./Rules.syntax" regions -->` in Razor. Augmentation retains the native language and adds Nitrogen diagnostics only. Explicit block-comment regions use `#!nitrogen region "./Rules.syntax"` and `#!nitrogen end` on their own lines. `nitrogen.json` can apply augmentation through workspace globs. Grammar/helper/configuration saves recheck without restart; `NGR0405` marks last-good analysis after a broken edit. See [signature examples](../../examples/Signatures/README.md) for complete syntax and exclusions.

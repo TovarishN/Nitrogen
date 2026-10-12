@@ -1,0 +1,9 @@
+#!nitrogen grammar
+language DateCalc {
+  start DateCalc.Program;
+  grammars "../DateCalc/DateCalc.ngr";
+  sources "../DateCalc/DateCalcLanguage.cs", "../DateCalc/MathModule.cs",
+          "../DateCalc/DateCalcEvaluator.cs", "../DateCalc/DateCalcFixes.cs";
+  tokens value "variable";
+  tokens function "function";
+}

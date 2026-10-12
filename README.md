@@ -5,6 +5,16 @@ its types and operations in a little C#, and Nitrogen derives the rest: an incre
 and semantic checks, typed HIR, a language server, and installable VS Code and Rider plugins. It follows
 the language-workbench idea of [JetBrains' Nitra](https://github.com/JetBrains/Nitra).
 
+Signed files can define and select a language without a generated editor extension or `nitrogen.json`:
+
+```text
+#!nitrogen grammar
+language Greeting { start Greeting.Hello; }
+syntax module Greeting { syntax Hello = "hello"; }
+```
+
+Save that as `Greeting.syntax`, then put `#!nitrogen language "./Greeting.syntax"` before `hello` in a file of any extension. The main VS Code extension recognizes it automatically; `nitrogen parse sample.txt` infers the start rule. `nitrogen check <file|directory>` checks selected programs and native source augmentations. A `Nitrogen.Build` PackageReference adds generation and checks to .NET builds. See the [runnable signature examples](examples/Signatures/README.md) for commented native signatures, regions, glob augmentation and registered build inputs.
+
 ## Build a language with an IDE
 
 [examples/DateCalc](examples/DateCalc) is a complete typed language: a calculator with dates.
@@ -103,7 +113,7 @@ The [feature matrix](docs/editor-support.md#feature-matrix) shows what works whe
   `nitrogen package --config examples/DateCalc/nitrogen.json --output dist`
   ([details](docs/editor-support.md#installable-plugins-for-a-language)).
 
-Your own language takes the same pieces: a grammar, a `nitrogen.json`, and as much C# as its semantics
+Your own language takes a grammar with a language declaration (or a legacy `nitrogen.json`), and as much C# as its semantics
 need. The [language guide](docs/language-guide.md) covers the grammar language.
 
 ### Editing a language in VS Code
