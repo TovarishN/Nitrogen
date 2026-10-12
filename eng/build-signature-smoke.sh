@@ -6,6 +6,9 @@ work="$(mktemp -d)"
 if [[ "${NITROGEN_SMOKE_KEEP:-}" == "1" ]]; then trap 'echo "Smoke files: $work"' EXIT; else trap 'rm -rf "$work"' EXIT; fi
 feed="${1:-$work/feed}"
 version="${2:-0.0.0-signature-smoke.$(date +%s)}"
+reference='"./Rules.syntax"'
+configReference='./Rules.syntax'
+if [[ "${NITROGEN_SMOKE_NAMES:-}" == "1" ]]; then reference=Rules; configReference=Rules; fi
 mkdir -p "$feed"
 feed="$(cd "$feed" && pwd)"
 if [[ $# -eq 0 ]]; then
@@ -47,10 +50,14 @@ allowed
 #!nitrogen end
 */
 CS
+if [[ "${NITROGEN_SMOKE_NAMES:-}" == "1" ]]; then
+  sed 's#"./Rules.syntax"#Rules#' "$consumer/Host.cs" > "$work/Host.names"
+  mv "$work/Host.names" "$consumer/Host.cs"
+fi
 build || { cat "$work/build.log"; exit 1; }
 grep -q 'Nitrogen source check' "$work/build.log"
 # Source filenames containing quotes are valid JSON inputs even though Csc forbids quoted Compile paths.
-printf '#!nitrogen language "./Rules.syntax"\nallowed\n' > "$consumer/quoted\" program.txt"
+printf '#!nitrogen language %s\nallowed\n' "$reference" > "$consumer/quoted\" program.txt"
 printf 'public sealed class Use { public static System.Type Module => typeof(Rules.Syntax.RulesModule); }\n' > "$consumer/Use.cs"
 build || { cat "$work/build.log"; exit 1; }
 rm "$consumer/quoted\" program.txt"
@@ -68,10 +75,10 @@ sed 's/^forbidden$/allowed/' "$consumer/Host.cs" > "$consumer/changed.cs"
 mv "$consumer/changed.cs" "$consumer/Host.cs"
 printf 'public static class Checks { public static bool Allowed(string text) => !text.Contains("forbidden"); }\n' > "$consumer/Checks.cs"
 printf 'public sealed class forbidden {}\n' > "$consumer/Other.cs"
-printf '{"augmentations":[{"language":"./Rules.syntax","files":["Other.cs"]}]}\n' > "$consumer/nitrogen.json"
+printf '{"augmentations":[{"language":"%s","files":["Other.cs"]}]}\n' "$configReference" > "$consumer/nitrogen.json"
 expect_failure
 grep -q 'Other.cs(1,1): error AU1001' "$work/build.log"
-printf '{"augmentations":[{"language":"./Rules.syntax","files":["Other.cs"],"exclude":["Other.cs"]}]}\n' > "$consumer/nitrogen.json"
+printf '{"augmentations":[{"language":"%s","files":["Other.cs"],"exclude":["Other.cs"]}]}\n' "$configReference" > "$consumer/nitrogen.json"
 build || { cat "$work/build.log"; exit 1; }
 # A dependency present on disk but excluded from registered project inputs cannot be loaded.
 cp "$consumer/Rules.syntax" "$work/Rules.original"

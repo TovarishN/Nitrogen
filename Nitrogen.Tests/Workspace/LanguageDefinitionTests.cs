@@ -75,11 +75,11 @@ public sealed class LanguageDefinitionTests
     }
 
     [Fact]
-    public void Bare_names_report_unsupported_until_discovery_is_added()
+    public void Bare_names_resolve_a_unique_signed_declaration()
     {
         var result = new LanguageDefinitionResolver().Resolve(new LanguageReference("L", false), PathOf("sample.txt"), Inputs(("root.syntax", Simple)));
-        Assert.Null(result.Definition);
-        Assert.Contains(result.Diagnostics, d => d.Message.Contains("name", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(PathOf("root.syntax"), result.Definition?.Id);
+        Assert.Empty(result.Diagnostics);
     }
 
     [Fact]

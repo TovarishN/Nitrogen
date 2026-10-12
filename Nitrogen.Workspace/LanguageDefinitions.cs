@@ -10,7 +10,7 @@ public sealed record AnalysisIssue(string Code, string Message, AnalysisLocation
 public sealed record LanguageDefinition(string Id, string Name, string Start, string GeneratedNamespace,
     IReadOnlyList<DocumentInput> Grammars, IReadOnlyList<DocumentInput> Sources, IReadOnlyList<string> Usings,
     IReadOnlyList<string> Extensions, IReadOnlyList<LanguagePresentationOption> Presentation);
-public sealed record DefinitionResult(LanguageDefinition? Definition, IReadOnlyList<AnalysisIssue> Diagnostics);
+public sealed record DefinitionResult(LanguageDefinition? Definition, IReadOnlyList<AnalysisIssue> Diagnostics, string? CandidateId = null);
 
 public interface ILanguageDefinitionResolver
 {

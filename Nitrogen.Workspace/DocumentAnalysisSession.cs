@@ -26,11 +26,12 @@ public sealed class DocumentAnalysisSession : IDisposable
         public DefinitionResult Resolve(LanguageReference reference, string originPath, InputSnapshot inputs)
         {
             var result = inner.Resolve(reference, originPath, inputs);
-            if (result.Definition is not null || !reference.IsPath) return result;
+            if (result.Definition is not null || !reference.IsPath && result.CandidateId is null) return result;
             string path;
-            try { path = DefinitionPaths.RelativeTo(reference.Value, originPath); }
+            try { path = result.CandidateId ?? DefinitionPaths.RelativeTo(reference.Value, originPath); }
             catch (Exception error) when (error is ArgumentException or NotSupportedException or PathTooLongException) { return result; }
-            if (!compiled.TryGetValue(path, out var previous)) return result;
+            if (DefinitionPaths.Find(inputs, path) is null || !compiled.TryGetValue(path, out var previous) ||
+                !reference.IsPath && previous.Definition.Name != reference.Value) return result;
             var stale = new AnalysisIssue("NGR0405", "using the last successfully compiled language while its definition contains errors",
                 new(path, 0, 0), [], "nitrogen:" + previous.Definition.Name, false);
             return new(previous.Definition, result.Diagnostics.Append(stale).ToArray());

@@ -10,12 +10,17 @@ public sealed record GrammarParseResult(GrammarFile? File, EquatableArray<Gramma
 /// <summary>The bootstrap parser for <c>.ngr</c> files. It stops at the first syntax error.</summary>
 public static class GrammarParser
 {
-    public static GrammarParseResult Parse(string text)
+    public static GrammarParseResult Parse(string text) => ParseCore(text, false);
+
+    /// <summary>Reads leading language metadata even while a following syntax module is being edited.</summary>
+    public static GrammarParseResult ParseDeclaration(string text) => ParseCore(text, true);
+
+    static GrammarParseResult ParseCore(string text, bool declarationOnly)
     {
         try
         {
             var parser = new Parser(text);
-            return new GrammarParseResult(parser.ParseFile(), default);
+            return new GrammarParseResult(parser.ParseFile(declarationOnly), default);
         }
         catch (LanguageDeclarationException error)
         {
@@ -73,12 +78,12 @@ public static class GrammarParser
             return new CodeText(_text.Substring(from, trimmed - from), GrammarSpan.FromBounds(from, trimmed));
         }
 
-        public GrammarFile ParseFile()
+        public GrammarFile ParseFile(bool declarationOnly)
         {
             var languages = new List<LanguageDecl>();
             if (AtKeyword("language")) languages.Add(ParseLanguage());
             var modules = new List<ModuleDecl>();
-            while (!At(TokenKind.End)) modules.Add(ParseModule());
+            while (!declarationOnly && !At(TokenKind.End)) modules.Add(ParseModule());
             return new GrammarFile(modules.ToArray(), languages.ToArray());
         }
 
