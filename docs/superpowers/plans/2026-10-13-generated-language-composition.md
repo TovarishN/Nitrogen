@@ -172,7 +172,7 @@ using var parsed = Language.Parse(source, DateCalcComposition.Start);
 - [x] Document factory API, stable Start, explicit semantics/customization, configuration registration for generator-only projects, and extraction limits. Preserve the user's existing editor-support edits by reviewing the baseline diff before editing.
 - [x] Run `dotnet build Nitrogen.slnx -warnaserror` and `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build`; investigate failures without weakening existing gates.
 - [x] Run `python3 eng/check-links.py`, `python3 eng/test-build-identity.py`, and `git diff --check`.
-- [ ] In VS Code, use an isolated DateCalc copy: extract a supported whole rule, inspect all-file preview, apply, use Go to Definition, edit the extracted rule and confirm diagnostics refresh, then undo and confirm complete restoration. Do not alter the user's open example files for this check.
+- [x] In VS Code, use an isolated DateCalc copy: extract a supported whole rule, inspect all-file preview, apply, use Go to Definition, edit the extracted rule and confirm diagnostics refresh, then undo and confirm complete restoration. Do not alter the user's open example files for this check.
 - [x] Use requesting-code-review for one independent whole-branch review, address concrete findings, and rerun affected checks.
 - [x] Commit scoped documentation changes and report implementation, evidence, remaining limits, branch, and commit IDs. No PR/release without a new request.
 
@@ -197,6 +197,12 @@ then passed with equivalent values after migrating to the generated factory.
 
 An independent reviewer found and verified fixes for validation-before-emission and
 factory collisions with sibling generated types, including module names ending in
-Composition. No concrete findings remain. VS Code interaction acceptance is still
-pending: the Mac was locked and CUA could not unlock it; an unlock request was sent.
+Composition. No concrete findings remain. VS Code interaction acceptance passed after the Mac
+was unlocked: the real extension development host previewed and applied all three
+files, retained DateCalc values (3, 42 days, 42 days, 2026-11-02 Mon), navigated from
+the Number reference to Shared.ngr, refreshed diagnostics after editing the extracted
+token, cleared them after undoing that edit, and undid the entire extraction in one
+operation. The original grammar/configuration buffers were restored, all seven source
+files match their original bytes, and Shared.ngr no longer exists. No LSP restart
+occurred during the verification.
 No PR, merge, version change, or release was performed.
