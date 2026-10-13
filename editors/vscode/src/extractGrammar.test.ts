@@ -115,3 +115,19 @@ test('a changed edit during review is refused even when document versions also c
   await extractGrammar(host, selection);
   assert.deepEqual(calls, ['review', 'warn:The extraction changed during review. Select the definitions again.']);
 });
+
+test('successful extraction reports completion for the applied proposal only', async () => {
+  const { host } = fixture();
+  let completed = false;
+  host.complete = (result, uri) => {
+    assert.ok(result.action?.edit);
+    assert.equal(uri, 'file:///new.ngr');
+    completed = true;
+  };
+  await extractGrammar(host, selection);
+  assert.equal(completed, true);
+  completed = false;
+  host.apply = async () => false;
+  await extractGrammar(host, selection);
+  assert.equal(completed, false);
+});
