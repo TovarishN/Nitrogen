@@ -11,7 +11,7 @@ public static class CompositionWriter
         var diagnostics = new List<CompiledDiagnostic>();
         string path = inputs.FirstOrDefault()?.Path ?? "";
         string factory = composition.Name + "Composition";
-        if (!ValidIdentifier(composition.Name) || composition.Namespace.Split('.').Any(s => !ValidIdentifier(s)))
+        if (composition.Name.Length == 0 || !ValidIdentifier(factory) || composition.Namespace.Split('.').Any(s => !ValidIdentifier(s)))
             return Error("language name and namespace must be valid C# identifiers");
         var modules = new List<ModuleDecl>();
         var namespaces = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -27,6 +27,8 @@ public static class CompositionWriter
                 origins[module.Name] = input;
             }
         }
+        foreach (var diagnostic in GrammarValidator.Validate(modules))
+            diagnostics.Add(new(diagnostic.Module is not null && origins.TryGetValue(diagnostic.Module, out var origin) ? origin.Path : path, diagnostic));
         if (diagnostics.Any(d => d.Diagnostic.Severity == GrammarSeverity.Error))
             return new(diagnostics.ToArray(), default);
         var model = new EmitModel(new GrammarAnalysis(modules), namespaces, origins);
@@ -46,7 +48,7 @@ public static class CompositionWriter
         foreach (var module in selected) code.Append("\n            .Add(").Append(Ref(module)).Append(".Instance)");
         code.Append(";\n\n    public static global::Nitrogen.Rule Start => ").Append(Ref(startModule)).Append('.')
             .Append(CSharpText.Identifier(startName)).Append(";\n}\n");
-        return new(diagnostics.ToArray(), new[] { new GeneratedSource(composition.Namespace + "." + factory + ".g.cs", code.ToString()) });
+        return new(diagnostics.ToArray(), new[] { new GeneratedSource(composition.FactoryHintName, code.ToString()) });
 
         GrammarCompileResult Error(string message) => new(new[] { new CompiledDiagnostic(path,
             new GrammarDiagnostic("NGR0406", GrammarSeverity.Error, message, default)) }, default);

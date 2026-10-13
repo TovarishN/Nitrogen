@@ -54,7 +54,7 @@ internal sealed class ConfigurationJson
             throw new FormatException("expected ',' or ']' ");
         }
         foreach (string literal in new[] { "true", "false", "null" })
-            if (_text.Substring(_position).StartsWith(literal, StringComparison.Ordinal))
+            if (_position + literal.Length <= _text.Length && string.CompareOrdinal(_text, _position, literal, 0, literal.Length) == 0)
             {
                 _position += literal.Length;
                 return literal == "null" ? null : (object)(literal == "true");

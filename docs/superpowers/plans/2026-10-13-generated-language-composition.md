@@ -1,6 +1,6 @@
 # Generated Language Composition Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Generate stable configured-language factories so Extract Block automatically preserves helpers' syntax composition.
 
@@ -42,7 +42,7 @@
 - `CompositionWriter.Write(LanguageComposition composition)` produces `GrammarCompileResult`, using existing diagnostics/generated-source records.
 - The writer validates membership/start against parsed grammar modules, deduplicates module identities, and resolves generated module class names/namespaces through existing emitter naming conventions.
 
-- [ ] Add failing tests for a factory with two modules in one grammar, shared dependency duplicates, unknown starts, invalid C# language identifiers, and factory/module-name collisions. Assert diagnostic location and no composition source on failure.
+- [x] Add failing tests for a factory with two modules in one grammar, shared dependency duplicates, unknown starts, invalid C# language identifiers, and factory/module-name collisions. Assert diagnostic location and no composition source on failure.
 
 Representative fixture and output assertions:
 
@@ -59,8 +59,8 @@ Assert.Contains("global::Demo.Syntax.BModule.Instance", code);
 Assert.Contains("global::Demo.Syntax.AModule.Program", code);
 ```
 
-- [ ] Run `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~CompositionWriterTests`; confirm the missing API fails before implementation.
-- [ ] Implement the record and writer with existing GrammarParser, CSharpText identifier handling, and generated module naming. Sort modules by ordinal module name, matching GrammarWorkspace. Emit a public static factory whose CreateBuilder returns a new LanguageBuilder; its Start property returns the resolved generated Rule. Do not enumerate semantic modules.
+- [x] Run `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~CompositionWriterTests`; confirm the missing API fails before implementation.
+- [x] Implement the record and writer with existing GrammarParser, CSharpText identifier handling, and generated module naming. Sort modules by ordinal module name, matching GrammarWorkspace. Emit a public static factory whose CreateBuilder returns a new LanguageBuilder; its Start property returns the resolved generated Rule. Do not enumerate semantic modules.
 
 Generated shape:
 
@@ -75,8 +75,8 @@ public static class DemoComposition
 }
 ```
 
-- [ ] Run focused tests and ensure generated C# compiles against runtime references, rather than relying only on source-text assertions.
-- [ ] Commit only this task's code/tests and the approved design/plan on the feature branch.
+- [x] Run focused tests and ensure generated C# compiles against runtime references, rather than relying only on source-text assertions.
+- [x] Commit only this task's code/tests and the approved design/plan on the feature branch.
 
 ## Task 2: Registered configuration and source-generator integration
 
@@ -93,7 +93,7 @@ public static class DemoComposition
 - RegisteredGrammarInputs retains supplied-input normalization and feeds resolved compositions to CompositionWriter after grammar compilation succeeds.
 - Nitrogen.Build registers relevant nitrogen.json files and their already-registered grammar dependencies as generator inputs. No hidden disk discovery.
 
-- [ ] Write failing generator tests using the AdditionalText/GeneratorDriver pattern in SignedGeneratorTests. Cover JSON configuration, signed language declarations, registered-only globs, changed config membership via ReplaceAdditionalText, overlapping shared dependencies, missing registered files, duplicate names, and explicit namespace conflicts.
+- [x] Write failing generator tests using the AdditionalText/GeneratorDriver pattern in SignedGeneratorTests. Cover JSON configuration, signed language declarations, registered-only globs, changed config membership via ReplaceAdditionalText, overlapping shared dependencies, missing registered files, duplicate names, and explicit namespace conflicts.
 
 Representative supplied configuration:
 
@@ -106,12 +106,12 @@ Representative supplied configuration:
 
 Assert OneComposition includes A/Shared and excludes B; assert TwoComposition includes B/Shared and excludes A. Run generated output through CSharpCompilation with real runtime metadata references and a helper that calls both factories.
 
-- [ ] Run `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter 'FullyQualifiedName~CompositionGeneratorTests|FullyQualifiedName~SignedGeneratorTests'` and record the expected failures.
-- [ ] Implement shared configuration normalization with no new analyzer runtime dependencies. Use a small dependency-free JSON reader restricted to decoding the existing configuration schema while correctly skipping arbitrary unrelated JSON values; test strings, escapes, nested objects, arrays, numbers, booleans, null, malformed and truncated input. Do not extract JSON fields with regular expressions. Resolve glob matches only against supplied paths, and reuse existing configuration semantics for defaults and language declarations.
-- [ ] Resolve factory ownership per configuration/declaration. Report ambiguous overlapping definitions instead of silently choosing. Preserve existing unconfigured module namespaces; configured namespaces must agree with emitted modules or report a conflict.
-- [ ] Add generator inputs for registered configurations in WriteAnalysisManifest. Test that a file merely existing beside registered inputs cannot be selected and that configuration content changes invalidate incremental generation.
-- [ ] Verify actual generator diagnostic locations can map to configuration inputs as well as grammar inputs.
-- [ ] Run focused generator/build-input tests, then commit the task's scoped files.
+- [x] Run `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter 'FullyQualifiedName~CompositionGeneratorTests|FullyQualifiedName~SignedGeneratorTests'` and record the expected failures.
+- [x] Implement shared configuration normalization with no new analyzer runtime dependencies. Use a small dependency-free JSON reader restricted to decoding the existing configuration schema while correctly skipping arbitrary unrelated JSON values; test strings, escapes, nested objects, arrays, numbers, booleans, null, malformed and truncated input. Do not extract JSON fields with regular expressions. Resolve glob matches only against supplied paths, and reuse existing configuration semantics for defaults and language declarations.
+- [x] Resolve factory ownership per configuration/declaration. Report ambiguous overlapping definitions instead of silently choosing. Preserve existing unconfigured module namespaces; configured namespaces must agree with emitted modules or report a conflict.
+- [x] Add generator inputs for registered configurations in WriteAnalysisManifest. Test that a file merely existing beside registered inputs cannot be selected and that configuration content changes invalidate incremental generation.
+- [x] Verify actual generator diagnostic locations can map to configuration inputs as well as grammar inputs.
+- [x] Run focused generator/build-input tests, then commit the task's scoped files.
 
 ## Task 3: Live editor composition parity
 
@@ -129,12 +129,12 @@ Assert OneComposition includes A/Shared and excludes B; assert TwoComposition in
 - Each configured caller supplies definition Name/Start, alongside its existing namespace/grammar inputs.
 - CompileCore invokes the shared CompositionWriter with the workspace's resolved inputs.
 
-- [ ] Add failing tests compiling a helper that calls DemoComposition.CreateBuilder/Start in GrammarWorkspace. Assert a syntax-only factory stays usable with explicit semantic registrations. Test helper-type collisions and that ValidateCompilation does not execute a throwing helper initializer.
-- [ ] Add a document-session test changing only the configured language name/start; assert the factory recompiles, an invalid helper receives a diagnostic, and last-good serving behavior remains intact.
-- [ ] Run `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter 'FullyQualifiedName~WorkspaceCompositionTests|FullyQualifiedName~DocumentAnalysisTests|FullyQualifiedName~WorkspaceLanguageSemanticsTests'` and confirm missing-factory failures.
-- [ ] Thread composition properties through all configured workspace constructors. Extend DocumentAnalysisSession's fingerprint to include Name and Start. Emit factory diagnostics through existing workspace paths, before loading helpers.
-- [ ] Ensure actual runtime module ordering and factory ordering use the same ordinal ordering. Preserve existing semantic-provider discovery and custom workspace configure callbacks.
-- [ ] Run focused tests and commit the task's scoped files.
+- [x] Add failing tests compiling a helper that calls DemoComposition.CreateBuilder/Start in GrammarWorkspace. Assert a syntax-only factory stays usable with explicit semantic registrations. Test helper-type collisions and that ValidateCompilation does not execute a throwing helper initializer.
+- [x] Add a document-session test changing only the configured language name/start; assert the factory recompiles, an invalid helper receives a diagnostic, and last-good serving behavior remains intact.
+- [x] Run `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter 'FullyQualifiedName~WorkspaceCompositionTests|FullyQualifiedName~DocumentAnalysisTests|FullyQualifiedName~WorkspaceLanguageSemanticsTests'` and confirm missing-factory failures.
+- [x] Thread composition properties through all configured workspace constructors. Extend DocumentAnalysisSession's fingerprint to include Name and Start. Emit factory diagnostics through existing workspace paths, before loading helpers.
+- [x] Ensure actual runtime module ordering and factory ordering use the same ordinal ordering. Preserve existing semantic-provider discovery and custom workspace configure callbacks.
+- [x] Run focused tests and commit the task's scoped files.
 
 ## Task 4: DateCalc migration and extraction regression
 
@@ -147,11 +147,11 @@ Assert OneComposition includes A/Shared and excludes B; assert TwoComposition in
 - DateCalc uses DateCalcComposition.CreateBuilder and DateCalcComposition.Start.
 - Existing Extract Block edits remain grammar/configuration edits; direct-module and quote-string protections stay enabled.
 
-- [ ] Add a failing extraction test with a helper using the generated factory. Resolve the extraction, apply its complete edit, compile the proposed language, and parse before/after using the stable Start member.
-- [ ] Add a start-rule extraction case with no moved generated view/kind consumers; assert the config start changes and Start continues to return the correct rule.
-- [ ] Exercise configured helper evaluation before/after extraction through the existing DateCalc test pipeline, comparing parse/binding/type/lowering diagnostics and projected values for variables and fortnights. Select a movable token/rule that has no unsupported C# generated-type consumer; retain refusals where another genuine API dependency would break.
-- [ ] Run focused tests and observe the failure before migration.
-- [ ] Register nitrogen.json plus necessary grammars as AdditionalFiles for the DateCalc project and any test project compiling its linked helpers. Replace only the explicit syntax factory and parse start:
+- [x] Add a failing extraction test with a helper using the generated factory. Resolve the extraction, apply its complete edit, compile the proposed language, and parse before/after using the stable Start member.
+- [x] Add a start-rule extraction case with no moved generated view/kind consumers; assert the config start changes and Start continues to return the correct rule.
+- [x] Exercise configured helper evaluation before/after extraction through the existing DateCalc test pipeline, comparing parse/binding/type/lowering diagnostics and projected values for variables and fortnights. Select a movable token/rule that has no unsupported C# generated-type consumer; retain refusals where another genuine API dependency would break.
+- [x] Run focused tests and observe the failure before migration.
+- [x] Register nitrogen.json plus necessary grammars as AdditionalFiles for the DateCalc project and any test project compiling its linked helpers. Replace only the explicit syntax factory and parse start:
 
 ```csharp
 static readonly Lazy<Language> s_language = new(() => DateCalcComposition.CreateBuilder()
@@ -160,8 +160,8 @@ static readonly Lazy<Language> s_language = new(() => DateCalcComposition.Create
 using var parsed = Language.Parse(source, DateCalcComposition.Start);
 ```
 
-- [ ] Run focused extraction/DateCalc tests and build `examples/DateCalc/DateCalc.csproj`. Confirm the direct-module refusal regression still passes.
-- [ ] Commit this task's scoped files.
+- [x] Run focused extraction/DateCalc tests and build `examples/DateCalc/DateCalc.csproj`. Confirm the direct-module refusal regression still passes.
+- [x] Commit this task's scoped files.
 
 ## Task 5: Documentation, integration verification, and review
 
@@ -169,13 +169,34 @@ using var parsed = Language.Parse(source, DateCalcComposition.Start);
 - Modify `README.md` and `docs/editor-support.md` narrowly.
 - Update this plan's checkboxes with verification evidence.
 
-- [ ] Document factory API, stable Start, explicit semantics/customization, configuration registration for generator-only projects, and extraction limits. Preserve the user's existing editor-support edits by reviewing the baseline diff before editing.
-- [ ] Run `dotnet build Nitrogen.slnx -warnaserror` and `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build`; investigate failures without weakening existing gates.
-- [ ] Run `python3 eng/check-links.py`, `python3 eng/test-build-identity.py`, and `git diff --check`.
+- [x] Document factory API, stable Start, explicit semantics/customization, configuration registration for generator-only projects, and extraction limits. Preserve the user's existing editor-support edits by reviewing the baseline diff before editing.
+- [x] Run `dotnet build Nitrogen.slnx -warnaserror` and `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --no-build`; investigate failures without weakening existing gates.
+- [x] Run `python3 eng/check-links.py`, `python3 eng/test-build-identity.py`, and `git diff --check`.
 - [ ] In VS Code, use an isolated DateCalc copy: extract a supported whole rule, inspect all-file preview, apply, use Go to Definition, edit the extracted rule and confirm diagnostics refresh, then undo and confirm complete restoration. Do not alter the user's open example files for this check.
-- [ ] Use requesting-code-review for one independent whole-branch review, address concrete findings, and rerun affected checks.
-- [ ] Commit scoped documentation changes and report implementation, evidence, remaining limits, branch, and commit IDs. No PR/release without a new request.
+- [x] Use requesting-code-review for one independent whole-branch review, address concrete findings, and rerun affected checks.
+- [x] Commit scoped documentation changes and report implementation, evidence, remaining limits, branch, and commit IDs. No PR/release without a new request.
 
 ## Execution and isolation
 
 Continue with the user's previously selected native execution method: primary agent implements tasks in order, with one whole-branch review at the end. At execution time follow using-git-worktrees to select/create an isolated checkout. The current Nitrogen checkout has an unrelated tracked editor-support edit and untracked approved design/plan; preserve those files and transfer only the approved artifacts into the implementation checkout as needed. Do not modify CsNitra.
+
+
+## Execution evidence
+
+Implemented in `/tmp/nitrogen-language-composition` on `codex/generated-language-composition`.
+The plan's code tasks and independent review are complete. A shared configuration resolver
+and dependency-free JSON decoder keep the analyzer self-contained. Source identities are
+explicit; factory hint paths use a separate `Compositions/` prefix.
+
+Verification on 2026-10-13: full build 0 warnings/errors, all 1,575 .NET tests passed,
+32 VS Code client tests passed, client compile passed, 23 Markdown link checks passed,
+build identity checks passed, and `eng/test-composition-inputs.py` passed. The latter
+also failed as expected with config-selected input registration temporarily removed.
+The real DateCalc regression reproduced the reported direct-module extraction refusal,
+then passed with equivalent values after migrating to the generated factory.
+
+An independent reviewer found and verified fixes for validation-before-emission and
+factory collisions with sibling generated types, including module names ending in
+Composition. No concrete findings remain. VS Code interaction acceptance is still
+pending: the Mac was locked and CUA could not unlock it; an unlock request was sent.
+No PR, merge, version change, or release was performed.

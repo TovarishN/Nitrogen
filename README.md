@@ -213,6 +213,23 @@ GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCreden
 freshly packed packages; a `v*` tag publishes them and drafts the GitHub release, with the packages and editor
 plugins attached, for its notes to be written.
 
+Configured languages also generate a stable syntax composition factory. For DateCalc:
+
+```csharp
+var language = DateCalcComposition.CreateBuilder()
+    .AddSemantic(MathModule.Semantics)
+    .AddSemantic(DateCalcLanguage.Semantics)
+    .Build();
+using var parsed = language.Parse(source, DateCalcComposition.Start);
+```
+
+The factory includes all modules selected by the language definition. Extract Block
+updates that definition, so helpers using the factory automatically include the extracted
+module. Semantic registration and builder customization remain explicit. Generator-only
+projects must register `nitrogen.json` and every selected grammar as `AdditionalFiles`;
+use a grammar glob such as `*.ngr` to include files created by extraction. A defining
+`language` declaration also generates the factory. See [composition factories](docs/editor-support.md#generated-language-composition-factories).
+
 **The CLI:**
 
 ```sh

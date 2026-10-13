@@ -7,7 +7,7 @@ namespace Nitrogen.Generator;
 internal static class RegisteredGrammarInputs
 {
     internal sealed record Input(string Path, string Text, string Namespace, string? ExplicitNamespace);
-    internal sealed record Result(EquatableArray<GrammarInput> Inputs, GrammarCompileResult Compilation);
+    internal sealed record Result(EquatableArray<GrammarInput> Inputs, GrammarCompileResult Compilation, EquatableArray<LanguageComposition> Compositions);
 
     internal static Result Compile(IEnumerable<Input> supplied)
     {
@@ -39,7 +39,7 @@ internal static class RegisteredGrammarInputs
             compilation = compilation with { Sources = sources };
         }
         return new(selected.Values.Concat(files.Values.Where(f => Path.GetFileName(f.Path) == "nitrogen.json")
-            .Select(f => new GrammarInput(f.Path, f.Text, f.Namespace))).ToArray(), compilation with { Diagnostics = diagnostics.Concat(compilation.Diagnostics).ToArray() });
+            .Select(f => new GrammarInput(f.Path, f.Text, f.Namespace))).ToArray(), compilation with { Diagnostics = diagnostics.Concat(compilation.Diagnostics).ToArray() }, compositions.Compositions);
 
         void Visit(Input input, string? inheritedNamespace, HashSet<string> active)
         {

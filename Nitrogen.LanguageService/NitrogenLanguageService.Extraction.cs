@@ -125,7 +125,7 @@ public sealed partial class NitrogenLanguageService
                 if (before.Definition.Sources.Any(source => CSharpSyntaxTree.ParseText(source.Text).GetRoot().DescendantNodes()
                     .OfType<MemberAccessExpressionSyntax>().Any(member => member.Name.Identifier.ValueText == "Instance" &&
                         member.Expression.ToString().Split('.').Last() == moduleClass)))
-                    return Refuse("A helper composes the original module directly. Update that module factory to compose the extracted module too before extracting.");
+                    return Refuse($"A helper composes module '{selection.Module}' directly. Use {before.Definition.GeneratedNamespace}.{before.Definition.Name}Composition.CreateBuilder() to include all configured syntax modules before extracting.");
                 // Constant category names in C# quote APIs are not checked by a C# compilation.
                 foreach (var move in transformation.Symbols)
                     if (before.Definition.Sources.Any(s => s.Text.Contains('"' + move.Before + '"', StringComparison.Ordinal)))

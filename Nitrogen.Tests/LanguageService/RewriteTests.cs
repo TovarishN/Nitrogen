@@ -226,7 +226,7 @@ public sealed class RewriteTests : IDisposable
     [Fact]
     public void An_instantiation_is_not_mistaken_for_a_document_named_rewrite()
     {
-        var workspace = new Nitrogen.Workspace.GrammarWorkspace { GeneratedNamespace = "DateCalc.Syntax" };
+        var workspace = new Nitrogen.Workspace.GrammarWorkspace { GeneratedNamespace = "DateCalc.Syntax", CompositionName = "DateCalc", StartRule = "DateCalc.Program" };
         workspace.SetGrammar("DateCalc.ngr", File.ReadAllText(Path.Combine(_root, "DateCalc.ngr")));
         foreach (string source in new[] { "DateCalcLanguage.cs", "MathModule.cs", "DateCalcEvaluator.cs", "DateCalcFixes.cs" })
             workspace.Sources[source] = File.ReadAllText(Path.Combine(_root, source));

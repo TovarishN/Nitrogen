@@ -101,4 +101,53 @@ public sealed class CompositionGeneratorTests
         Assert.DoesNotContain(result.Diagnostics, d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
         Assert.Contains(result.Results.SelectMany(r => r.GeneratedSources), s => s.HintName.Contains("DemoComposition"));
     }
+    [Theory]
+    [InlineData("Other")]
+    [InlineData("OtherComposition")]
+    public void Unrelated_generated_type_cannot_collide_with_a_factory(string moduleName)
+    {
+        var result = Run(new Input("nitrogen.json", "{\"languages\":[{\"name\":\"Demo\",\"start\":\"A.Program\",\"namespace\":\"Demo.Syntax\",\"grammars\":[\"a.ngr\"]}]}"),
+            new Input("a.ngr", "syntax module A { syntax Program = \"a\"; }"),
+            new Input("other.ngr", "syntax module " + moduleName + " { extensible syntax Composition { | Demo = \"x\" } }"));
+        Assert.Contains(result.Diagnostics, d => d.Id == "NGR0406" && d.GetMessage().Contains("collides"));
+    }
+
+    [Fact]
+    public void Invalid_composed_grammar_reports_a_grammar_diagnostic_instead_of_crashing_generator()
+    {
+        var result = Run(new Input("nitrogen.json", "{\"languages\":[{\"name\":\"Demo\",\"start\":\"A.Program\",\"namespace\":\"Demo.Syntax\",\"grammars\":[\"a.ngr\"]}]}"),
+            new Input("a.ngr", "syntax module A { syntax Program = \"a\"; extend syntax Missing.Expr { | Extra = \"x\" } }"));
+        Assert.DoesNotContain(result.Diagnostics, d => d.Id == "CS8785");
+        Assert.Contains(result.Diagnostics, d => d.Id.StartsWith("NGR", StringComparison.Ordinal));
+    }
+    [Fact]
+    public void Duplicate_factory_names_are_diagnosed_without_crashing()
+    {
+        var result = Run(new Input("nitrogen.json", "{\"languages\":[{\"name\":\"Demo\",\"start\":\"A.Program\",\"grammars\":[\"a.ngr\"]},{\"name\":\"Demo\",\"start\":\"A.Program\",\"grammars\":[\"a.ngr\"]}]}"),
+            new Input("a.ngr", "syntax module A { syntax Program = \"a\"; }"));
+        Assert.DoesNotContain(result.Diagnostics, d => d.Id == "CS8785");
+        Assert.Contains(result.Diagnostics, d => d.Id == "NGR0406" && d.GetMessage().Contains("multiple definitions"));
+    }
+
+    [Fact]
+    public void Shared_grammar_with_conflicting_language_namespaces_is_diagnosed()
+    {
+        var result = Run(new Input("nitrogen.json", "{\"languages\":[{\"name\":\"One\",\"start\":\"A.Program\",\"namespace\":\"One.Syntax\",\"grammars\":[\"a.ngr\"]},{\"name\":\"Two\",\"start\":\"A.Program\",\"namespace\":\"Two.Syntax\",\"grammars\":[\"a.ngr\"]}]}"),
+            new Input("a.ngr", "syntax module A { syntax Program = \"a\"; }"));
+        Assert.Contains(result.Diagnostics, d => d.Id == "NGR0406" && d.GetMessage().Contains("conflicting namespaces"));
+    }
+
+    [Fact]
+    public void Configured_globs_do_not_read_unregistered_files_from_disk()
+    {
+        string folder = Directory.CreateTempSubdirectory("composition-registered-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(folder, "outside.ngr"), "syntax module Outside { syntax Program = \"x\"; }");
+            string json = System.Text.Json.JsonSerializer.Serialize(new { languages = new[] { new { name = "Demo", start = "Outside.Program", grammars = new[] { Path.Combine(folder, "*.ngr") } } } });
+            var result = Run(new Input("nitrogen.json", json));
+            Assert.Contains(result.Diagnostics, d => d.Id == "NGR0406" && d.GetMessage().Contains("registered"));
+        }
+        finally { Directory.Delete(folder, true); }
+    }
 }
