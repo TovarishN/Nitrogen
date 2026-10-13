@@ -25,6 +25,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     readonly HashSet<string> _workspaceFolders = new(StringComparer.Ordinal);
     string? _workspaceRoot;   // the client's folder: its files are indexed
     string? _configRoot;      // whose nitrogen.json configures the languages: --config's directory, else the workspace
+    bool _extractSupported;
     bool _watchDynamically;
     bool _refreshInlayHints;  // the client takes workspace/inlayHint/refresh
     bool _refreshSemanticTokens; // the client takes workspace/semanticTokens/refresh
@@ -205,6 +206,10 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     if (_workspaceFolders.Count == 0 && _workspaceRoot is not null) _workspaceFolders.Add(_workspaceRoot);
                     if (_workspaceFolders.Count > 0 || initialize?.WorkspaceFolders is not null)
                         service.SetSignatureRoots(_workspaceFolders);
+                    var editCapabilities = initialize?.Capabilities?.Workspace?.WorkspaceEdit;
+                    _extractSupported = initialize?.InitializationOptions?.GrammarExtraction == true && editCapabilities?.DocumentChanges == true &&
+                        editCapabilities.ResourceOperations?.Contains("create", StringComparer.Ordinal) == true &&
+                        editCapabilities.ChangeAnnotationSupport is not null;
                     _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
                     _refreshInlayHints = initialize?.Capabilities?.Workspace?.InlayHint?.RefreshSupport == true;
                     _refreshSemanticTokens = initialize?.Capabilities?.Workspace?.SemanticTokens?.RefreshSupport == true;
@@ -216,7 +221,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, DeclarationProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
-                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix"]),
+                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix", "refactor.extract"]),
                         SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
                         FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true,
                         DocumentFormattingProvider: true, DocumentRangeFormattingProvider: true,
@@ -309,15 +314,58 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             {
                 var request = Params(parameters, LspJson.Default.CodeActionParams);
                 string uri = request.TextDocument.Uri;
-                var actions = service.QuickFixes(uri, new DocumentRange(Position(request.Range.Start), Position(request.Range.End)))
-                    .Select(fix => new LspCodeAction(fix.Title, "quickfix",
-                        [new LspDiagnostic(Range(fix.Diagnostic.Range), (int)fix.Diagnostic.Severity, fix.Diagnostic.Code, "nitrogen", fix.Diagnostic.Message)],
-                        new WorkspaceEdit(new Dictionary<string, LspTextEdit[]>
-                        {
-                            [uri] = fix.Edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText)).ToArray(),
-                        })))
-                    .ToArray();
-                await RespondAsync(id, actions, LspJson.Default.LspCodeActionArray, cancel);
+                bool Wants(string kind) => request.Context?.Only is not { } only || only.Any(filter =>
+                    filter.Length == 0 || kind == filter || kind.StartsWith(filter + ".", StringComparison.Ordinal));
+                var actions = new List<LspCodeAction>();
+                if (Wants("quickfix"))
+                    actions.AddRange(service.QuickFixes(uri, new DocumentRange(Position(request.Range.Start), Position(request.Range.End)))
+                        .Select(fix => new LspCodeAction(fix.Title, "quickfix",
+                            [new LspDiagnostic(Range(fix.Diagnostic.Range), (int)fix.Diagnostic.Severity, fix.Diagnostic.Code, "nitrogen", fix.Diagnostic.Message)],
+                            new WorkspaceEdit(new Dictionary<string, LspTextEdit[]>
+                            {
+                                [uri] = fix.Edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText)).ToArray(),
+                            }))));
+                if (Wants("refactor.extract"))
+                {
+                    var prepared = service.PrepareExtraction(uri, new(Position(request.Range.Start), Position(request.Range.End)));
+                    if (prepared.Id is not null)
+                        actions.Add(_extractSupported
+                            ? new("Extract Block…", "refactor.extract", Command: new("Extract Block…", "nitrogen.extractGrammar", [new(request.TextDocument, request.Range)]))
+                            : new("Extract Block…", "refactor.extract", Disabled: new("The client must support reviewed, versioned edits and file creation.")));
+                }
+                await RespondAsync(id, actions.ToArray(), LspJson.Default.LspCodeActionArray, cancel);
+                break;
+            }
+            case "nitrogen/prepareGrammarExtraction":
+            {
+                var request = Params(parameters, LspJson.Default.LspExtractionParams);
+                var prepared = _extractSupported
+                    ? service.PrepareExtraction(request.TextDocument.Uri, new(Position(request.Range.Start), Position(request.Range.End)))
+                    : new ExtractionPreparation(null, null, null, "The client must support reviewed, versioned edits and file creation.");
+                await RespondAsync(id, prepared, LspJson.Default.ExtractionPreparation, cancel);
+                break;
+            }
+            case "nitrogen/resolveGrammarExtraction":
+            {
+                var request = Params(parameters, LspJson.Default.ExtractionRequest);
+                var proposal = _extractSupported ? service.ResolveExtraction(request)
+                    : new ExtractionProposal(request.DestinationUri, "", [], [], "The client does not support reviewed file creation.");
+                LspCodeAction? action = null;
+                if (proposal.UnavailableReason is null)
+                {
+                    var changes = new List<LspDocumentChange>
+                    {
+                        new LspCreateFile(proposal.DestinationUri, new(), "extract"),
+                        new LspTextDocumentEdit(new(proposal.DestinationUri, null),
+                            [new(new(new(0, 0), new(0, 0)), proposal.DestinationText, "extract")]),
+                    };
+                    changes.AddRange(proposal.Changes.Select(change => new LspTextDocumentEdit(new(change.Uri, change.Version),
+                        change.Edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText, "extract")).ToArray())));
+                    action = new("Extract Block…", "refactor.extract", Edit: new(DocumentChanges: changes.ToArray(),
+                        ChangeAnnotations: new() { ["extract"] = new("Extract grammar definitions", true, string.Join(" ", proposal.Notices)) }));
+                }
+                await RespondAsync(id, new LspExtractionResult(action, proposal.UnavailableReason, proposal.Notices,
+                    proposal.Changes.Select(c => new ExtractionExpectedDocument(c.Uri, c.Version, c.OriginalText)).ToArray()), LspJson.Default.LspExtractionResult, cancel);
                 break;
             }
             case "textDocument/signatureHelp":

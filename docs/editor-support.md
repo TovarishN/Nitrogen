@@ -216,3 +216,49 @@ not served twice. Each Rider plugin also gives its language a minimal parser
 definition, because Rider itself injects the language named by a `language=` comment, and asks the
 server for semantic tokens in every file it serves (the platform asks only in plain-text and TextMate
 files by default, so Rider showed no Nitrogen coloring before).
+
+## Extract grammar definitions (VS Code)
+
+Select one or more complete sibling rules or alternatives in a grammar, then choose
+**Refactor → Extract Block…** or run **Nitrogen: Extract Block…** from the command palette.
+Choose a new `.ngr` file in an existing workspace folder and name its syntax module.
+Review the source, destination, reference and configuration changes before applying.
+The read-only changes view shows every file; choose **Apply all changes** or **Cancel**
+in the notification (reopen it from the notification bell if it disappears). The complete
+edit uses VS Code's normal workspace undo. Individual edits cannot be deselected.
+
+Whole rules become definitions in the new module. Alternatives become an
+`extend syntax OriginalModule.Rule` block. Their dependencies remain in place and are
+referenced through existing imports or qualified names. Comments attached directly to
+the selection, semantic blocks, lowering clauses, precedence and line endings are retained.
+To use exports without a module prefix, add `using Shared;` in the consuming syntax
+module and write `Word` instead of `Shared.Word`. Existing name resolution requires
+qualification when imported names are ambiguous. Extraction emits qualified references
+conservatively; an import can replace those prefixes afterward.
+
+An explicit `nitrogen.json` grammar list or a defining grammar's `language` declaration
+is updated when needed; a matching grammar glob needs no redundant entry.
+
+The same open language session refreshes after application, including unsaved grammar
+and configuration buffers. Go to definition and references follow the moved rules.
+No language-server restart is needed. Renaming a grammar rule with qualified uses is
+currently refused, so an incomplete rename cannot leave those references broken.
+
+Extraction refuses partial/mixed selections, invalid baseline grammars, name collisions,
+existing destinations, paths through symbolic links, changes outside the workspace,
+changes to composed alternative order or inferred quotation categories, stale proposals, and destinations that a grammar
+pattern would accidentally add to an unrelated language. Use a focused language workspace
+if the bounded workspace input limit is reached.
+
+Generated C# names can change when module ownership changes. Configured helper sources
+are compiled against the proposal without loading their assembly or running initializers.
+An unsupported helper consumer disables extraction with an explanation. In particular,
+a helper that explicitly composes the original generated module must be adapted to
+compose the extracted module as well; constant quotation-category strings also need
+explicit attention. Consumers outside the workspace are not verified.
+
+This first version moves selected definitions only. Moving into an existing file,
+automatically moving dependencies, extracting arbitrary expression fragments, quote
+functions and quasiquote-pattern matching are separate extensions. The interactive
+command is provided by the general Nitrogen VS Code extension; other clients need to
+implement the extraction prompt flow and support annotated resource edits.

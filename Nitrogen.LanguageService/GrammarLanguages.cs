@@ -86,6 +86,29 @@ public sealed partial class NitrogenLanguageService
 
     IReadOnlyList<string> LoadConfiguration()
     {
+        string file = Path.Combine(_root!, "nitrogen.json");
+        JsonDocument? parsed = null;
+        try
+        {
+            string? text = TextOf(new Uri(file).AbsoluteUri) ?? (File.Exists(file) ? File.ReadAllText(file) : null);
+            parsed = text is null ? null : JsonDocument.Parse(text);
+            if (parsed?.RootElement.TryGetProperty("languages", out var entries) == true)
+                foreach (var entry in entries.EnumerateArray())
+                {
+                    _ = entry.GetProperty("name").GetString();
+                    _ = entry.GetProperty("start").GetString();
+                    foreach (string property in new[] { "grammars", "extensions", "sources", "usings" })
+                        if (entry.TryGetProperty(property, out var values))
+                            foreach (var value in values.EnumerateArray()) _ = value.GetString();
+                }
+        }
+        catch (Exception error) when (error is JsonException or InvalidOperationException or KeyNotFoundException)
+        {
+            // An editor buffer can be temporarily incomplete; retain the last working configuration.
+            parsed?.Dispose();
+            return [];
+        }
+        using var json = parsed;
         var affected = new List<string>();
         foreach (var language in _grammarLanguages)
         {
@@ -94,10 +117,7 @@ public sealed partial class NitrogenLanguageService
         }
         _grammarLanguages.Clear();
         RefreshClosedGrammars(); // none until the languages are read again
-        string file = Path.Combine(_root!, "nitrogen.json");
-        if (!File.Exists(file)) return affected;
-
-        using var json = JsonDocument.Parse(File.ReadAllText(file));
+        if (json is null) return affected;
         if (!json.RootElement.TryGetProperty("languages", out var configuredLanguages))
             return affected.Concat(Reindex()).Distinct().ToList();
         foreach (var entry in configuredLanguages.EnumerateArray())
@@ -134,6 +154,7 @@ public sealed partial class NitrogenLanguageService
         System.Uri.TryCreate(uri, UriKind.Absolute, out var parsed) && parsed.IsFile ? GrammarHookPath(Path.GetFullPath(parsed.LocalPath)) : [];
 
     IReadOnlyList<string> GrammarHookPath(string path) =>
+        _root is not null && SamePath(path, Path.Combine(_root, "nitrogen.json")) ? LoadConfiguration() :
         _grammarLanguages.FirstOrDefault(l => l.Files().Contains(path, StringComparer.Ordinal) || l.SourceFiles().Contains(path, StringComparer.Ordinal)) is { } language ? Compile(language) : [];
 
     IReadOnlyList<string> Compile(GrammarLanguage language)

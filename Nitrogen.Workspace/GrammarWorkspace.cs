@@ -63,7 +63,16 @@ public sealed class GrammarWorkspace
 
     public bool RemoveGrammar(string path) => _files.Remove(path);
 
-    public WorkspaceSnapshot Compile()
+    /// <summary>Checks generated and helper C# without loading assemblies or running helper initializers.</summary>
+    public IReadOnlyList<WorkspaceDiagnostic> ValidateCompilation()
+    {
+        using var validation = CompileCore(load: false);
+        return validation.Diagnostics;
+    }
+
+    public WorkspaceSnapshot Compile() => CompileCore(load: true);
+
+    WorkspaceSnapshot CompileCore(bool load)
     {
         int version = ++_version;
         var grammar = GrammarCompiler.Compile(_files.Select(f => new GrammarInput(f.Key, f.Value, GeneratedNamespace)).ToArray());
@@ -84,6 +93,8 @@ public sealed class GrammarWorkspace
         var emitted = compilation.Emit(image);
         diagnostics.AddRange(emitted.Diagnostics.Where(d => d.Severity == CodeAnalysis.DiagnosticSeverity.Error).Select(FromCSharp));
         if (!emitted.Success) return new WorkspaceSnapshot(version, diagnostics);
+
+        if (!load) return new WorkspaceSnapshot(version, diagnostics);
 
         image.Position = 0;
         var context = new WorkspaceLoadContext();

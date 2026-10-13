@@ -6,6 +6,7 @@ import { CSharpStrings, csharpSelector } from './csharpStrings';
 import { languagesOfOtherExtensions, workspaceFileExtensions } from './otherExtensions';
 import { SignatureRouting } from './signatureRouting';
 import { serverCommand } from './server';
+import { registerGrammarExtraction } from './extractGrammar';
 
 let client: LanguageClient | undefined;
 let strings: CSharpStrings | undefined;
@@ -49,13 +50,14 @@ export async function activate(context: ExtensionContext): Promise<void> {
     documentSelector: selector,
     middleware: routing.middleware(strings.middleware, document => (document.uri.scheme === 'file' || document.uri.scheme === 'untitled') && !claimedLanguages.some(name => document.languageId.toLowerCase() === name.toLowerCase() || document.uri.path.toLowerCase().endsWith('.' + name.toLowerCase()))),
     // Generated extensions own their language files and tagged C# strings; this client still serves .ngr.
-    initializationOptions: { skipLanguages: claimedLanguages },
+    initializationOptions: { skipLanguages: claimedLanguages, grammarExtraction: true },
     synchronize: { fileEvents: workspace.createFileSystemWatcher('**/*') },
   };
   if (clientOptions.synchronize?.fileEvents && !Array.isArray(clientOptions.synchronize.fileEvents)) context.subscriptions.push(clientOptions.synchronize.fileEvents);
   context.subscriptions.push(strings);
   client = new LanguageClient('nitrogen', 'Nitrogen', serverOptions, clientOptions);
   await client.start();
+  registerGrammarExtraction(context, client);
   routing.start(context);
 }
 
