@@ -27,7 +27,7 @@ public sealed class GrammarExtractionParityTests : IDisposable
         var preparation = service.PrepareExtraction(Uri("a.ngr"), new(map.PositionOf(at), map.PositionOf(at + rule.Length)));
         Assert.Null(preparation.UnavailableReason);
         var proposal = service.ResolveExtraction(new(preparation.Id!, Uri("z.ngr"), "Shared"));
-        Assert.Null(proposal.UnavailableReason);
+        Assert.True(proposal.UnavailableReason is null, proposal.UnavailableReason);
         return proposal;
     }
     void ApplyUnsaved(NitrogenLanguageService service, ExtractionProposal proposal)
@@ -76,14 +76,15 @@ public sealed class GrammarExtractionParityTests : IDisposable
         Assert.Empty(service.Diagnostics(Uri("sample.test")));
         Assert.Equal(before, Assert.Single(service.Definition(Uri("sample.test"), new(0, 7))));
         string updated = service.TextOf(Uri("a.ngr"))!;
-        var at = new LineMap(updated).PositionOf(updated.IndexOf("Shared.Ref", StringComparison.Ordinal) + 8);
+        Assert.Contains("using Shared;", updated);
+        var at = new LineMap(updated).PositionOf(updated.IndexOf("Let Ref", StringComparison.Ordinal) + 4);
         Assert.Contains(service.Definition(Uri("a.ngr"), at), d => d.Uri == result.DestinationUri);
     }
     [Fact]
     public void Extracted_qualified_uses_remain_references_and_unsafe_rename_is_refused()
     {
         const string rule = "syntax Word = \"x\";";
-        const string grammar = "syntax module A { " + rule + " syntax Program = Word; }";
+        const string grammar = "syntax module A { " + rule + " syntax Program = Word; } syntax module B { token Word = \"b\"; syntax Use = A.Word; }";
         using var service = Service(grammar, "A.Program");
         var result = Extract(service, grammar, rule);
         ApplyUnsaved(service, result);
@@ -91,6 +92,49 @@ public sealed class GrammarExtractionParityTests : IDisposable
         Assert.Contains(service.References(result.DestinationUri, declaration, false), r => r.Uri == Uri("a.ngr"));
         Assert.Contains("qualified", Assert.Throws<RenameRefusedException>(() => service.Rename(result.DestinationUri, declaration, "Changed")).Message);
         Assert.Throws<RenameRefusedException>(() => service.PrepareRename(result.DestinationUri, declaration));
+    }
+    [Fact]
+    public void Imported_uses_remain_references_and_an_incomplete_rename_is_refused()
+    {
+        const string rule = "syntax Word = \"x\";";
+        const string grammar = "syntax module A { " + rule + " syntax Program = Word; }";
+        using var service = Service(grammar, "A.Program");
+        var result = Extract(service, grammar, rule);
+        ApplyUnsaved(service, result);
+        var declaration = new LineMap(result.DestinationText).PositionOf(result.DestinationText.IndexOf("Word =", StringComparison.Ordinal));
+        Assert.Single(service.References(result.DestinationUri, declaration, false));
+        Assert.Contains("imported", Assert.Throws<RenameRefusedException>(() => service.Rename(result.DestinationUri, declaration, "Changed")).Message);
+    }
+    [Fact]
+    public void A_new_import_preserves_parsing_and_navigation_of_colliding_names()
+    {
+        const string rule = "syntax Word = \"x\";";
+        const string grammar = "syntax module A { " + rule + " } syntax module Other { token Word = \"y\"; } syntax module B { using Other; syntax Program = Word A.Word; }";
+        using var service = Service(grammar, "B.Program");
+        service.Open(Uri("sample.test"), 1, "y x");
+        Assert.Empty(service.Diagnostics(Uri("sample.test")));
+        var result = Extract(service, grammar, rule);
+        ApplyUnsaved(service, result);
+        Assert.Empty(service.Diagnostics(Uri("sample.test")));
+        string updated = service.TextOf(Uri("a.ngr"))!;
+        var at = new LineMap(updated).PositionOf(updated.IndexOf("Shared.Word", StringComparison.Ordinal) + 8);
+        Assert.Contains(service.Definition(Uri("a.ngr"), at), d => d.Uri == result.DestinationUri);
+    }
+    [Fact]
+    public void Extracting_a_keyword_named_token_preserves_the_program_language()
+    {
+        const string rule = "token except = \"e\";";
+        const string grammar = "syntax module A { " + rule + " token Program = \"p\" A.except \"x\"; syntax Document = Program; }";
+        using var service = Service(grammar, "A.Document");
+        service.Open(Uri("sample.test"), 1, "pex");
+        Assert.Empty(service.Diagnostics(Uri("sample.test")));
+        service.Change(Uri("sample.test"), 2, "p");
+        Assert.NotEmpty(service.Diagnostics(Uri("sample.test")));
+        service.Change(Uri("sample.test"), 3, "pex");
+        ApplyUnsaved(service, Extract(service, grammar, rule));
+        Assert.Empty(service.Diagnostics(Uri("sample.test")));
+        service.Change(Uri("sample.test"), 4, "p");
+        Assert.NotEmpty(service.Diagnostics(Uri("sample.test")));
     }
     [Fact]
     public void Typed_lowering_and_values_remain_equivalent_after_a_rule_move()

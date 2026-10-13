@@ -79,7 +79,7 @@ public static class WorkspaceInputReader
         }
     }
 
-    static IEnumerable<string> Enumerate(string directory)
+    internal static IEnumerable<string> Enumerate(string directory)
     {
         string[] files, children;
         try { files = Directory.GetFiles(directory); children = Directory.GetDirectories(directory); }
@@ -88,7 +88,11 @@ public static class WorkspaceInputReader
         foreach (string child in children.Order(StringComparer.Ordinal))
         {
             string name = Path.GetFileName(child);
-            if (name.StartsWith('.') || Skipped.Contains(name) || (File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0) continue;
+            if (name.StartsWith('.') || Skipped.Contains(name)) continue;
+            FileAttributes attributes;
+            try { attributes = File.GetAttributes(child); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { continue; }
+            if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
             foreach (string file in Enumerate(child)) yield return file;
         }
     }

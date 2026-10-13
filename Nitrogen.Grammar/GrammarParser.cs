@@ -34,6 +34,11 @@ public static class GrammarParser
         }
     }
 
+    internal static bool CanUseUnqualifiedReference(string name) =>
+        name is not ("precedence" or "except") && !IsClauseWord(name);
+
+    static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic" or "lowers" or "rewrites";
+
     sealed class Parser
     {
         readonly string _text;
@@ -347,7 +352,7 @@ public static class GrammarParser
         {
             TokenKind.String or TokenKind.LBracket or TokenKind.LParen or TokenKind.Dot
                 or TokenKind.Bang or TokenKind.Amp or TokenKind.QualifiedName => true,
-            TokenKind.Identifier => Current.Value != "precedence" && Current.Value != "except" && !IsClauseWord(Current.Value),
+            TokenKind.Identifier => CanUseUnqualifiedReference(Current.Value),
             _ => false,
         };
 
@@ -462,8 +467,6 @@ public static class GrammarParser
             Expect(TokenKind.RParen, "')'");
             return inner;
         }
-
-        static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic" or "lowers" or "rewrites";
 
         static NameDecl Name(GrammarToken token) => new(token.Value, token.Span);
 

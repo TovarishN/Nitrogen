@@ -7,6 +7,30 @@ namespace Nitrogen.Tests;
 public sealed class WorkspaceInputReaderTests
 {
     [Fact]
+    public void A_directory_removed_after_listing_does_not_abort_remaining_discovery()
+    {
+        string root = Directory.CreateTempSubdirectory("nitrogen-reader-race-").FullName;
+        try
+        {
+            string marker = Path.Combine(root, "marker.ngr");
+            File.WriteAllText(marker, "syntax module Marker { }");
+            string removed = Directory.CreateDirectory(Path.Combine(root, "a-removed")).FullName;
+            File.WriteAllText(Path.Combine(removed, "gone.ngr"), "syntax module Gone { }");
+            string retained = Directory.CreateDirectory(Path.Combine(root, "b-retained")).FullName;
+            string grammar = Path.Combine(retained, "kept.ngr");
+            File.WriteAllText(grammar, "syntax module Kept { }");
+            using var files = WorkspaceInputReader.Enumerate(root).GetEnumerator();
+            Assert.True(files.MoveNext()); // Both child directories were captured before this yield.
+            Assert.Equal(marker, files.Current);
+            Directory.Delete(removed, true);
+            var remaining = new List<string>();
+            while (files.MoveNext()) remaining.Add(files.Current);
+            Assert.Equal([grammar], remaining);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
     public async Task Zero_length_entries_do_not_block_discovery_on_a_unix_fifo()
     {
         if (OperatingSystem.IsWindows()) return;
