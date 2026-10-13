@@ -256,8 +256,9 @@ if the bounded workspace input limit is reached.
 Generated C# names can change when module ownership changes. Configured helper sources
 are compiled against the proposal without loading their assembly or running initializers.
 An unsupported helper consumer disables extraction with an explanation. In particular,
-a helper that explicitly composes the original generated module must be adapted to
-compose the extracted module as well; constant quotation-category strings also need
+a helper that explicitly composes the original generated module should use the
+[generated composition factory](#generated-language-composition-factories) before extraction.
+Constant quotation-category strings and references to moved generated types still need
 explicit attention. Consumers outside the workspace are not verified.
 
 This first version moves selected definitions only. Moving into an existing file,
@@ -265,3 +266,46 @@ automatically moving dependencies, extracting arbitrary expression fragments, qu
 functions and quasiquote-pattern matching are separate extensions. The interactive
 command is provided by the general Nitrogen VS Code extension; other clients need to
 implement the extraction prompt flow and support annotated resource edits.
+
+
+## Generated language composition factories
+
+A configured language named `DateCalc` generates `DateCalcComposition` in its configured
+namespace (`DateCalc.Syntax` in the example). Both `nitrogen.json` entries and grammar
+`language` declarations provide this API:
+
+```csharp
+var language = DateCalcComposition.CreateBuilder()
+    .AddSemantic(MathModule.Semantics)
+    .AddSemantic(DateCalcLanguage.Semantics)
+    .Build();
+using var parsed = language.Parse(source, DateCalcComposition.Start);
+```
+
+`CreateBuilder()` returns a fresh builder with each selected syntax module once, in
+ordinal module-name order, matching the live workspace. Add semantic modules or custom
+trivia before building. The factory does not discover semantic providers or cache a
+language. `Start` follows the configured syntax start rule, including after extraction.
+
+The factory is regenerated during project builds and live workspace compilation.
+Changing grammar membership, language name, or start rule refreshes it without restarting
+the LSP. Each configured language keeps its own membership; unrelated registered grammars
+are excluded from its factory. Invalid names, conflicting definitions or namespaces,
+missing registered inputs, and factory type collisions are reported as diagnostics.
+
+Generator-only consumers register the configuration and all grammar inputs explicitly:
+
+```xml
+<AdditionalFiles Include="nitrogen.json" />
+<AdditionalFiles Include="*.ngr" Namespace="DateCalc.Syntax" />
+```
+
+Register dependencies of other extensions too. The generator never discovers an
+unregistered file from disk. Nitrogen.Build supplies configurations and grammar inputs
+from its registered project items. An unconfigured module-only project keeps its existing
+module API without a guessed composition factory.
+
+Extract Block can update grammar membership and the configured start while helpers keep
+using the same factory. It still refuses moves that break other generated C# APIs,
+quotation category strings, or unsupported direct-module helper factories. Compilation
+validation checks the proposal without executing helper initializers.

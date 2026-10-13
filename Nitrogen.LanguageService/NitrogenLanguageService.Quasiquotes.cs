@@ -181,7 +181,11 @@ public sealed partial class NitrogenLanguageService
                     if (ReadNavigationText(file) is { } text) texts[file] = text;
                 if (_quoteLanguages.TryGetValue(key, out var cached) && cached.Texts.Count == texts.Count &&
                     texts.All(p => cached.Texts.TryGetValue(p.Key, out var text) && text == p.Value)) return cached.Snapshot?.Language;
-                var workspace = new GrammarWorkspace();
+                var workspace = new GrammarWorkspace
+                {
+                    CompositionName = entry.GetProperty("name").GetString(),
+                    StartRule = entry.GetProperty("start").GetString()
+                };
                 if (entry.TryGetProperty("namespace", out var ns)) workspace.GeneratedNamespace = ns.GetString()!;
                 if (entry.TryGetProperty("usings", out var usings))
                     foreach (var u in usings.EnumerateArray()) workspace.Usings.Add(u.GetString()!);

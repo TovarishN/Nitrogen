@@ -8,7 +8,8 @@
     <ProjectReference Include="..\..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
   <ItemGroup>
-    <AdditionalFiles Include="DateCalc.ngr" Namespace="DateCalc.Syntax" />
+    <AdditionalFiles Include="*.ngr" Namespace="DateCalc.Syntax" />
+    <AdditionalFiles Include="nitrogen.json" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
     <CompilerVisibleProperty Include="RootNamespace" />
   </ItemGroup>

@@ -207,11 +207,28 @@ script on Linux.
 <AdditionalFiles Include="MyLanguage.ngr" Namespace="My.Language.Syntax" />
 ```
 
-and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.12.1`. Reading the feed needs a
+and the `nitrogen` tool: `dotnet tool install Nitrogen.Cli --version 0.13.0`. Reading the feed needs a
 GitHub token with `read:packages`; NuGet takes it from `NuGetPackageSourceCredentials_<source name>`
 (`Username=<user>;Password=<token>`). `eng/package-smoke.sh` builds a consumer and runs the tool from
 freshly packed packages; a `v*` tag publishes them and drafts the GitHub release, with the packages and editor
 plugins attached, for its notes to be written.
+
+Configured languages also generate a stable syntax composition factory. For DateCalc:
+
+```csharp
+var language = DateCalcComposition.CreateBuilder()
+    .AddSemantic(MathModule.Semantics)
+    .AddSemantic(DateCalcLanguage.Semantics)
+    .Build();
+using var parsed = language.Parse(source, DateCalcComposition.Start);
+```
+
+The factory includes all modules selected by the language definition. Extract Block
+updates that definition, so helpers using the factory automatically include the extracted
+module. Semantic registration and builder customization remain explicit. Generator-only
+projects must register `nitrogen.json` and every selected grammar as `AdditionalFiles`;
+use a grammar glob such as `*.ngr` to include files created by extraction. A defining
+`language` declaration also generates the factory. See [composition factories](docs/editor-support.md#generated-language-composition-factories).
 
 **The CLI:**
 

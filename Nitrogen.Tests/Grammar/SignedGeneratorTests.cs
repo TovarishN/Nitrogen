@@ -35,7 +35,7 @@ public sealed class SignedGeneratorTests
     {
         var result = Run(Driver(null, new Input(PathOf("L.syntax"), Root())));
         Assert.DoesNotContain(result.Diagnostics, d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
-        Assert.Contains("namespace L.Syntax", Assert.Single(result.GeneratedTrees).ToString());
+        Assert.Contains("namespace L.Syntax", Assert.Single(result.GeneratedTrees, tree => !tree.FilePath.Contains("Composition.g.cs")).ToString());
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class SignedGeneratorTests
         var dependency = new Input(PathOf("Common.part"), "syntax module Common { token Word = \"ok\"; }");
         GeneratorDriver driver = Driver(null, root, dependency).RunGenerators(CSharpCompilation.Create("Signed"));
         Assert.Empty(driver.GetRunResult().Diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error));
-        Assert.Equal(2, driver.GetRunResult().GeneratedTrees.Length);
+        Assert.Equal(3, driver.GetRunResult().GeneratedTrees.Length);
         var updated = new Input(dependency.Path, "syntax module Common { token Word = \"changed\"; }");
         driver = driver.ReplaceAdditionalText(dependency, updated).RunGenerators(CSharpCompilation.Create("Signed"));
         Assert.Contains("changed", string.Join("\n", driver.GetRunResult().GeneratedTrees.Select(t => t.ToString())));

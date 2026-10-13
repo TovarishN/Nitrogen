@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
 using Nitrogen.Grammar;
 
@@ -17,7 +18,7 @@ namespace Nitrogen.Generator;
 [Generator(LanguageNames.CSharp)]
 public sealed class NitrogenGenerator : IIncrementalGenerator
 {
-    sealed record Compiled(EquatableArray<GrammarInput> Inputs, GrammarCompileResult Result);
+    sealed record Compiled(EquatableArray<GrammarInput> Inputs, GrammarCompileResult Result, EquatableArray<LanguageComposition> Compositions);
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -27,13 +28,14 @@ public sealed class NitrogenGenerator : IIncrementalGenerator
             .Collect()
             .Select(static (inputs, _) => Compile(inputs));
 
-        context.RegisterSourceOutput(compiled, static (output, result) => Emit(output, result));
+        context.RegisterSourceOutput(compiled.Combine(context.CompilationProvider),
+            static (output, pair) => Emit(output, pair.Left, pair.Right));
     }
 
     static Compiled Compile(IEnumerable<RegisteredGrammarInputs.Input> inputs)
     {
         var result = RegisteredGrammarInputs.Compile(inputs);
-        return new(result.Inputs, result.Compilation);
+        return new(result.Inputs, result.Compilation, result.Compositions);
     }
 
     static RegisteredGrammarInputs.Input ToInput(AdditionalText file, AnalyzerConfigOptionsProvider options, CancellationToken cancellation)
@@ -45,12 +47,28 @@ public sealed class NitrogenGenerator : IIncrementalGenerator
         return new(file.Path, text, string.IsNullOrWhiteSpace(ns) ? "Nitrogen.Generated" : ns!.Trim(), explicitNamespace?.Trim());
     }
 
-    static void Emit(SourceProductionContext output, Compiled compiled)
+    static void Emit(SourceProductionContext output, Compiled compiled, Compilation compilation)
     {
         foreach (var diagnostic in compiled.Result.Diagnostics)
             output.ReportDiagnostic(ToRoslyn(diagnostic, compiled.Inputs));
+        if (compiled.Result.Sources.Count == 0) return;
+        // Include sibling generated module types when checking factory names, without
+        // changing which modules a factory composes.
+        var factories = compiled.Compositions.ToDictionary(c => c.FactoryHintName, c => c.FactoryTypeName, StringComparer.Ordinal);
+        var inventory = factories.Count == 0 ? compilation : compilation.AddSyntaxTrees(compiled.Result.Sources
+            .Where(s => !factories.ContainsKey(s.HintName))
+            .Select(s => CSharpSyntaxTree.ParseText(s.Code, compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions, path: s.HintName)));
         foreach (var source in compiled.Result.Sources)
+        {
+            if (factories.TryGetValue(source.HintName, out string? typeName) && inventory.GetTypeByMetadataName(typeName) is { } existing)
+            {
+                var descriptor = new DiagnosticDescriptor("NGR0406", "Nitrogen composition", "{0}", "Nitrogen", DiagnosticSeverity.Error, isEnabledByDefault: true);
+                output.ReportDiagnostic(Diagnostic.Create(descriptor, existing.Locations.FirstOrDefault(l => l.SourceTree is not null && compilation.SyntaxTrees.Contains(l.SourceTree)) ?? Location.None,
+                    $"composition factory '{typeName}' collides with an existing type"));
+                continue;
+            }
             output.AddSource(source.HintName, SourceText.From(source.Code, Encoding.UTF8));
+        }
     }
 
     static Diagnostic ToRoslyn(CompiledDiagnostic compiled, EquatableArray<GrammarInput> inputs)

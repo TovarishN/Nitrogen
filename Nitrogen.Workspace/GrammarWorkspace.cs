@@ -50,6 +50,12 @@ public sealed class GrammarWorkspace
     /// <summary>The C# namespace the grammars are generated into: where helper sources find the generated modules and views.</summary>
     public string GeneratedNamespace { get; set; } = Namespace;
 
+    /// <summary>The configured language's stable factory name prefix; null for module-only callers.</summary>
+    public string? CompositionName { get; set; }
+
+    /// <summary>The configured qualified syntax start rule used by the stable factory.</summary>
+    public string? StartRule { get; set; }
+
     /// <summary>Namespaces the generated code imports (issue 239): where semantics blocks' helper types live.</summary>
     public IList<string> Usings { get; } = new List<string>();
 
@@ -75,7 +81,17 @@ public sealed class GrammarWorkspace
     WorkspaceSnapshot CompileCore(bool load)
     {
         int version = ++_version;
-        var grammar = GrammarCompiler.Compile(_files.Select(f => new GrammarInput(f.Key, f.Value, GeneratedNamespace)).ToArray());
+        var inputs = _files.Select(f => new GrammarInput(f.Key, f.Value, GeneratedNamespace)).ToArray();
+        var grammar = GrammarCompiler.Compile(inputs);
+        if (!grammar.HasErrors && CompositionName is not null)
+        {
+            var factory = CompositionWriter.Write(new(CompositionName, StartRule ?? "", GeneratedNamespace, inputs));
+            grammar = grammar with
+            {
+                Diagnostics = grammar.Diagnostics.Concat(factory.Diagnostics).ToArray(),
+                Sources = grammar.Sources.Concat(factory.Sources).ToArray()
+            };
+        }
         var diagnostics = grammar.Diagnostics.Select(FromGrammar).ToList();
         if (grammar.HasErrors) return new WorkspaceSnapshot(version, diagnostics);
 
