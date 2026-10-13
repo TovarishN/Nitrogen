@@ -34,11 +34,12 @@ public sealed class CompositionWriterTests
     [InlineData("Bad.Name", "A.Program", "syntax module A { syntax Program = \"ok\"; }")]
     [InlineData("Demo", "A.Missing", "syntax module A { syntax Program = \"ok\"; }")]
     [InlineData("Demo", "A.Word", "syntax module A { token Word = \"ok\"; }")]
-    [InlineData("Demo", "A.Program", "syntax module A { syntax Program = \"ok\"; syntax Composition = | Demo = \"other\"; }")]
+    [InlineData("Demo", "A.Program", "syntax module A { syntax Program = \"ok\"; extensible syntax Composition { | Demo = \"other\" } }")]
     public void Invalid_composition_does_not_emit_a_factory(string name, string start, string grammar)
     {
         var result = CompositionWriter.Write(new(name, start, "Demo.Syntax", new[] { Input(grammar) }));
         Assert.True(result.HasErrors);
+        Assert.Contains(result.Diagnostics, d => d.Diagnostic.Code == "NGR0406");
         Assert.Empty(result.Sources);
         Assert.All(result.Diagnostics, diagnostic => Assert.Equal("a.ngr", diagnostic.Path));
     }

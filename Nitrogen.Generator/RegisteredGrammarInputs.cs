@@ -22,9 +22,24 @@ internal static class RegisteredGrammarInputs
             if (input.Path.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase) || header.Signatures.Any(s => s.Mode == SignatureMode.Grammar))
                 Visit(input, null, new HashSet<string>(comparer));
         }
+        var compositions = CompositionConfiguration.Resolve(files.Values.Select(f => new GrammarInput(f.Path, f.Text, f.Namespace)));
+        diagnostics.AddRange(compositions.Diagnostics);
+        foreach (var grammar in compositions.Compositions.SelectMany(c => c.Grammars))
+        {
+            if (files.TryGetValue(Path.GetFullPath(grammar.Path), out var original) &&
+                !string.IsNullOrWhiteSpace(original.ExplicitNamespace) && original.ExplicitNamespace != grammar.Namespace)
+                Error(original, $"Namespace metadata '{original.ExplicitNamespace}' conflicts with language namespace '{grammar.Namespace}'");
+            selected[Path.GetFullPath(grammar.Path)] = grammar;
+        }
         var compilation = diagnostics.Any(d => d.Diagnostic.Severity == GrammarSeverity.Error)
             ? new GrammarCompileResult(default, default) : GrammarCompiler.Compile(selected.Values);
-        return new(selected.Values.ToArray(), compilation with { Diagnostics = diagnostics.Concat(compilation.Diagnostics).ToArray() });
+        if (!compilation.HasErrors && !diagnostics.Any(d => d.Diagnostic.Severity == GrammarSeverity.Error))
+        {
+            var sources = compilation.Sources.Concat(compositions.Compositions.SelectMany(c => CompositionWriter.Write(c).Sources)).ToArray();
+            compilation = compilation with { Sources = sources };
+        }
+        return new(selected.Values.Concat(files.Values.Where(f => Path.GetFileName(f.Path) == "nitrogen.json")
+            .Select(f => new GrammarInput(f.Path, f.Text, f.Namespace))).ToArray(), compilation with { Diagnostics = diagnostics.Concat(compilation.Diagnostics).ToArray() });
 
         void Visit(Input input, string? inheritedNamespace, HashSet<string> active)
         {

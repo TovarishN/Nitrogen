@@ -50,7 +50,7 @@ public sealed class WriteAnalysisManifest : Microsoft.Build.Utilities.Task
                     if (texts.ContainsKey(dependency) && grammars.Add(dependency)) queue.Enqueue(dependency);
                 }
             }
-            GeneratorInputs = grammars.Order(PathComparer).Select(p => (ITaskItem)new TaskItem(p)).ToArray();
+            GeneratorInputs = grammars.Concat(files.Where(p => Path.GetFileName(p) == "nitrogen.json")).Distinct(PathComparer).Order(PathComparer).Select(p => (ITaskItem)new TaskItem(p)).ToArray();
             string json = JsonSerializer.Serialize(new { root = Path.GetFullPath(Root), files, documents = files });
             string manifest = Path.GetFullPath(ManifestPath);
             Directory.CreateDirectory(Path.GetDirectoryName(manifest)!);
