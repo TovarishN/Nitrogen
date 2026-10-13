@@ -60,6 +60,33 @@ public sealed class GrammarExtractionServiceTests : IDisposable
         File.AppendAllText(Path.Combine(_root, "nitrogen.json"), "\n");
         Assert.Contains("changed", service.ResolveExtraction(new(prepared.Id!, Uri("aa.ngr"), "Shared")).UnavailableReason!);
     }
+    [Theory]
+    [InlineData("close")]
+    [InlineData("reopen")]
+    [InlineData("open-config")]
+    public void Reviewing_unchanged_documents_does_not_invalidate_extraction(string transition)
+    {
+        using var service = Service();
+        var request = new ExtractionRequest(Prepare(service).Id!, Uri("aa.ngr"), "Shared");
+        var reviewed = service.ResolveExtraction(request);
+        Assert.Null(reviewed.UnavailableReason);
+        if (transition == "open-config")
+            service.Open(Uri("nitrogen.json"), 1, File.ReadAllText(Path.Combine(_root, "nitrogen.json")));
+        else
+        {
+            service.Close(Uri("a.ngr"));
+            if (transition == "reopen")
+                service.Open(Uri("a.ngr"), 7, Grammar);
+        }
+        var confirmed = service.ResolveExtraction(request);
+        Assert.Null(confirmed.UnavailableReason);
+        Assert.Equal(reviewed.DestinationText, confirmed.DestinationText);
+        Assert.Equal(reviewed.Changes.Select(c => c.Uri), confirmed.Changes.Select(c => c.Uri));
+        var sourceChange = Assert.Single(confirmed.Changes, c => c.Uri == Uri("a.ngr"));
+        Assert.Equal(service.VersionOf(Uri("a.ngr")), sourceChange.Version);
+        service.Open(Uri("a.ngr"), 8, Grammar + "\n");
+        Assert.Contains("changed", service.ResolveExtraction(request).UnavailableReason!);
+    }
     [Fact]
     public void Rejects_existing_and_outside_destinations()
     {

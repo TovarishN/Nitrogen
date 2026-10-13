@@ -41,13 +41,19 @@ export async function extractGrammar(host: ExtractionHost, selection: Extraction
     if (checked.unavailableReason || !checked.action?.edit) {
       host.warn(checked.unavailableReason ?? 'Extraction is unavailable.'); return;
     }
-    if (JSON.stringify(checked.action.edit) !== JSON.stringify(resolved.action.edit)) {
+    if (reviewedEdit(checked.action.edit) !== reviewedEdit(resolved.action.edit)) {
       host.warn('The extraction changed during review. Select the definitions again.'); return;
     }
     if (await host.apply(checked)) await host.open(destinationUri);
   } catch (error) {
     host.warn('Extraction failed: ' + (error instanceof Error ? error.message : String(error)));
   }
+}
+
+/** Opening or closing an unchanged document during review may change its LSP version. */
+function reviewedEdit(edit: WorkspaceEdit): string {
+  return JSON.stringify({ ...edit, documentChanges: edit.documentChanges?.map(change =>
+    'textDocument' in change ? { ...change, textDocument: { uri: change.textDocument.uri } } : change) });
 }
 
 export function extractionPreview(result: ExtractionResolution): { uri: string; before: string; after: string }[] {
