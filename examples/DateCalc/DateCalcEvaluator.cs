@@ -16,7 +16,7 @@ public sealed record DateCalcLine(int Line, string Text, bool IsError = false);
 /// </summary>
 public static class DateCalcEvaluator
 {
-    static readonly Lazy<Language> s_language = new(() => new LanguageBuilder().Add(DateCalcModule.Instance)
+    static readonly Lazy<Language> s_language = new(() => DateCalcComposition.CreateBuilder()
         .AddSemantic(MathModule.Semantics).AddSemantic(DateCalcLanguage.Semantics).Build());
 
     /// <summary>The language <see cref="Run"/> parses with, built on first use: reading <see cref="Profile"/> does not build it.</summary>
@@ -38,7 +38,7 @@ public static class DateCalcEvaluator
     /// <summary>The value of each statement, in order, or the diagnostics that stop it from running; <c>today</c> is <paramref name="today"/>, else the local date.</summary>
     public static IReadOnlyList<DateCalcLine> Run(string source, DateOnly? today = null)
     {
-        using var parsed = Language.Parse(source, DateCalcModule.Program);
+        using var parsed = Language.Parse(source, DateCalcComposition.Start);
         var project = new Project(Language);
         project.Set("input.datecalc", parsed.Tree);
         var file = new ProjectSemantics(project)["input.datecalc"];

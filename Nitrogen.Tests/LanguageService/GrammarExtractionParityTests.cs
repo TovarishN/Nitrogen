@@ -64,6 +64,23 @@ public sealed class GrammarExtractionParityTests : IDisposable
         Assert.NotEmpty(service.Diagnostics(Uri("sample.test")));
     }
     [Fact]
+    public void Factory_start_stays_usable_when_the_configured_start_rule_moves()
+    {
+        const string rule = "syntax Program = \"x\";";
+        const string grammar = "syntax module A { " + rule + " }";
+        const string helper = "public static class Helper { public static Nitrogen.LanguageBuilder Builder() => Nitrogen.Workspace.Grammar.TestComposition.CreateBuilder(); public static Nitrogen.Rule Start => Nitrogen.Workspace.Grammar.TestComposition.Start; }";
+        using var service = Service(grammar, "A.Program", helper);
+        service.Open(Uri("sample.test"), 1, "x");
+        Assert.Empty(service.Diagnostics(Uri("sample.test")));
+        var result = Extract(service, grammar, rule);
+        ApplyUnsaved(service, result);
+        Assert.Contains("Shared.Program", service.TextOf(Uri("nitrogen.json"))!);
+        Assert.Empty(service.Diagnostics(Uri("sample.test")));
+        service.Change(result.DestinationUri, 2, result.DestinationText.Replace("\"x\"", "\"y\""));
+        Assert.NotEmpty(service.Diagnostics(Uri("sample.test")));
+    }
+
+    [Fact]
     public void Binding_targets_and_grammar_navigation_survive_a_rule_move()
     {
         const string rule = "syntax Ref = Name:Identifier references value Name;";
