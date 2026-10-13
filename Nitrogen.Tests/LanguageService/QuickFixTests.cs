@@ -129,7 +129,7 @@ public sealed class QuickFixTests : IDisposable
             open, request, """{"jsonrpc":"2.0","id":99,"method":"shutdown"}""", """{"jsonrpc":"2.0","method":"exit"}""");
 
         var kinds = messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("codeActionProvider").GetProperty("codeActionKinds");
-        Assert.Equal("quickfix", Assert.Single(kinds.EnumerateArray()).GetString());
+        Assert.Contains(kinds.EnumerateArray(), kind => kind.GetString() == "quickfix");
         var action = Assert.Single(messages.Single(m => m.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt32() == 5)
             .GetProperty("result").EnumerateArray());
         Assert.Equal("Change to 2026-02-28", action.GetProperty("title").GetString());

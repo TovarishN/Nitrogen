@@ -67,12 +67,17 @@ public sealed record InlayHintWorkspaceClientCapabilities(bool? RefreshSupport);
 public sealed record SemanticTokensWorkspaceClientCapabilities(bool? RefreshSupport);
 
 public sealed record WorkspaceClientCapabilities(DidChangeWatchedFilesClientCapabilities? DidChangeWatchedFiles,
-    InlayHintWorkspaceClientCapabilities? InlayHint = null, SemanticTokensWorkspaceClientCapabilities? SemanticTokens = null);
+    InlayHintWorkspaceClientCapabilities? InlayHint = null, SemanticTokensWorkspaceClientCapabilities? SemanticTokens = null,
+    WorkspaceEditClientCapabilities? WorkspaceEdit = null);
+
+public sealed record WorkspaceEditClientCapabilities(bool? DocumentChanges = null, string[]? ResourceOperations = null,
+    ChangeAnnotationSupport? ChangeAnnotationSupport = null);
+public sealed record ChangeAnnotationSupport(bool? GroupsOnLabel = null);
 
 public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
 
 /// <param name="SkipLanguages">Languages, by name or extension without the dot, whose tagged C# strings this server leaves to another (an editor plugin that carries the language).</param>
-public sealed record InitializationOptions(string[]? SkipLanguages, bool SignatureDocuments = true);
+public sealed record InitializationOptions(string[]? SkipLanguages, bool SignatureDocuments = true, bool GrammarExtraction = false);
 
 public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders, ClientCapabilities? Capabilities = null,
     InitializationOptions? InitializationOptions = null);
@@ -101,9 +106,25 @@ public sealed record MarkupContent(string Kind, string Value);
 
 public sealed record LspHover(MarkupContent Contents, LspRange Range);
 
-public sealed record LspTextEdit(LspRange Range, string NewText);
+public sealed record LspTextEdit(LspRange Range, string NewText,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AnnotationId = null);
 
-public sealed record WorkspaceEdit(Dictionary<string, LspTextEdit[]> Changes);
+public sealed record WorkspaceEdit(
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, LspTextEdit[]>? Changes = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LspDocumentChange[]? DocumentChanges = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] Dictionary<string, LspChangeAnnotation>? ChangeAnnotations = null);
+
+[JsonDerivedType(typeof(LspCreateFile))]
+[JsonDerivedType(typeof(LspTextDocumentEdit))]
+public abstract record LspDocumentChange;
+public sealed record LspCreateFile(string Uri, LspCreateFileOptions Options, string AnnotationId) : LspDocumentChange
+{
+    public string Kind => "create";
+}
+public sealed record LspCreateFileOptions(bool Overwrite = false, bool IgnoreIfExists = false);
+public sealed record LspOptionalVersionedTextDocumentIdentifier(string Uri, [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] int? Version);
+public sealed record LspTextDocumentEdit(LspOptionalVersionedTextDocumentIdentifier TextDocument, LspTextEdit[] Edits) : LspDocumentChange;
+public sealed record LspChangeAnnotation(string Label, bool NeedsConfirmation, string? Description = null);
 
 public sealed record SemanticTokensLegend(string[] TokenTypes, string[] TokenModifiers);
 
@@ -150,9 +171,20 @@ public sealed record LspSignatureInformation(string Label, LspParameterInformati
 public sealed record LspSignatureHelp(LspSignatureInformation[] Signatures, int ActiveSignature, int ActiveParameter);
 
 /// <summary>The params of <c>textDocument/codeAction</c>; the client's diagnostics are not used: the server checks its own.</summary>
-public sealed record CodeActionParams(TextDocumentIdentifier TextDocument, LspRange Range);
+public sealed record CodeActionParams(TextDocumentIdentifier TextDocument, LspRange Range, CodeActionContext? Context = null);
+public sealed record CodeActionContext(string[]? Only = null);
 
-public sealed record LspCodeAction(string Title, string Kind, LspDiagnostic[] Diagnostics, WorkspaceEdit Edit);
+public sealed record LspCodeAction(string Title, string Kind,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LspDiagnostic[]? Diagnostics = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] WorkspaceEdit? Edit = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LspActionCommand? Command = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] LspCodeActionDisabled? Disabled = null);
+public sealed record LspActionCommand(string Title, string Command, LspExtractionParams[] Arguments);
+public sealed record LspCodeActionDisabled(string Reason);
+public sealed record LspExtractionParams(TextDocumentIdentifier TextDocument, LspRange Range);
+public sealed record LspExtractionResult(LspCodeAction? Action, string? UnavailableReason, IReadOnlyList<string> Notices,
+    IReadOnlyList<ExtractionExpectedDocument> ExpectedDocuments);
+public sealed record ExtractionExpectedDocument(string Uri, int? Version, string Text);
 
 public sealed record InlayHintParams(TextDocumentIdentifier TextDocument, LspRange Range);
 
@@ -185,6 +217,10 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(LspCompletionItem[]))]
 [JsonSerializable(typeof(InlayHintParams))]
 [JsonSerializable(typeof(LspInlayHint[]))]
+[JsonSerializable(typeof(ExtractionPreparation))]
+[JsonSerializable(typeof(ExtractionRequest))]
+[JsonSerializable(typeof(LspExtractionParams))]
+[JsonSerializable(typeof(LspExtractionResult))]
 [JsonSerializable(typeof(CodeActionParams))]
 [JsonSerializable(typeof(LspCodeAction[]))]
 [JsonSerializable(typeof(LspSignatureHelp))]

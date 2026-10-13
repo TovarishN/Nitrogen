@@ -140,6 +140,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (QuoteAt(uri, position) is { } quote) return QuoteDefinitions(quote, quote.Document.Lines.OffsetOf(position));
         if (GrammarDeclarationDefinition(uri, position) is { Count: > 0 } declarations) return declarations;
         if (GrammarHelperDefinition(uri, position) is { Count: > 0 } helpers) return helpers;
+        if (GrammarRuleAt(uri, position) is { } grammar) return grammar.Definitions;
         if (AssistedNavigation(uri, position) is { } assisted) return assisted.Definitions;
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? Definition(inner.Uri, inner.Position) : [];
         return NameAt(uri, position) is { } name ? name.Symbols.Where(s => !s.IsBuiltin).Select(LocationOf).Select(OutOf).ToList() : [];
@@ -150,6 +151,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     {
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpQuoteReferences(csharp, position, includeDeclaration);
         if (QuoteAt(uri, position) is { } quote) return QuoteReferences(quote, quote.Document.Lines.OffsetOf(position), includeDeclaration);
+        if (GrammarRuleAt(uri, position) is { } grammar)
+            return (includeDeclaration ? grammar.Definitions.Concat(grammar.References) : grammar.References).Distinct().ToArray();
         if (AssistedNavigation(uri, position) is { } assisted)
             return AssistedReferences(assisted.Scope, assisted.Name, includeDeclaration ? assisted.Definitions : []);
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? References(inner.Uri, inner.Position, includeDeclaration) : [];
@@ -327,6 +330,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner ? OutOf(inner.Uri, PrepareRename(inner.Uri, inner.Position))
                 : throw new RenameRefusedException("Nothing to rename here.");
+        CheckGrammarRename(uri, position);
         var (document, _, span, _) = RenameTarget(uri, position);
         return document.Lines.RangeOf(span);
     }
@@ -341,6 +345,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner ? Rename(inner.Uri, inner.Position, newName)
                 : throw new RenameRefusedException("Nothing to rename here.");
+        CheckGrammarRename(uri, position);
         var (_, project, _, symbol) = RenameTarget(uri, position);
         CheckName(symbol, newName);
         var uses = project.ReferencesTo(symbol);
@@ -403,7 +408,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (!TryLanguage(uri, out var language, out var start))
         {
             _unserved[uri] = (version, text); // served as soon as a workspace grammar for it compiles
-            return [];
+            return GrammarHook(uri);
         }
         var document = new Document(uri, version, text, language, start);
         if (!_projects.TryGetValue(language, out var project)) _projects[language] = project = new Project(language.Language);
