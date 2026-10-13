@@ -7,8 +7,7 @@ namespace Nitrogen.LanguageService;
 
 public sealed partial class NitrogenLanguageService
 {
-    sealed record PendingExtraction(string Root, InputSnapshot Inputs, string Uri, DocumentRange Range,
-        Dictionary<string, int?> Versions, DateTime Created);
+    sealed record PendingExtraction(string Root, InputSnapshot Inputs, string Uri, DocumentRange Range, DateTime Created);
     readonly Dictionary<string, PendingExtraction> _extractions = new(StringComparer.Ordinal);
 
     public ExtractionPreparation PrepareExtraction(string uri, DocumentRange range)
@@ -35,7 +34,7 @@ public sealed partial class NitrogenLanguageService
                 _extractions.Remove(expired);
             if (_extractions.Count >= 16) _extractions.Remove(_extractions.Keys.First());
             string id = Guid.NewGuid().ToString("N");
-            _extractions[id] = new(root, inputs, uri, range, inputs.Files.Keys.ToDictionary(p => p, ExtractionVersion), DateTime.UtcNow);
+            _extractions[id] = new(root, inputs, uri, range, DateTime.UtcNow);
             string suggested = selected.Selection.Module + ".Extracted";
             return new(id, suggested, suggested.Split('.').Last() + ".ngr", null);
         }
@@ -55,8 +54,10 @@ public sealed partial class NitrogenLanguageService
             string sourcePath = new Uri(pending.Uri).LocalPath;
             if (ExtractionRoot(sourcePath) != pending.Root) return Refuse("The workspace changed; prepare extraction again.");
             var current = ExtractionInputs(pending.Root);
+            // Reviewing can close or reopen editor documents without changing their text.
+            // Validate the complete input content, then emit current document versions below.
             if (current.Files.Count != pending.Inputs.Files.Count || pending.Inputs.Files.Any(f =>
-                !current.Files.TryGetValue(f.Key, out var input) || input.Text != f.Value.Text || ExtractionVersion(f.Key) != pending.Versions[f.Key]))
+                !current.Files.TryGetValue(f.Key, out var input) || input.Text != f.Value.Text))
                 return Refuse("Workspace files changed while extraction was being prepared; select the definitions again.");
             if (!Uri.TryCreate(request.DestinationUri, UriKind.Absolute, out var destination) || !destination.IsFile)
                 return Refuse("Choose a new local .ngr file inside the workspace.");
@@ -145,7 +146,7 @@ public sealed partial class NitrogenLanguageService
             {
                 string path = new Uri(group.Key).LocalPath;
                 var lines = new LineMap(current.Files[path].Text);
-                return new ExtractionDocumentChange(group.Key, pending.Versions[path], group.Select(e =>
+                return new ExtractionDocumentChange(group.Key, ExtractionVersion(path), group.Select(e =>
                     new DocumentEdit(lines.RangeOf(new(e.Span.Start, e.Span.Length)), e.NewText)).ToArray(), current.Files[path].Text);
             }).ToArray();
             return new(destination.AbsoluteUri, transformation.DestinationText, changes,

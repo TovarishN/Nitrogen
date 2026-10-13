@@ -85,3 +85,33 @@ test('a dependency changed during review refuses application', async () => {
   await extractGrammar(host, selection);
   assert.deepEqual(calls, ['resolve:Shared', 'review', 'warn:Workspace changed during review.']);
 });
+
+test('opening or reopening unchanged files during review applies the fresh proposal', async () => {
+  const { host, calls } = fixture();
+  let count = 0;
+  host.resolve = async () => ({
+    action: { edit: { documentChanges: [{
+      textDocument: { uri: 'file:///a.ngr', version: ++count === 1 ? 1 : 7 },
+      edits: [{ range: selection.range, newText: 'using Shared;' }],
+    }] } }, expectedDocuments: [{ uri: 'file:///a.ngr', version: count === 1 ? 1 : 7, text: 'original' }], notices: [],
+  });
+  host.apply = async result => {
+    assert.equal(result.expectedDocuments[0].version, 7);
+    calls.push('apply'); return true;
+  };
+  await extractGrammar(host, selection);
+  assert.deepEqual(calls, ['review', 'apply', 'open:file:///new.ngr']);
+});
+
+test('a changed edit during review is refused even when document versions also change', async () => {
+  const { host, calls } = fixture();
+  let count = 0;
+  host.resolve = async () => ({
+    action: { edit: { documentChanges: [{
+      textDocument: { uri: 'file:///a.ngr', version: ++count },
+      edits: [{ range: selection.range, newText: count === 1 ? 'reviewed' : 'different' }],
+    }] } }, expectedDocuments: [], notices: [],
+  });
+  await extractGrammar(host, selection);
+  assert.deepEqual(calls, ['review', 'warn:The extraction changed during review. Select the definitions again.']);
+});
