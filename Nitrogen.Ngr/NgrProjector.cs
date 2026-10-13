@@ -59,12 +59,21 @@ internal static class NgrProjector
         var symbols = new List<SymbolsDecl>();
         var builtins = new List<BuiltinDecl>();
         var symbolProperties = new List<SymbolPropertyDecl>();
+        var helpers = new List<QuoteHelperDecl>();
         foreach (var item in Items(module.Arguments[1]))
         {
             var member = (HirOperation)item;
             var a = member.Arguments;
             switch (Kind(member))
             {
+                case "QuoteHelper":
+                    var quote = Span(a[3]);
+                    helpers.Add(new(Name(a[0]), Items(a[1]).Select(parameter =>
+                    {
+                        var parts = Expect(parameter, "QuoteParameter").Arguments;
+                        return new QuoteParameter(Name(parts[0]), Name(parts[1]), Value(parts[2]) is not null, Span(parameter));
+                    }).ToArray(), Name(a[2]), new(Text(a[3])[2..^2], GrammarSpan.FromBounds(quote.Start + 2, quote.End - 2)), Span(member)));
+                    break;
                 case "Using":
                     usings.Add(new UsingDecl(Text(a[0]), Span(member)));
                     break;
@@ -109,7 +118,7 @@ internal static class NgrProjector
             }
         }
         return new ModuleDecl(Text(module.Arguments[0]), usings.ToArray(), rules.ToArray(), extends.ToArray(), Span(module),
-            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray());
+            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray());
     }
 
     static EquatableArray<Alternative> Alternatives(HirNode list)
@@ -207,6 +216,11 @@ internal static class NgrProjector
                     break;
                 case "Dynamic":
                     clauses.Add(new BindingClause(BindingClauseKind.Dynamic, default, "", default, false, false, Span(node)));
+                    break;
+                case "HelperRewrite":
+                    clauses.Add(new(BindingClauseKind.Rewrites, default, "", default, false, false, Span(node),
+                        HelperCall: new(Name(a[0]), Items(a[1]).Select(Name).ToArray(),
+                            GrammarSpan.FromBounds(Span(a[0]).Start, Span(node).End))));
                     break;
                 case "Rewrites":
                 {

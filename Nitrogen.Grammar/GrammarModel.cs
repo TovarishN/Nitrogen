@@ -10,7 +10,14 @@ public sealed record ModuleDecl(
     GrammarSpan Span,
     EquatableArray<SymbolsDecl> Symbols = default,
     EquatableArray<BuiltinDecl> Builtins = default,
-    EquatableArray<SymbolPropertyDecl> SymbolProperties = default);
+    EquatableArray<SymbolPropertyDecl> SymbolProperties = default,
+    EquatableArray<QuoteHelperDecl> Helpers = default);
+
+public sealed record QuoteText(string Text, GrammarSpan Span);
+public sealed record QuoteParameter(NameDecl Name, NameDecl Category, bool IsList, GrammarSpan Span);
+public sealed record QuoteHelperDecl(NameDecl Name, EquatableArray<QuoteParameter> Parameters,
+    NameDecl ReturnCategory, QuoteText Body, GrammarSpan Span);
+public sealed record QuoteHelperCall(NameDecl Helper, EquatableArray<NameDecl> Arguments, GrammarSpan Span);
 
 public sealed record UsingDecl(string Module, GrammarSpan Span);
 
@@ -158,7 +165,8 @@ public sealed record BindingClause(
     NameDecl? OperationProperty = null,
     NameDecl? InitializerProperty = null,
     bool FileScope = false,
-    bool Sequential = false);
+    bool Sequential = false,
+    QuoteHelperCall? HelperCall = null);
 
 /// <summary>C# text from a semantics block (issue 239), trimmed at the end; the grammar compiler never parses it.</summary>
 public sealed record CodeText(string Text, GrammarSpan Span);

@@ -20,6 +20,10 @@ public static class GrammarDumper
             builder.Append(" (builtin ").Append(builtin.Kind.Name).Append(builtin.Scope is { } scope ? " in " + scope.Name : "").Append(' ')
                 .Append(string.Join(" ", builtin.Names.Select(n => n.Name))).Append(')');
         foreach (var property in module.SymbolProperties) builder.Append(SymbolProperty(property));
+        foreach (var helper in module.Helpers)
+            builder.Append(" (function ").Append(helper.Name.Name).Append(" (")
+                .Append(string.Join(" ", helper.Parameters.Select(p => p.Name.Name + ":" + p.Category.Name + (p.IsList ? "*" : ""))))
+                .Append(") : ").Append(helper.ReturnCategory.Name).Append(" ").Append(CSharpText.Literal(helper.Body.Text)).Append(")");
         foreach (var rule in module.Rules) builder.Append(' ').Append(Dump(rule));
         foreach (var extend in module.Extends)
         {
@@ -84,7 +88,9 @@ public static class GrammarDumper
         BindingClauseKind.LowersLiteral => $"(lowers literal {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersTemplate => $"(lowers template {clause.Field}({clause.Arguments[0].Name}))",
         BindingClauseKind.LowersExpand => $"(lowers expand {clause.Field}({clause.Arguments[0].Name}))",
-        BindingClauseKind.Rewrites => $"(rewrites {CSharpText.Literal(clause.Target!.Name)})",
+        BindingClauseKind.Rewrites => clause.HelperCall is { } call
+            ? $"(rewrites {call.Helper.Name}({string.Join(", ", call.Arguments.Select(a => a.Name))}))"
+            : $"(rewrites {CSharpText.Literal(clause.Target!.Name)})",
         BindingClauseKind.LowersText => $"(lowers text {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersSequence => $"(lowers sequence {clause.Target!.Name} {clause.Field})",
         BindingClauseKind.LowersValue => clause.TypeProperty is { } typeProperty
