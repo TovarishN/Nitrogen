@@ -152,7 +152,7 @@ public sealed partial class NitrogenLanguageService
 
     static string? ValidateExtractionComposition(LanguageDefinition definition)
     {
-        var workspace = new GrammarWorkspace { GeneratedNamespace = definition.GeneratedNamespace };
+        var workspace = new GrammarWorkspace { GeneratedNamespace = definition.GeneratedNamespace, CompositionName = definition.Name, StartRule = definition.Start };
         foreach (var grammar in definition.Grammars) workspace.SetGrammar(grammar.Path, grammar.Text);
         foreach (var source in definition.Sources) workspace.Sources[source.Path] = source.Text;
         foreach (string imported in definition.Usings) workspace.Usings.Add(imported);

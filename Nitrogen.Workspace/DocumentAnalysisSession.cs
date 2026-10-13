@@ -169,13 +169,13 @@ public sealed class DocumentAnalysisSession : IDisposable
     Compilation? Compile(LanguageDefinition definition, InputSnapshot inputs, List<AnalysisIssue> issues)
     {
         string fingerprint = string.Concat(definition.Grammars.Concat(definition.Sources).Select(f =>
-            f.Path.Length + ":" + f.Path + f.Text.Length + ":" + f.Text)) + definition.GeneratedNamespace + "|" + string.Join("|", definition.Usings);
+            f.Path.Length + ":" + f.Path + f.Text.Length + ":" + f.Text)) + definition.GeneratedNamespace + "|" + definition.Name + "|" + definition.Start + "|" + string.Join("|", definition.Usings);
         if (_compiled.TryGetValue(definition.Id, out var previous) && previous.Fingerprint == fingerprint)
         {
             AddCompilationDiagnostics(previous.Snapshot, definition, inputs, issues);
             return previous;
         }
-        var workspace = new GrammarWorkspace { GeneratedNamespace = definition.GeneratedNamespace };
+        var workspace = new GrammarWorkspace { GeneratedNamespace = definition.GeneratedNamespace, CompositionName = definition.Name, StartRule = definition.Start };
         foreach (var grammar in definition.Grammars) workspace.SetGrammar(grammar.Path, grammar.Text);
         foreach (var source in definition.Sources) workspace.Sources[source.Path] = source.Text;
         foreach (string name in definition.Usings) workspace.Usings.Add(name);

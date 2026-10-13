@@ -30,7 +30,7 @@ public sealed partial class NitrogenLanguageService
 
         public Presentation Presentation { get; } = presentation;
 
-        public GrammarWorkspace Workspace { get; } = new() { GeneratedNamespace = generatedNamespace ?? GrammarWorkspace.Namespace };
+        public GrammarWorkspace Workspace { get; } = new() { GeneratedNamespace = generatedNamespace ?? GrammarWorkspace.Namespace, CompositionName = name, StartRule = start };
 
         public WorkspaceSnapshot? Snapshot { get; set; }
 
