@@ -1,7 +1,7 @@
 # Typed quasiquote helpers and Extract Quote Helper
 
-Status: proposed for written-spec review. The declaration/call syntax was approved in conversation;
-this document defines the implementation scope. No feature implementation is included yet.
+Status: written spec approved in conversation on 2026-10-14.
+This document defines the implementation scope. No feature implementation is included yet.
 
 Editor integration depends on the persistent review UX already verified in local commit `d4e0444`
 on `codex/extraction-review-ux`. Integrate that change before the helper-refactoring editor stage;
