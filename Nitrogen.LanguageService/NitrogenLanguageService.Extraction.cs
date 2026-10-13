@@ -126,8 +126,15 @@ public sealed partial class NitrogenLanguageService
                     .OfType<MemberAccessExpressionSyntax>().Any(member => member.Name.Identifier.ValueText == "Instance" &&
                         member.Expression.ToString().Split('.').Last() == moduleClass)))
                     return Refuse($"A helper composes module '{selection.Module}' directly. Use {before.Definition.GeneratedNamespace}.{before.Definition.Name}Composition.CreateBuilder() to include all configured syntax modules before extracting.");
+                // Only syntax and extensible rules have quotation categories. A token's
+                // qualified name may also be an unrelated semantic operation ID.
+                var categories = before.Definition.Grammars
+                    .SelectMany(grammar => GrammarParser.Parse(DocumentSignatures.Read(grammar.Text).MaskedText).File?.Modules ?? default)
+                    .SelectMany(module => module.Rules.Where(rule => rule is SyntaxRule or ExtensibleRule)
+                        .Select(rule => module.Name + "." + rule.Name))
+                    .ToHashSet(StringComparer.Ordinal);
                 // Constant category names in C# quote APIs are not checked by a C# compilation.
-                foreach (var move in transformation.Symbols)
+                foreach (var move in transformation.Symbols.Where(move => categories.Contains(move.Before)))
                     if (before.Definition.Sources.Any(s => s.Text.Contains('"' + move.Before + '"', StringComparison.Ordinal)))
                         return Refuse("A helper uses the moved rule's name as a string; update that quotation/API consumer explicitly before extracting.");
             }

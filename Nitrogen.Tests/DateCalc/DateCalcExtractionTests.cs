@@ -8,8 +8,10 @@ namespace Nitrogen.Tests;
 
 public sealed class DateCalcExtractionTests
 {
-    [Fact]
-    public void DateCalc_factory_preserves_evaluation_after_token_extraction()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void DateCalc_factory_preserves_evaluation_after_token_extraction(bool allTokens)
     {
         string root = Directory.CreateTempSubdirectory("datecalc-extraction-").FullName;
         try
@@ -22,7 +24,9 @@ public sealed class DateCalcExtractionTests
             using var service = new NitrogenLanguageService(LspCommand.Registry());
             service.ConfigureWorkspace(root);
             service.Open(uri, 1, grammar);
-            const string selected = "token Number     = Digit+ (\".\" Digit+)?;";
+            string selected = allTokens
+                ? grammar[grammar.IndexOf("token Digit", StringComparison.Ordinal)..grammar.IndexOf("\n\n  builtin", StringComparison.Ordinal)]
+                : "token Number     = Digit+ (\".\" Digit+)?;";
             int at = grammar.IndexOf(selected, StringComparison.Ordinal);
             Assert.True(at >= 0);
             var map = new LineMap(grammar);

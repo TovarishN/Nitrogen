@@ -158,5 +158,20 @@ public sealed class GrammarExtractionServiceTests : IDisposable
         var result = service.ResolveExtraction(new(Prepare(service).Id!, Uri("aa.ngr"), "Shared"));
         Assert.Contains("module", result.UnavailableReason!);
     }
+    [Fact]
+    public void Refuses_moving_a_syntax_rule_used_as_a_quotation_category_string()
+    {
+        File.WriteAllText(Path.Combine(_root, "Helper.cs"), """
+            public static class Helper
+            {
+                public static object Quote() => Nitrogen.Workspace.Grammar.AComposition.CreateBuilder().Build()
+                    .CompileQuote("A.Word", "x", new System.Collections.Generic.Dictionary<string, Nitrogen.QuoteHole>());
+            }
+            """);
+        using var service = Service(helpers: ", \"sources\": [\"Helper.cs\"]");
+        var result = service.ResolveExtraction(new(Prepare(service).Id!, Uri("aa.ngr"), "Shared"));
+        Assert.Contains("quotation", result.UnavailableReason!);
+        Assert.Empty(result.Changes);
+    }
     public void Dispose() => Directory.Delete(_root, true);
 }
