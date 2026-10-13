@@ -228,21 +228,24 @@ in the notification (reopen it from the notification bell if it disappears). The
 edit uses VS Code's normal workspace undo. Individual edits cannot be deselected.
 
 Whole rules become definitions in the new module. Alternatives become an
-`extend syntax OriginalModule.Rule` block. Their dependencies remain in place and are
+`extend syntax` block targeting their original rule. Their dependencies remain in place and are
 referenced through existing imports or qualified names. Comments attached directly to
 the selection, semantic blocks, lowering clauses, precedence and line endings are retained.
-To use exports without a module prefix, add `using Shared;` in the consuming syntax
-module and write `Word` instead of `Shared.Word`. Existing name resolution requires
-qualification when imported names are ambiguous. Extraction emits qualified references
-conservatively; an import can replace those prefixes afterward.
+Extraction adds `using Shared;` to consuming modules and keeps names such as `Word`
+unqualified when they resolve to the same moved definition. The new module likewise
+uses short names for unambiguous dependencies. If names collide or a local definition
+shadows an import, references stay qualified. Names that would become grammar keywords
+also keep their qualification. Any existing reference made ambiguous by
+the new import is qualified to preserve its original meaning. Literals and comments are
+not rewritten as names.
 
 An explicit `nitrogen.json` grammar list or a defining grammar's `language` declaration
 is updated when needed; a matching grammar glob needs no redundant entry.
 
 The same open language session refreshes after application, including unsaved grammar
 and configuration buffers. Go to definition and references follow the moved rules.
-No language-server restart is needed. Renaming a grammar rule with qualified uses is
-currently refused, so an incomplete rename cannot leave those references broken.
+No language-server restart is needed. Renaming a grammar rule with imported or qualified uses that the rename
+binder cannot track is currently refused, so an incomplete rename cannot leave those references broken.
 
 Extraction refuses partial/mixed selections, invalid baseline grammars, name collisions,
 existing destinations, paths through symbolic links, changes outside the workspace,

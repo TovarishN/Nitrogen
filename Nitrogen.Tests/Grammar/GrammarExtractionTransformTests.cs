@@ -29,20 +29,21 @@ public sealed class GrammarExtractionTransformTests
         Assert.Empty(result.Problems);
         Assert.Contains(rule, result.DestinationText);
         string remaining = Apply(text, result.Edits.Where(e => e.Uri == Uri));
-        Assert.Contains("syntax Program = Z.Word; // Word", remaining);
+        Assert.Contains("using Z;", remaining);
+        Assert.Contains("syntax Program = Word; // Word", remaining);
         Assert.DoesNotContain("syntax Word =", remaining);
         Assert.False(GrammarCompiler.Compile(new[] { new GrammarInput("a.ngr", remaining, "Test"), new("z.ngr", result.DestinationText, "Test") }).HasErrors);
     }
     [Fact]
-    public void Qualifies_retained_dependencies_and_updates_external_consumers_by_identity()
+    public void Imports_retained_dependencies_and_updates_external_consumers_by_identity()
     {
         const string rule = "syntax Word = Number;";
         string text = "syntax module A { token Number = ['0'..'9']+; " + rule + " }";
         var result = Move(text, rule, new ExtractionSource("file:///b.ngr", "syntax module B { using A; syntax Program = Word; syntax Literal = \"Word\"; }"),
             new ExtractionSource("file:///other.ngr", "syntax module Other { syntax Word = \"other\"; syntax Program = Word; }"));
         Assert.Empty(result.Problems);
-        Assert.Contains("syntax Word = A.Number;", result.DestinationText);
-        Assert.Contains(result.Edits, e => e.Uri == "file:///b.ngr" && e.NewText == "Z.Word");
+        Assert.Contains("syntax Word = Number;", result.DestinationText);
+        Assert.Contains(result.Edits, e => e.Uri == "file:///b.ngr" && e.NewText.Contains("using Z;"));
         Assert.DoesNotContain(result.Edits, e => e.Uri == "file:///other.ngr");
     }
     [Fact]
@@ -52,8 +53,8 @@ public sealed class GrammarExtractionTransformTests
         string text = "syntax module A { token Number = ['0'..'9']+; extensible syntax Expr { out Type : int = 0; " + alternative + " } }";
         var result = Move(text, alternative);
         Assert.Empty(result.Problems);
-        Assert.Contains("extend syntax A.Expr", result.DestinationText);
-        Assert.Contains("Value:A.Number", result.DestinationText);
+        Assert.Contains("extend syntax Expr", result.DestinationText);
+        Assert.Contains("Value:Number", result.DestinationText);
         Assert.Contains("out Type : int = 0;", Apply(text, result.Edits));
         Assert.DoesNotContain("out Type", result.DestinationText);
     }
@@ -64,7 +65,8 @@ public sealed class GrammarExtractionTransformTests
         var result = Move("syntax module A { " + rule + " }", rule,
             new ExtractionSource("file:///b.ngr", "syntax module B { extend syntax A.Expr { | Extra = \"2\" } }"));
         Assert.Empty(result.Problems);
-        Assert.Contains(result.Edits, e => e.Uri == "file:///b.ngr" && e.NewText == "Z.Expr");
+        Assert.Contains(result.Edits, e => e.Uri == "file:///b.ngr" && e.NewText == "Expr");
+        Assert.Contains(result.Edits, e => e.Uri == "file:///b.ngr" && e.NewText.Contains("using Z;"));
     }
     [Fact]
     public void Refuses_a_move_that_changes_a_rewrite_category()
@@ -81,7 +83,83 @@ public sealed class GrammarExtractionTransformTests
         var result = Move("syntax module B { using A; extend syntax Expr { " + alternative + " } }", alternative,
             new ExtractionSource("file:///b.ngr", "syntax module A { extensible syntax Expr { | Num = \"1\" } }"));
         Assert.Empty(result.Problems);
-        Assert.Contains("extend syntax A.Expr", result.DestinationText);
+        Assert.Contains("extend syntax Expr", result.DestinationText);
+    }
+    [Fact]
+    public void Adding_an_import_preserves_other_imported_referents()
+    {
+        const string rule = "syntax Word = \"x\";";
+        const string consumer = "syntax module B { using Other; syntax Program = Word A.Word; }";
+        var result = Move("syntax module A { " + rule + " }", rule,
+            new ExtractionSource("file:///b.ngr", consumer), new ExtractionSource("file:///other.ngr", "syntax module Other { syntax Word = \"y\"; }"));
+        Assert.Empty(result.Problems);
+        string updated = Apply(consumer, result.Edits.Where(e => e.Uri == "file:///b.ngr"));
+        Assert.Contains("using Z;", updated);
+        Assert.Contains("syntax Program = Other.Word Z.Word;", updated);
+    }
+    [Fact]
+    public void A_local_name_keeps_its_binding_and_the_moved_name_stays_qualified()
+    {
+        const string rule = "syntax Word = \"x\";";
+        const string consumer = "syntax module B { syntax Word = \"local\"; syntax Program = A.Word Word; }";
+        var result = Move("syntax module A { " + rule + " }", rule, new ExtractionSource("file:///b.ngr", consumer));
+        Assert.Empty(result.Problems);
+        Assert.Contains("syntax Program = Z.Word Word;", Apply(consumer, result.Edits.Where(e => e.Uri == "file:///b.ngr")));
+    }
+    [Fact]
+    public void A_moved_dependency_stays_qualified_when_its_imports_conflict()
+    {
+        const string rule = "syntax Word = Number;";
+        var result = Move("syntax module A { using Other; token Number = \"n\"; " + rule + " }", rule,
+            new ExtractionSource("file:///other.ngr", "syntax module Other { token Number = \"o\"; }"));
+        Assert.Empty(result.Problems);
+        Assert.Contains("syntax Word = A.Number;", result.DestinationText);
+    }
+    [Fact]
+    public void Moving_multiple_rules_keeps_internal_and_external_names_unqualified()
+    {
+        const string rules = "token Number = ['0'..'9']+; syntax Word = Number;";
+        string text = "syntax module A { " + rules + " syntax Program = Word; }";
+        var result = Move(text, rules);
+        Assert.Empty(result.Problems);
+        Assert.Contains("syntax Word = Number;", result.DestinationText);
+        string remaining = Apply(text, result.Edits.Where(e => e.Uri == Uri));
+        Assert.Contains("using Z;", remaining);
+        Assert.Contains("syntax Program = Word;", remaining);
+    }
+    [Fact]
+    public void An_import_uses_real_header_tokens_and_preserves_crlf()
+    {
+        const string selected = "\r\n  syntax Word = \"x\";";
+        string text = "syntax module A /* { header comment */ {" + selected + "\r\n  syntax Program = Word;\r\n}";
+        var result = Move(text, selected);
+        Assert.Empty(result.Problems);
+        string remaining = Apply(text, result.Edits.Where(e => e.Uri == Uri));
+        Assert.Contains("/* { header comment */ {\r\n  using Z;", remaining);
+        Assert.Contains("syntax Program = Word;", remaining);
+        Assert.DoesNotContain("\n", remaining.Replace("\r\n", ""));
+        Assert.Single(result.Edits, e => e.Uri == Uri && e.Span.Start == text.IndexOf(selected, StringComparison.Ordinal));
+    }
+    [Theory]
+    [InlineData("except")]
+    [InlineData("precedence")]
+    [InlineData("declares")]
+    [InlineData("references")]
+    [InlineData("scope")]
+    [InlineData("dynamic")]
+    [InlineData("lowers")]
+    [InlineData("rewrites")]
+    public void Short_names_cannot_turn_references_into_grammar_keywords(string name)
+    {
+        string rule = "token " + name + " = \"e\";";
+        string text = "syntax module A { " + rule + " token Program = \"p\" A." + name + " \"x\"; }";
+        var result = Move(text, rule);
+        Assert.Empty(result.Problems);
+        string remaining = Apply(text, result.Edits.Where(e => e.Uri == Uri));
+        Assert.Contains("token Program = \"p\" Z." + name + " \"x\";", remaining);
+        var program = GrammarParser.Parse(remaining).File!.Modules[0].Rules.OfType<TokenRule>().Single();
+        Assert.Equal(3, Assert.IsType<SequenceExpr>(program.Body).Items.Count);
+        Assert.Empty(program.Except);
     }
     [Fact]
     public void Refuses_a_duplicate_module_name()

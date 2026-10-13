@@ -7,15 +7,12 @@ public sealed partial class NitrogenLanguageService
     void CheckGrammarRename(string uri, DocumentPosition position)
     {
         if (GrammarRuleAt(uri, position) is not { } grammar) return;
-        foreach (var reference in grammar.References)
-        {
-            string? text = ReadNavigationText(new Uri(reference.Uri).LocalPath);
-            if (text is null) continue;
-            var lines = new LineMap(text);
-            int start = lines.OffsetOf(reference.Range.Start), end = lines.OffsetOf(reference.Range.End);
-            if (text.Substring(start, end - start).Contains('.'))
-                throw new RenameRefusedException("Renaming a grammar rule with qualified references is not yet supported. Update its resolved uses together.");
-        }
+        var name = NameAt(uri, position);
+        var supported = name is { Symbols.Count: 1 } bound
+            ? bound.Project.ReferencesTo(bound.Symbols[0]).Select(LocationOf).ToHashSet()
+            : new HashSet<DocumentLocation>();
+        if (grammar.References.Any(reference => !supported.Contains(reference)))
+            throw new RenameRefusedException("Renaming a grammar rule with imported or qualified references is not yet supported. Update its resolved uses together.");
     }
 
     sealed record GrammarRuleOccurrence(string Identity, string Path, GrammarSpan Span, bool IsDefinition);

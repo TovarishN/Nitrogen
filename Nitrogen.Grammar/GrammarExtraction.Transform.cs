@@ -62,50 +62,50 @@ public static partial class GrammarExtraction
             if (file.Text.Substring(span.Start, span.Length) != text)
                 replacements.Add(new(uri, span, text));
         }
-        foreach (var (file, parsed) in files)
-            foreach (var module in parsed.File!.Modules)
-            {
-                foreach (var rule in module.Rules)
-                    switch (rule)
-                    {
-                        case TokenRule token: Visit(token.Body, null); break;
-                        case SyntaxRule syntax: Visit(syntax.Body, null); break;
-                        case ExtensibleRule extensible:
-                            foreach (var alternative in extensible.Alternatives) Visit(alternative.Body, module.Name);
-                            break;
-                    }
-                foreach (var extend in module.Extends)
-                {
-                    var target = analysis.Resolve(extend.Target, extend.Span, module, null);
-                    if (target is null)
-                    {
-                        Problem("An extension target could not be resolved.", file.Uri, extend.Span);
-                        continue;
-                    }
-                    var header = GrammarLexer.Tokenize(file.Text.Substring(extend.Span.Start,
-                        file.Text.IndexOf('{', extend.Span.Start) - extend.Span.Start));
-                    var token = header.Last(t => t.Value == extend.Target);
-                    if (Mapped(target.Key) != target.Key)
-                        Replace(file.Uri, new(extend.Span.Start + token.Start, token.Length), Mapped(target.Key));
-                    foreach (var alternative in extend.Alternatives) Visit(alternative.Body, target.Module.Name);
-                }
-                foreach (var builtin in module.Builtins)
-                    if (builtin.Scope is { } scope && analysis.Resolve(scope.Name, scope.Span, module, null) is { } target && Mapped(target.Key) != target.Key)
-                        Replace(file.Uri, scope.Span, Mapped(target.Key));
+        var names = files.SelectMany(file => file.Parsed.File!.Modules.SelectMany(module =>
+            ExtractionNames(analysis, module, file.Source.Text).Select(name =>
+                (file.Source, Module: module, Name: name, Target: analysis.Resolve(name.Name, name.Span, module, PointModule(name.ImplicitPoint)))))).ToArray();
+        foreach (var name in names.Where(n => n.Target is null))
+            Problem("A rule dependency could not be resolved: " + name.Name.Name, name.Source.Uri, name.Name.Span);
+        if (problems.Count > 0) return Failed();
 
-                void Visit(Expr expression, string? implicitModule)
-                {
-                    if (expression is ReferenceExpr reference)
-                    {
-                        var target = analysis.Resolve(reference.Name, reference.Span, module, implicitModule);
-                        if (target is null)
-                            Problem("A rule dependency could not be resolved: " + reference.Name, file.Uri, reference.Span);
-                        else if (IsMoved(file.Uri, reference.Span) || Mapped(target.Key) != target.Key)
-                            Replace(file.Uri, reference.Span, Mapped(target.Key));
-                    }
-                    foreach (var child in Children(expression)) Visit(child, implicitModule);
-                }
-            }
+        var consumers = new HashSet<string>(names.Where(n => !IsMoved(n.Source.Uri, n.Name.Span) && Mapped(n.Target!.Key) != n.Target.Key)
+            .Select(n => n.Module.Name), StringComparer.Ordinal);
+        var destinationDeclaration = new ModuleDecl(destinationModule,
+            owner.Usings.Select(u => u.Module).Append(owner.Name).Distinct().Select(name => new UsingDecl(name, default)).ToArray(),
+            selection.Shape == ExtractionShape.Rules ? owner.Rules.Where(r => selection.Definitions.Contains(r.Span)).ToArray() : Array.Empty<RuleDecl>(),
+            Array.Empty<ExtendDecl>(), default);
+        // A lookup-only view of final ownership/imports. The emitted text is still compiled below;
+        // no rewritten rule bodies or speculative parse results are used for validation here.
+        var lookupModules = modules.Select(module => module with
+        {
+            Rules = module == owner && selection.Shape == ExtractionShape.Rules
+                ? module.Rules.Where(r => !selection.Definitions.Contains(r.Span)).ToArray() : module.Rules,
+            Usings = consumers.Contains(module.Name)
+                ? module.Usings.Append(new UsingDecl(destinationModule, default)).ToArray() : module.Usings,
+        }).Append(destinationDeclaration).ToArray();
+        var lookup = new GrammarAnalysis(lookupModules);
+        string NameFor(GrammarSymbol target, ModuleDecl module, GrammarSpan span, string? point = null, string? written = null) =>
+            (written == target.Rule.Name || GrammarParser.CanUseUnqualifiedReference(target.Rule.Name)) &&
+            lookup.Resolve(target.Rule.Name, span, module, PointModule(point is null ? null : Mapped(point)))?.Key == Mapped(target.Key)
+                ? target.Rule.Name : Mapped(target.Key);
+        foreach (var name in names)
+        {
+            bool moved = IsMoved(name.Source.Uri, name.Name.Span);
+            // Explicit unrelated qualification remains intentional; newly imported names must
+            // also preserve every existing unqualified referent, even if that now needs a prefix.
+            if (!moved && name.Name.Name.Contains('.') && Mapped(name.Target!.Key) == name.Target.Key) continue;
+            var context = moved ? destinationDeclaration : lookupModules.First(m => m.Name == name.Module.Name);
+            Replace(name.Source.Uri, name.Name.Span, NameFor(name.Target!, context, name.Name.Span, name.Name.ImplicitPoint, name.Name.Name));
+        }
+        if (extensionTarget is not null)
+            extensionTarget = NameFor(analysis.Resolve(extensionTarget, selection.Removal, owner, null)!, destinationDeclaration, selection.Removal);
+        var importEdits = files.SelectMany(file => file.Parsed.File!.Modules.Where(m => consumers.Contains(m.Name)).Select(module =>
+        {
+            int at = module.Usings.Count > 0 ? module.Usings.Last().Span.End : ExtractionOpeningBrace(file.Source.Text, module.Span.Start).End;
+            string lineEnd = file.Source.Text.Contains("\r\n") ? "\r\n" : "\n";
+            return new ExtractionTextEdit(file.Source.Uri, new(at, 0), lineEnd + "  using " + destinationModule + ";" + lineEnd);
+        })).ToArray();
         if (problems.Count > 0) return Failed();
         string movedText = source.Text.Substring(selection.Removal.Start, selection.Removal.Length);
         foreach (var replacement in replacements.Where(e => IsMoved(e.Uri, e.Span)).OrderByDescending(e => e.Span.Start))
@@ -124,7 +124,9 @@ public static partial class GrammarExtraction
         builder.Append('}').Append(newline);
         string destination = builder.ToString();
         var edits = replacements.Where(e => !IsMoved(e.Uri, e.Span)).ToList();
-        edits.Add(new(selection.Uri, selection.Removal, ""));
+        var leadingImport = importEdits.FirstOrDefault(e => e.Uri == selection.Uri && e.Span.Start == selection.Removal.Start);
+        edits.Add(new(selection.Uri, selection.Removal, leadingImport?.NewText ?? ""));
+        edits.AddRange(importEdits.Where(e => e != leadingImport));
         var afterSources = sources.Select(s => new ExtractionSource(s.Uri, Apply(s.Text, edits.Where(e => e.Uri == s.Uri))))
             .Append(new ExtractionSource(destinationUri, destination)).OrderBy(s => s.Uri, StringComparer.Ordinal).ToArray();
         var compiled = GrammarCompiler.Compile(afterSources.Select(s => new GrammarInput(s.Uri, DocumentSignatures.Read(s.Text).MaskedText, "Extraction")));
