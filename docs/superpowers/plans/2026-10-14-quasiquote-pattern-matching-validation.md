@@ -19,7 +19,7 @@ passes 36/36; the complete Release suite passes **1757/1757** with no skipped te
 
 Logs: `/tmp/nitrogen-reference-hint-red.log`, `/tmp/nitrogen-reference-hint-final-green.log`,
 `/tmp/nitrogen-reference-hint-final-full.log`, and `/tmp/nitrogen-reference-hint-bundled-red.log`.
-Canonical packaging passes with 0 build warnings/errors and all 1757 tests. VSIX and Rider bundled-server smoke checks pass. The actual VSIX server returns exactly one expected hint on each of the five sample statements; `/tmp/nitrogen-reference-hint-bundled-green.log` records the result. Build `0.14.0+build.171.8fcc9db3847428df76ba715b8ff2ea5ebe1fffb4` is installed in the isolated scratch VS Code profile, and its language-service DLL matches the verified artifact. Native visual confirmation remains pending a window reload. Packaging log: `/tmp/nitrogen-reference-hint-package.log`.
+Canonical packaging passes with 0 build warnings/errors and all 1757 tests. VSIX and Rider bundled-server smoke checks pass. The actual VSIX server returns exactly one expected hint on each of the five sample statements; `/tmp/nitrogen-reference-hint-bundled-green.log` records the result. Build `0.14.0+build.171.8fcc9db3847428df76ba715b8ff2ea5ebe1fffb4` is installed in the isolated scratch VS Code profile, and its language-service DLL matches the verified artifact. The user subsequently confirmed the manual VS Code acceptance checks all pass on 2026-10-14. Packaging log: `/tmp/nitrogen-reference-hint-package.log`.
 
 ## Automated evidence before native acceptance
 
@@ -93,7 +93,7 @@ The following records the execution decisions in chronological order, including 
 
 ## Native VS Code acceptance
 
-Native computer control is unavailable in this session. These checks are prepared for manual execution; no native UI pass is claimed. Automated editor service and client tests are separate evidence.
+Native computer control is unavailable in this session. The user performed these checks and confirmed they all pass on 2026-10-14, including rename, corrected hint placement, navigation, diagnostics and live grammar reload. This is user-confirmed native acceptance; the agent did not directly control the native UI. Automated editor service and client tests are separate evidence.
 
 
 Run `bash /tmp/nitrogen-composition-ui/run-pattern-demo.sh` after local packaging completes.

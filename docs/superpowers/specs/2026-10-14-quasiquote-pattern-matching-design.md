@@ -1,6 +1,6 @@
 # Typed quasiquote pattern matching
 
-Status: approved by the user on 2026-10-14; implemented and independently reviewed. Automated Release and distribution checks pass; native VS Code acceptance is prepared for manual verification.
+Status: approved by the user on 2026-10-14; implemented and independently reviewed. Automated Release and distribution checks pass; the user confirmed all manual VS Code acceptance checks pass on 2026-10-14.
 
 ## Intent and agreed scope
 
