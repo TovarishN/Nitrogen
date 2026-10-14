@@ -137,6 +137,18 @@ public sealed class QuoteHelperExtractionTests : IDisposable
         var files = Directory.GetFiles(_root).ToDictionary(path => path, File.ReadAllText);
         foreach (var change in proposal.Changes) files[new System.Uri(change.Uri).LocalPath] = RenameTests.Apply(change.OriginalText, change.Edits);
         files[Path.Combine(_root, "Shared.ngr")] = proposal.DestinationText;
+        const string program = "let count = 3;\ncount fortnights;\n(1 + 2) fortnights;\n2026-10-05 + 2 fortnights;";
+        service.Open(Uri("sample.datecalc"), 1, program);
+        File.WriteAllText(Path.Combine(_root, "Shared.ngr"), ""); // VS Code creates the file, then changes open buffers.
+        service.Open(Uri("Shared.ngr"), 1, proposal.DestinationText);
+        foreach (var change in proposal.Changes)
+            service.Change(change.Uri, (change.Version ?? 0) + 1, files[new System.Uri(change.Uri).LocalPath]);
+        var whole = new DocumentRange(new(0, 0), new(10, 0));
+        Assert.Empty(service.Diagnostics(Uri("sample.datecalc")));
+        Assert.Equal(new[] { "= 3", "= 42 days", "= 42 days", "= 2026-11-02 Mon" }, service.ValueHints(Uri("sample.datecalc"), whole).Select(h => h.Label));
+        service.Change(Uri("Shared.ngr"), 2, proposal.DestinationText.Replace("2 weeks", "3 weeks"));
+        Assert.Empty(service.Diagnostics(Uri("sample.datecalc")));
+        Assert.Equal(new[] { "= 3", "= 63 days", "= 63 days", "= 2026-11-16 Mon" }, service.ValueHints(Uri("sample.datecalc"), whole).Select(h => h.Label));
         var workspace = new GrammarWorkspace { GeneratedNamespace = "DateCalc.Syntax", CompositionName = "DateCalc", StartRule = "DateCalc.Program" };
         foreach (var file in files)
             if (file.Key.EndsWith(".ngr", StringComparison.Ordinal)) workspace.SetGrammar(file.Key, file.Value);

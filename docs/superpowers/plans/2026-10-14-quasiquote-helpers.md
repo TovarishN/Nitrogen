@@ -1,6 +1,6 @@
 # Typed Quasiquote Helpers Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Execution is native in this session, as previously selected. Steps use checkbox (`- [ ]`) syntax for tracking. Use one independent whole-branch review after implementation.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Execution is native in this session, as previously selected. Steps use checkbox (`- [x]`) syntax for tracking. Use one independent whole-branch review after implementation.
 
 **Goal:** Declare typed reusable `.ngr` quote helpers, invoke them from rewrites, navigate their inputs and uses, and extract a complete inline quote into a reviewed shared helper.
 
@@ -62,7 +62,7 @@ public sealed record QuoteHelperCall(NameDecl Helper, EquatableArray<NameDecl> A
 `ModuleDecl.Helpers` has type `EquatableArray<QuoteHelperDecl>` and defaults to `default`.
 `BindingClause.HelperCall` has type `QuoteHelperCall?` and defaults to `null`; inline rewrites retain their current `Target` representation.
 
-- [ ] **1. Write parser regression tests before adding model/parser code.** Start with the following test, then parameterize zero/list/multiple parameters, qualified categories/calls, multiline quotes and unchanged legacy syntax:
+- [x] **1. Write parser regression tests before adding model/parser code.** Start with the following test, then parameterize zero/list/multiple parameters, qualified categories/calls, multiline quotes and unchanged legacy syntax:
 
 ```csharp
 [Fact]
@@ -82,13 +82,13 @@ public void Parses_a_helper_without_turning_it_into_a_rule()
 
 Also assert `GrammarParser.Parse("syntax module M { syntax function = \"x\"; }")` still produces one `SyntaxRule` named `function`. Reject missing return types, default parameters, optional/list returns, nested calls and non-field arguments with an error span at the unsupported token.
 
-- [ ] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperGrammarTests`. Record the expected new-model/missing-syntax failure.
-- [ ] **3. Add the records and parser branches.** Detect a helper declaration using `syntax function Identifier (` lookahead; otherwise retain normal `syntax Identifier =` parsing. Capture quotes through the existing template capture path so delimiters/trivia handling agree. In `rewrites`, choose inline quote or `qualifiedName(field, ...)`; retain precise name/body/argument spans. Keep helpers out of `Rules` and extension-point collections.
+- [x] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperGrammarTests`. Record the expected new-model/missing-syntax failure.
+- [x] **3. Add the records and parser branches.** Detect a helper declaration using `syntax function Identifier (` lookahead; otherwise retain normal `syntax Identifier =` parsing. Capture quotes through the existing template capture path so delimiters/trivia handling agree. In `rewrites`, choose inline quote or `qualifiedName(field, ...)`; retain precise name/body/argument spans. Keep helpers out of `Rules` and extension-point collections.
 
 Add the self-hosted grammar productions, lowering operation signatures, and AST handlers for the same records. Extend the existing module-member partition to collect helpers separately. Do not map helpers through `TokenRule` or `SyntaxRule`. Add grammar dumper support for declarations and calls with unchanged quoted bodies.
 
-- [ ] **4. Run GREEN:** focused parser tests, then `--filter FullyQualifiedName~SelfHostingTests`. Include a mixed file containing both a helper and a rule named `function`, and compare bootstrap/self-hosted models including spans as existing parity tests do.
-- [ ] **5. Commit:** `git add Nitrogen.Grammar Nitrogen.Ngr Nitrogen.Tests/Grammar && git commit -m "Parse typed quote helpers and preserve self-hosting parity"`. Stage only the named files actually changed.
+- [x] **4. Run GREEN:** focused parser tests, then `--filter FullyQualifiedName~SelfHostingTests`. Include a mixed file containing both a helper and a rule named `function`, and compare bootstrap/self-hosted models including spans as existing parity tests do.
+- [x] **5. Commit:** `git add Nitrogen.Grammar Nitrogen.Ngr Nitrogen.Tests/Grammar && git commit -m "Parse typed quote helpers and preserve self-hosting parity"`. Stage only the named files actually changed.
 
 ## Task 2: Resolution, ordinary rewrite emission, and all-helper validation
 
@@ -127,7 +127,7 @@ Add `GrammarCompiler.CompileQuotationSyntax(IEnumerable<GrammarInput> inputs) : 
 
 `Language.ValidateQuoteHelpers() : IReadOnlyList<QuoteHelperError>` validates all module helpers with `CompileQuote` and disposes each compilation. `LanguageBuilder.TryBuild` converts failures to composition diagnostics without returning a usable language; messages include helper identity, original quotation codes are preserved, and `CompositionDiagnostic.Location` carries the real helper/body span. Map relative quote spans through `QuoteHelper.Source`; use the full body span when the core has no narrower location. Workspace validation maps those locations directly, without parsing names out of message text. Existing modules with no helpers retain behavior.
 
-- [ ] **1. Write static-resolution RED tests:** compile two `GrammarInput` values with `GrammarCompiler.Compile`; assert success for imported and qualified helper calls and diagnostics NGR0141–NGR0147 for collisions, duplicate parameters, unknown/ambiguous calls, argument count, unsupported shapes and category/return mismatch. Pin the diagnostic span to the specific name/argument. Include unused bad signatures.
+- [x] **1. Write static-resolution RED tests:** compile two `GrammarInput` values with `GrammarCompiler.Compile`; assert success for imported and qualified helper calls and diagnostics NGR0141–NGR0147 for collisions, duplicate parameters, unknown/ambiguous calls, argument count, unsupported shapes and category/return mismatch. Pin the diagnostic span to the specific name/argument. Include unused bad signatures.
 
 ```csharp
 [Fact]
@@ -141,8 +141,8 @@ public void Helper_calls_are_type_checked_before_emission()
 }
 ```
 
-- [ ] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperValidationTests`.
-- [ ] **3. Implement lookup and mapped rewrite emission.** Emit `RewriteHole` names from the helper's parameter names, with child indices/strides from call arguments; emit the original helper body and declared return category. For two parameters bound to the same caller field, emit both names with the same child index. Do not rewrite dollar text or copy operand source text. Reuse `QuotationWriter.Shape` and the existing extension-point rewrite-category logic through one shared method.
+- [x] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperValidationTests`.
+- [x] **3. Implement lookup and mapped rewrite emission.** Emit `RewriteHole` names from the helper's parameter names, with child indices/strides from call arguments; emit the original helper body and declared return category. For two parameters bound to the same caller field, emit both names with the same child index. Do not rewrite dollar text or copy operand source text. Reuse `QuotationWriter.Shape` and the existing extension-point rewrite-category logic through one shared method.
 
 Emit `QuoteHelpers` metadata independently of kind enumeration, including unused declarations. Implement static body-hole checks against parameter declarations and validate opaque-token candidates through the composed parser at the full-validation stage.
 
@@ -150,8 +150,8 @@ Implement syntax-only emission as a mode of `ModuleWriter.Write`, retaining pars
 
 Wire `QuoteHelperValidation.Validate` into workspace compile/validation after normal C# emission succeeds and before loading configured helper assemblies. Use it for extraction preflight. In normal `LanguageBuilder`, validate helper bodies after constructing syntax but before returning success. Keep existing inline-quote warning behavior unchanged; helper body failures are errors. Preserve syntax-only language construction without semantic catalog requirements.
 
-- [ ] **4. Add and run full-validation tests:** unused malformed quote, unused unknown hole, wrong list splice, authored declaration, keyword/operator supplied by another composed module, and a configured C# static initializer that throws if executed. `ValidateCompilation` must diagnose helper failures without running that initializer. Test the normal generated factory's `TryBuild` path too. Confirm no assembly from failed validation remains pinned.
-- [ ] **5. Commit:** stage the exact grammar/runtime/workspace/test files above; commit `"Resolve quote helpers through structural rewrites and validate every body"`.
+- [x] **4. Add and run full-validation tests:** unused malformed quote, unused unknown hole, wrong list splice, authored declaration, keyword/operator supplied by another composed module, and a configured C# static initializer that throws if executed. `ValidateCompilation` must diagnose helper failures without running that initializer. Test the normal generated factory's `TryBuild` path too. Confirm no assembly from failed validation remains pinned.
+- [x] **5. Commit:** stage the exact grammar/runtime/workspace/test files above; commit `"Resolve quote helpers through structural rewrites and validate every body"`.
 
 ## Task 3: End-to-end binding, lists, ownership, and DateCalc parity
 
@@ -162,7 +162,7 @@ Wire `QuoteHelperValidation.Validate` into workspace compile/validation after no
 
 **Interfaces:** Use Task 2's emitted ordinary rewrite metadata and existing `LanguageBuilder`, `QuoteTemplate.Instantiate`, `ProjectSemantics`, and `HirLowering`. There is no new helper execution API.
 
-- [ ] **1. Write a temporary DateCalc fixture:** copy the six source/config files as `DateCalcExtractionTests` does; insert `syntax function FortnightDuration(Value: Expr) : Expr = <[ $Value * 2 weeks ]>;` before the existing `extensible syntax Expr`; replace only `rewrites <[ $Count * 2 weeks ]>` with `rewrites FortnightDuration(Count)`. Reuse the actual `GrammarWorkspace` compile/evaluator reflection pattern from `DateCalcExtractionTests`, keeping the fixture test-only and temporary.
+- [x] **1. Write a temporary DateCalc fixture:** copy the six source/config files as `DateCalcExtractionTests` does; insert `syntax function FortnightDuration(Value: Expr) : Expr = <[ $Value * 2 weeks ]>;` before the existing `extensible syntax Expr`; replace only `rewrites <[ $Count * 2 weeks ]>` with `rewrites FortnightDuration(Count)`. Reuse the actual `GrammarWorkspace` compile/evaluator reflection pattern from `DateCalcExtractionTests`, keeping the fixture test-only and temporary.
 
 ```csharp
 // Assertion against actual DateCalcEvaluator output, not generated source text:
@@ -171,13 +171,13 @@ Assert.Equal(new[] { "3", "42 days", "42 days", "2026-11-02 Mon" }, values);
 
 Compare lowered HIR for `(1 + 2) fortnights;` with `(1 + 2) * 2 weeks;`, using the existing `RewriteTests.Shape` logic in the new test class. Add another field also named `Value` in a surrounding grammar/module to prove helper parameter lookup does not capture it.
 
-- [ ] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter "FullyQualifiedName~DateCalcQuoteHelperTests|FullyQualifiedName~QuoteHelperRuntimeTests"` before any runtime adjustment.
-- [ ] **3. Add the generated list fixture:** expression literals, addition/multiplication, calls with a literal comma separator, and helpers with scalar/list parameters. Cover empty lists, nonempty lists, repeated list parameters, two parameters supplied the same field, unknown argument categories and a required-list destination. Reuse `QuoteInstantiation` ownership and language snapshot tests with helper body metadata from the generated fixture.
+- [x] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter "FullyQualifiedName~DateCalcQuoteHelperTests|FullyQualifiedName~QuoteHelperRuntimeTests"` before any runtime adjustment.
+- [x] **3. Add the generated list fixture:** expression literals, addition/multiplication, calls with a literal comma separator, and helpers with scalar/list parameters. Cover empty lists, nonempty lists, repeated list parameters, two parameters supplied the same field, unknown argument categories and a required-list destination. Reuse `QuoteInstantiation` ownership and language snapshot tests with helper body metadata from the generated fixture.
 
 If a failure exposes a difference between helper expansion and inline expansion, fix the mapped child/proxy metadata rather than parsing operand text. Preserve `_chain`/`NH0008` rewrite-cycle behavior. Do not add special evaluation logic for DateCalc.
 
-- [ ] **4. Run GREEN and existing quote suites:** the two new test classes plus `QuoteApiTests`, `QuoteOwnershipTests`, `TemplateListParsingTests`, `TemplateListInstantiationTests`, and `RewriteTests`. Include disposal of source trees/compilations and rejection of nodes from a new language snapshot.
-- [ ] **5. Commit:** `"Prove quote helper binding, list and DateCalc parity"` with fixture/test files and only any justified runtime changes.
+- [x] **4. Run GREEN and existing quote suites:** the two new test classes plus `QuoteApiTests`, `QuoteOwnershipTests`, `TemplateListParsingTests`, `TemplateListInstantiationTests`, and `RewriteTests`. Include disposal of source trees/compilations and rejection of nodes from a new language snapshot.
+- [x] **5. Commit:** `"Prove quote helper binding, list and DateCalc parity"` with fixture/test files and only any justified runtime changes.
 
 ## Task 4: Grammar IntelliSense, rename, and source origins
 
@@ -190,17 +190,17 @@ If a failure exposes a difference between helper expansion and inline expansion,
 
 Add optional helper-definition source metadata to `RewriteSpec` without breaking its three-argument constructor. It carries `QuoteHelperSource`, not a forged runtime node/snapshot. Preserve program origins for spliced operands. Related LSP locations are emitted from actual declaration/body spans; clients without related-location support still receive a clear primary diagnostic at the use.
 
-- [ ] **1. Write RED service tests with two temporary modules:** a qualified helper call and an unqualified imported call; helper parameters used twice in the body; caller fields with different names; categories from a third module. Assert exact destination URI/range for helper, parameter, field and category navigation. Assert helper completion includes ordered input categories and return category.
+- [x] **1. Write RED service tests with two temporary modules:** a qualified helper call and an unqualified imported call; helper parameters used twice in the body; caller fields with different names; categories from a third module. Assert exact destination URI/range for helper, parameter, field and category navigation. Assert helper completion includes ordered input categories and return category.
 
 Use the existing `RewriteTests` service setup and `LineMap.PositionOf(text.IndexOf(...))` to locate tokens. Tests call actual `service.Definition`, `References`, `Completion`, and `Rename` APIs, not the index directly.
 
-- [ ] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperNavigationTests`.
-- [ ] **3. Implement occurrence indexing and dispatch:** compose it with existing grammar rule/property/C# navigation rather than replacing those paths. Resolve `$Name`/`..$Name` occurrences from parsed quote holes; exclude opaque dollar tokens/comments. Rename the parameter declaration and only its helper-body splices; calls are positional and do not rename caller fields. Helper rename updates every resolved grammar call across files or refuses unsupported known consumers. Ambiguous uses must not navigate/rename to one arbitrary declaration.
+- [x] **2. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperNavigationTests`.
+- [x] **3. Implement occurrence indexing and dispatch:** compose it with existing grammar rule/property/C# navigation rather than replacing those paths. Resolve `$Name`/`..$Name` occurrences from parsed quote holes; exclude opaque dollar tokens/comments. Rename the parameter declaration and only its helper-body splices; calls are positional and do not rename caller fields. Helper rename updates every resolved grammar call across files or refuses unsupported known consumers. Ambiguous uses must not navigate/rename to one arbitrary declaration.
 
 Map parse-template failures to the helper quote body and runtime expansion failures primarily to the program use. Preserve existing copied-subtree origins, add the helper definition as related information, and show the expansion/helper name in the message. Keep keyword/operator navigation within helper quotes working through existing quotation contexts.
 
-- [ ] **4. Run GREEN:** new navigation tests plus `GrammarHelperNavigationTests`, `GrammarPropertyNavigationTests`, `CSharpQuoteNavigationTests`, `RewriteTests`, and LSP transport tests. Edit a helper's body with `service.Change` and assert sample diagnostics/value hints refresh without constructing a new service.
-- [ ] **5. Commit:** `"Add IntelliSense and precise origins for grammar quote helpers"`.
+- [x] **4. Run GREEN:** new navigation tests plus `GrammarHelperNavigationTests`, `GrammarPropertyNavigationTests`, `CSharpQuoteNavigationTests`, `RewriteTests`, and LSP transport tests. Edit a helper's body with `service.Change` and assert sample diagnostics/value hints refresh without constructing a new service.
+- [x] **5. Commit:** `"Add IntelliSense and precise origins for grammar quote helpers"`.
 
 ## Task 5: Extract Quote Helper with complete proposal review
 
@@ -229,23 +229,23 @@ Protocol methods are `nitrogen/prepareQuoteHelperExtraction` and `nitrogen/resol
 
 Extend the TypeScript host flow with a separate helper-input collector that produces the exact request above. Keep review/apply/open/completion in the shared host and reuse `ExtractionReview`; do not create a second Apply/Cancel implementation.
 
-- [ ] **1. Integrate the prerequisite before editing the client:** check the worktree is clean, then `git merge --no-edit codex/extraction-review-ux`. Inspect any conflict against the approved feature files and preserve the existing UX tests. Run its 38 client tests and the extraction service tests before proceeding.
-- [ ] **2. Write RED selection/transformation tests:** a caret in a complete inline quote; an exact whole-quote selection; a partial selection; no holes; scalar/list holes; repeated holes; quoted/comment dollar text; destination in the same module, an existing shared module, and a new module. Assert the original body text is preserved and inferred parameters follow actual first-use order, not field declaration order.
+- [x] **1. Integrate the prerequisite before editing the client:** check the worktree is clean, then `git merge --no-edit codex/extraction-review-ux`. Inspect any conflict against the approved feature files and preserve the existing UX tests. Run its 38 client tests and the extraction service tests before proceeding.
+- [x] **2. Write RED selection/transformation tests:** a caret in a complete inline quote; an exact whole-quote selection; a partial selection; no holes; scalar/list holes; repeated holes; quoted/comment dollar text; destination in the same module, an existing shared module, and a new module. Assert the original body text is preserved and inferred parameters follow actual first-use order, not field declaration order.
 
 For service tests use a temporary DateCalc copy with the four-token/quote example. Prepare at the full `<[ $Count * 2 weeks ]>` span, resolve to `Shared.ngr` / `Shared` / `FortnightDuration`, assert no refusal, assert no files written, and assert only helper/import/config/call edits are proposed. Apply the proposed edits in the test fixture and evaluate before/after with the real DateCalc evaluator.
 
-- [ ] **3. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperExtraction` and `npm test` before implementing the new request/collector paths.
-- [ ] **4. Implement inference and proposal validation:** use the composed parser's real hole nodes and `TemplateLists` metadata; infer types from caller labels using Task 2's shape logic. Existing-file insertions use actual module closing spans and do not replace unrelated text. New modules qualify category names/import what is needed; add a source-side using and unqualified call only when resolution is unambiguous. Update configured grammars and language declarations using existing configuration-edit logic.
+- [x] **3. Run RED:** `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj --filter FullyQualifiedName~QuoteHelperExtraction` and `npm test` before implementing the new request/collector paths.
+- [x] **4. Implement inference and proposal validation:** use the composed parser's real hole nodes and `TemplateLists` metadata; infer types from caller labels using Task 2's shape logic. Existing-file insertions use actual module closing spans and do not replace unrelated text. New modules qualify category names/import what is needed; add a source-side using and unqualified call only when resolution is unambiguous. Update configured grammars and language declarations using existing configuration-edit logic.
 
 Snapshot the complete inputs during prepare. On resolution, reject named actual text/file-set changes, but allow unchanged documents to open/close; emit current versions. Check the configured language's original/proposed C# compilation without executing user helpers, and run Task 2's syntax-only quote validation on both compositions. Retain symlink/root/destination and unrelated-language glob protection. Existing old extraction must explicitly refuse helper-bearing selections or moves that would break helper references.
 
 LSP emits `create` only when `CreateDestination` is true. All edits carry existing complete-proposal annotations and expected document contents. The client revalidates after review, compares the full edit independently of document versions, then applies the fresh proposal after local content/version checks.
 
-- [ ] **5. Add GREEN safety/protocol/client tests:** existing destination has no CreateFile; new destination refuses collisions; invalid existing-module choice; stale source, destination/config and helper changes; unchanged reopen; symlink and outside-root paths; unrelated grammar globs; C# compilation failures; unknown helper name collision; cancellation at every prompt; pending review blocks another extraction; Retry prepares a new helper proposal; successful Apply opens destination and reports each changed file once.
+- [x] **5. Add GREEN safety/protocol/client tests:** existing destination has no CreateFile; new destination refuses collisions; invalid existing-module choice; stale source, destination/config and helper changes; unchanged reopen; symlink and outside-root paths; unrelated grammar globs; C# compilation failures; unknown helper name collision; cancellation at every prompt; pending review blocks another extraction; Retry prepares a new helper proposal; successful Apply opens destination and reports each changed file once.
 
 Use the existing `LspServerTests.Session` transport fixture to assert exact `documentChanges` and expected versions. Extend the client fixture to exercise the helper request payload and reuse existing persistent-control lifecycle tests. Verify unsupported clients get a disabled action rather than incomplete edits.
 
-- [ ] **6. Commit:** `"Extract inline rewrites into reviewed shared quote helpers"` with grammar/service/LSP/client tests and product changes.
+- [x] **6. Commit:** `"Extract inline rewrites into reviewed shared quote helpers"` with grammar/service/LSP/client tests and product changes.
 
 ## Task 6: Native acceptance, documentation, and completion evidence
 
@@ -254,9 +254,9 @@ Use the existing `LspServerTests.Session` transport fixture to assert exact `doc
 - Modify: `examples/DateCalc/DateCalc.ngr` to demonstrate the helper only after before/after parity is proved; keep `quasiquotation.datecalc` results unchanged and update its explanatory comment.
 - Update this plan's checkboxes with actual evidence paths/results.
 
-- [ ] **1. Add documentation/example RED checks:** compile the documented helper grammar with `GrammarWorkspace`; evaluate the actual DateCalc sample; assert the documentation's declaration/call syntax and values work. Add an example with a list parameter. Clearly state v1 exclusions and existing ownership/binding behavior.
-- [ ] **2. Run RED then update examples/docs:** keep one inline rewrite fixture elsewhere so the old syntax remains tested. Add CLI/build consumption coverage of the documented shared helper inputs; do not add undeclared input discovery.
-- [ ] **3. Run complete gates once final source changes are done:**
+- [x] **1. Add documentation/example RED checks:** compile the documented helper grammar with `GrammarWorkspace`; evaluate the actual DateCalc sample; assert the documentation's declaration/call syntax and values work. Add an example with a list parameter. Clearly state v1 exclusions and existing ownership/binding behavior.
+- [x] **2. Run RED then update examples/docs:** keep one inline rewrite fixture elsewhere so the old syntax remains tested. Add CLI/build consumption coverage of the documented shared helper inputs; do not add undeclared input discovery.
+- [x] **3. Run complete gates once final source changes are done:**
 
 ```sh
 dotnet build Nitrogen.slnx -warnaserror
@@ -291,3 +291,18 @@ git diff --check
 Written-plan review is required before executing Task 1. Preserve the previously chosen **native** execution method; do not ask the user to select it again. Implement each approved stage with RED/GREEN evidence and focused commits. Do not stop after parser support and call the feature complete: editor/refactoring/native acceptance are part of the approved slice.
 
 At completion report implemented behavior, commit/branch/worktree, .NET/client/generator verification, actual native acceptance, and any precise remaining limitation. Keep the worktree. Do not push, create a PR, merge or release unless requested.
+
+## Execution evidence (2026-10-14)
+
+- Tasks 1–5 committed through `c0ddeba`; documentation/example stage `8dca091`.
+- Full solution build: zero warnings/errors (`/tmp/nitrogen-helper-full-build.log`).
+- Full .NET gate: 1,642 passed (`/tmp/nitrogen-helper-full-tests-final.log`).
+- Client: 40 passed plus TypeScript/bundle compilation (`/tmp/nitrogen-helper-final-client.log`).
+- Markdown links, build identity, and composition input registration passed.
+- Extraction service/protocol gate: 81 passed. DateCalc application and live buffer changes additionally verified
+  through the actual service (`/tmp/nitrogen-helper-live-service.log`).
+- Native VS Code verified new-file review/cancel/apply, current-module apply, helper/parameter/keyword navigation,
+  zero grammar diagnostics, and single extraction undo with original byte hashes/new-file removal.
+  Initial sample values came from the installed DateCalc client; they are excluded as new-server refresh evidence.
+  Remaining native live-refresh/existing-module acceptance awaits scratch-folder trust approval.
+- One independent whole-branch review is in progress. No PR, merge, version bump or release requested for this feature.
