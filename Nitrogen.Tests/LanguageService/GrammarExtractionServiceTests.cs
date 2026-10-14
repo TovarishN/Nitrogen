@@ -87,6 +87,25 @@ public sealed class GrammarExtractionServiceTests : IDisposable
         service.Open(Uri("a.ngr"), 8, Grammar + "\n");
         Assert.Contains("changed", service.ResolveExtraction(request).UnavailableReason!);
     }
+    [Theory]
+    [InlineData("a.ngr", "edit")]
+    [InlineData("nitrogen.json", "edit")]
+    [InlineData("nitrogen.json", "remove")]
+    [InlineData("new.ngr", "add")]
+    public void Stale_extraction_identifies_the_changed_workspace_file(string name, string change)
+    {
+        using var service = Service();
+        var prepared = Prepare(service);
+        if (change == "remove")
+            File.Delete(Path.Combine(_root, name));
+        else if (name == "a.ngr")
+            service.Change(Uri(name), 2, Grammar + "\n");
+        else
+            File.AppendAllText(Path.Combine(_root, name), "\n");
+        var result = service.ResolveExtraction(new(prepared.Id!, Uri("aa.ngr"), "Shared"));
+        Assert.Contains(name, result.UnavailableReason!);
+        Assert.Empty(result.Changes);
+    }
     [Fact]
     public void Rejects_existing_and_outside_destinations()
     {

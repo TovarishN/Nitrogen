@@ -56,9 +56,13 @@ public sealed partial class NitrogenLanguageService
             var current = ExtractionInputs(pending.Root);
             // Reviewing can close or reopen editor documents without changing their text.
             // Validate the complete input content, then emit current document versions below.
-            if (current.Files.Count != pending.Inputs.Files.Count || pending.Inputs.Files.Any(f =>
-                !current.Files.TryGetValue(f.Key, out var input) || input.Text != f.Value.Text))
-                return Refuse("Workspace files changed while extraction was being prepared; select the definitions again.");
+            string? changedPath = pending.Inputs.Files.Where(f =>
+                    !current.Files.TryGetValue(f.Key, out var input) || input.Text != f.Value.Text)
+                .Select(f => f.Key).FirstOrDefault() ??
+                current.Files.Keys.FirstOrDefault(path => !pending.Inputs.Files.ContainsKey(path));
+            if (changedPath is not null)
+                return Refuse("Workspace file '" + Path.GetRelativePath(pending.Root, changedPath) +
+                    "' changed while extraction was being prepared; select the definitions again.");
             if (!Uri.TryCreate(request.DestinationUri, UriKind.Absolute, out var destination) || !destination.IsFile)
                 return Refuse("Choose a new local .ngr file inside the workspace.");
             string destinationPath = Path.GetFullPath(destination.LocalPath);

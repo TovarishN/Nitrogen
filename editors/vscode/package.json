@@ -15,7 +15,24 @@
     "onStartupFinished"
   ],
   "contributes": {
-    "commands": [{ "command": "nitrogen.extractGrammar", "title": "Nitrogen: Extract Block…" }],
+    "commands": [
+      {
+        "command": "nitrogen.extractGrammar",
+        "title": "Nitrogen: Extract Block\u2026"
+      },
+      {
+        "command": "nitrogen.applyGrammarExtraction",
+        "title": "Nitrogen: Apply all extraction changes",
+        "icon": "$(check)",
+        "enablement": "nitrogen.extractionReviewPending"
+      },
+      {
+        "command": "nitrogen.cancelGrammarExtraction",
+        "title": "Nitrogen: Cancel extraction",
+        "icon": "$(close)",
+        "enablement": "nitrogen.extractionReviewPending"
+      }
+    ],
     "languages": [
       {
         "id": "ngr",
@@ -48,12 +65,26 @@
           "description": "The dotnet executable that runs the bundled server; empty finds it through DOTNET_ROOT, the standard install locations, and PATH."
         }
       }
+    },
+    "menus": {
+      "editor/title": [
+        {
+          "command": "nitrogen.applyGrammarExtraction",
+          "when": "nitrogen.extractionReviewPending",
+          "group": "navigation@1"
+        },
+        {
+          "command": "nitrogen.cancelGrammarExtraction",
+          "when": "nitrogen.extractionReviewPending",
+          "group": "navigation@2"
+        }
+      ]
     }
   },
   "scripts": {
     "compile": "tsc -p ./ --noEmit && esbuild src/extension.ts --bundle --platform=node --target=node20 --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
     "package": "vsce package --no-dependencies --allow-missing-repository",
-    "test": "esbuild src/otherExtensions.test.ts src/server.test.ts src/developmentConfig.test.ts src/signatureDocuments.test.ts src/signatureRouting.test.ts src/extractGrammar.test.ts --external:vscode --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/otherExtensions.test.js out/test/server.test.js out/test/developmentConfig.test.js out/test/signatureDocuments.test.js out/test/signatureRouting.test.js out/test/extractGrammar.test.js"
+    "test": "esbuild src/otherExtensions.test.ts src/server.test.ts src/developmentConfig.test.ts src/signatureDocuments.test.ts src/signatureRouting.test.ts src/extractGrammar.test.ts src/extractionReview.test.ts --external:vscode --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/otherExtensions.test.js out/test/server.test.js out/test/developmentConfig.test.js out/test/signatureDocuments.test.js out/test/signatureRouting.test.js out/test/extractGrammar.test.js out/test/extractionReview.test.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

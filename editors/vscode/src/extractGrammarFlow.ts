@@ -19,6 +19,7 @@ export interface ExtractionHost {
   review(result: ExtractionResolution): Promise<boolean>;
   apply(result: ExtractionResolution): Promise<boolean>;
   open(uri: string): Promise<void>;
+  complete?(result: ExtractionResolution, destinationUri: string): void;
   warn(message: string): void;
 }
 
@@ -44,7 +45,10 @@ export async function extractGrammar(host: ExtractionHost, selection: Extraction
     if (reviewedEdit(checked.action.edit) !== reviewedEdit(resolved.action.edit)) {
       host.warn('The extraction changed during review. Select the definitions again.'); return;
     }
-    if (await host.apply(checked)) await host.open(destinationUri);
+    if (await host.apply(checked)) {
+      await host.open(destinationUri);
+      host.complete?.(checked, destinationUri);
+    }
   } catch (error) {
     host.warn('Extraction failed: ' + (error instanceof Error ? error.message : String(error)));
   }
