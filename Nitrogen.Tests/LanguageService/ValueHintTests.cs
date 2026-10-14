@@ -64,6 +64,20 @@ public sealed class ValueHintTests : IDisposable
         Assert.Equal(["= 14 days", "= 2026-10-19 Mon"], hints.Select(h => h.Label));
     }
 
+    [Theory]
+    [InlineData("count;")]
+    [InlineData("count swapped;")]
+    [InlineData("(count) swapped;")]
+    public void An_inlined_reference_shows_its_hint_at_the_use_instead_of_the_initializer(string statement)
+    {
+        using var service = Service();
+        var hints = Hints(service, "let count = 3;\n" + statement);
+
+        Assert.Equal(new[] { "= 3", "= 3" }, hints.Select(hint => hint.Label));
+        Assert.Equal(new[] { new DocumentPosition(0, 14), new DocumentPosition(1, statement.Length) },
+            hints.Select(hint => hint.At));
+    }
+
     [Fact]
     public void A_document_with_an_error_shows_no_values()
     {

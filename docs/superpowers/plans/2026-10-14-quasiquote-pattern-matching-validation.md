@@ -2,9 +2,28 @@
 
 Implementation: C# CompilePattern/Match and ordered typed `.ngr` match arms, scalar/list captures, caller bindings, editor navigation/rename and DateCalc examples.
 
-## Automated evidence
+## Manual acceptance follow-up: misplaced reference hints
 
-Final product commit: `cde69743cc2b09ea4aec14b008e73f3f07267756`.
+The user reported two `= 3` hints on `let count = 3;`, with no hint on `count swapped;`.
+The packaged-server reproduction confirms that the fallback's value is placed at the initializer's statement.
+Hint placement incorrectly inferred the source statement from the lowered HIR value's first origin.
+An initialized reference intentionally keeps its initializer's origin, so that origin is not a statement identity.
+
+The fix positions hints from selected source syntax in the same preorder used by LowerSelected.
+It leaves HIR provenance unchanged. An initial attempt to prepend reference origins was withdrawn after
+ReferenceInitializerTests caught two provenance-contract failures.
+
+Three new regression cases (plain reference, match fallback, parenthesized fallback) first failed with
+both hints on the declaration, then passed with separate source-statement positions. Focused verification
+passes 36/36; the complete Release suite passes **1757/1757** with no skipped tests.
+
+Logs: `/tmp/nitrogen-reference-hint-red.log`, `/tmp/nitrogen-reference-hint-final-green.log`,
+`/tmp/nitrogen-reference-hint-final-full.log`, and `/tmp/nitrogen-reference-hint-bundled-red.log`.
+The scratch VSIX is being refreshed for the user's next native check; visual confirmation remains pending.
+
+## Automated evidence before native acceptance
+
+Product commit before native acceptance: `cde69743cc2b09ea4aec14b008e73f3f07267756`.
 Packaged identity: `0.14.0+build.169.cde69743cc2b09ea4aec14b008e73f3f07267756`.
 The subsequent completion commit changes only documentation.
 

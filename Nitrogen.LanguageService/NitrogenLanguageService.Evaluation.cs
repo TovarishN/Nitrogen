@@ -84,8 +84,10 @@ public sealed partial class NitrogenLanguageService
         var file = SemanticsOf(document.Language)[document.Uri];
         var lowered = HirLowering.LowerSelected(file, profile.StatementKinds, Guid.NewGuid());
         if (lowered.Diagnostics.Count > 0) return ([], []);
-        var at = lowered.Roots
-            .Select(root => document.Lines.PositionOf(StatementEnd(file.Tree, root.Origins[0], profile.StatementKinds, document.Text)))
+        // LowerSelected returns one root per selected syntax node in preorder. A root's origins may
+        // belong to an inlined initializer, so use the selected statements to position their hints.
+        var at = StatementEnds(file.Tree, profile.StatementKinds, document.Text)
+            .Select(document.Lines.PositionOf)
             .ToList();
         return (lowered.Roots, at);
     }
@@ -134,15 +136,24 @@ public sealed partial class NitrogenLanguageService
 
     static ValueHint Failure(DocumentPosition at, string reason) => new(at, "= ⚠", reason, true);
 
-    /// <summary>The end of the statement the origin lies in, before its trailing whitespace: where its value is shown.</summary>
-    static int StatementEnd(SyntaxTree tree, SourceOrigin origin, IReadOnlySet<int> statementKinds, string text)
+    /// <summary>Selected statements' ends in lowering order, before trailing whitespace.</summary>
+    static IEnumerable<int> StatementEnds(SyntaxTree tree, IReadOnlySet<int> statementKinds, string text)
     {
-        int node = origin.Node;
-        while (node >= 0 && !statementKinds.Contains(tree.Kind(node))) node = tree.Parent(node);
-        var span = node >= 0 ? tree.Span(node) : origin.Span;
-        int end = span.End;
-        while (end > span.Start && char.IsWhiteSpace(text[end - 1])) end--;
-        return end;
+        var pending = new Stack<int>();
+        pending.Push(tree.Root);
+        while (pending.Count > 0)
+        {
+            int node = pending.Pop();
+            if (statementKinds.Contains(tree.Kind(node)))
+            {
+                var span = tree.Span(node);
+                int end = span.End;
+                while (end > span.Start && char.IsWhiteSpace(text[end - 1])) end--;
+                yield return end;
+            }
+            for (int child = tree.ChildCount(node) - 1; child >= 0; child--)
+                pending.Push(tree.Child(node, child));
+        }
     }
 
     static bool Within(DocumentPosition at, DocumentRange range) =>
