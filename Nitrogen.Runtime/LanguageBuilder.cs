@@ -65,9 +65,9 @@ public sealed unsafe class LanguageBuilder
             diagnostics = quoteErrors.Select(error => new CompositionDiagnostic(error.Diagnostic.Code,
                 new[] { error.Helper.Name }, $"quote helper {error.Helper.Name}: {error.Diagnostic.Message}")
             {
-                Location = new(error.Helper.Source.Path, error.Diagnostic.Span.Length > 0
-                    ? new(error.Helper.Source.Start + error.Diagnostic.Span.Start, error.Diagnostic.Span.Length)
-                    : new(error.Helper.Source.Start, error.Helper.Source.Length))
+                Location = new((error.Source ?? error.Helper.Source).Path, error.Diagnostic.Span.Length > 0
+                    ? new((error.Source ?? error.Helper.Source).Start + error.Diagnostic.Span.Start, error.Diagnostic.Span.Length)
+                    : new((error.Source ?? error.Helper.Source).Start, (error.Source ?? error.Helper.Source).Length))
             }).ToArray();
             return false;
         }

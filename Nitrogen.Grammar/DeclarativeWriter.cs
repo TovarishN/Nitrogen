@@ -92,11 +92,11 @@ internal static class DeclarativeWriter
             {
                 var resolved = model.Analysis.Helpers.Bind(helperCall, info.Module,
                     kind.Alternative?.Body ?? ((SyntaxRule)kind.Rule!).Body, Category(model, info, kind), implicitModule)!;
-                if (resolved.Symbol.Declaration.Match is not null) throw new InvalidOperationException("Match helpers require pattern-aware emission.");
                 text = resolved.Symbol.Declaration.Body.Text;
                 var sourceSpan = resolved.Symbol.Declaration.Body.Span;
                 helperSource = " { HelperSource = new(" + CSharpText.Literal(model.InputOf(resolved.Symbol.Module)?.Path ?? "") +
-                    $", {sourceSpan.Start}, {sourceSpan.Length}) }}";
+                    $", {sourceSpan.Start}, {sourceSpan.Length})" +
+                    (resolved.Symbol.Declaration.Match is null ? "" : ", MatchHelperName = " + CSharpText.Literal(resolved.Symbol.Key)) + " }";
                 foreach (var input in resolved.Inputs)
                     holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(input.Parameter)}, {input.Child}, {CSharpText.Literal(input.Category)}" +
                         (input.IsList ? $", true, {input.Stride}" : "") + ")");

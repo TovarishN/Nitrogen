@@ -7,11 +7,17 @@ public sealed unsafe partial class Language
         var errors = new List<QuoteHelperError>();
         foreach (var helper in Modules.SelectMany(module => module.QuoteHelpers))
         {
-            using var compilation = CompileQuote(helper.Category, helper.Text, helper.Parameters);
-            errors.AddRange(compilation.Diagnostics.Select(diagnostic => new QuoteHelperError(helper, diagnostic)));
+            using var plan = QuoteMatchPlan.Compile(this, helper);
+            errors.AddRange(plan.Errors);
         }
         return errors;
     }
+
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<QuoteMatchPlan>> _matchPlans = new(StringComparer.Ordinal);
+
+    internal QuoteMatchPlan MatchPlan(string qualifiedHelperName) => _matchPlans.GetOrAdd(qualifiedHelperName, name =>
+        new Lazy<QuoteMatchPlan>(() => QuoteMatchPlan.Compile(this,
+            Modules.SelectMany(module => module.QuoteHelpers).Single(helper => helper.Name == name)))).Value;
 
     internal bool AcceptsQuoteNode(string category, int kind) => Modules
         .FirstOrDefault(m => m.Id == SyntaxKinds.ModuleOf(kind))?.GetQuoteCategories(SyntaxKinds.LocalOf(kind))

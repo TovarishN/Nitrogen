@@ -41,6 +41,12 @@ public sealed partial class FileSemantics
         if (_language.Declarative.RuleFor(Tree.Kind(node))?.Rule is not { Form: DeclarativeForm.Rewrite, Rewrite: { } spec } rule)
             return null;
         if (_instances.TryGetValue(node, out var known)) return known;
+        if (spec.MatchHelperName is not null)
+        {
+            _instanceErrors[node] = new("NQP0001", Tree.Span(node), "Match helper execution is not yet supported.");
+            _instances[node] = null;
+            return null;
+        }
         RewriteInstance? instance = null;
         if (_chain.Contains(rule)) _cyclic.Add(node);
         else if (_language.RewriteTemplate(rule).Tree is { } template)

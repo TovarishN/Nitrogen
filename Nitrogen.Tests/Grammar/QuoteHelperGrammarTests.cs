@@ -89,7 +89,7 @@ public sealed class QuoteHelperGrammarTests
     {
         const string text = "syntax module M { syntax E=\"x\"; syntax function F(Value:E):E=match Value { | _ => <[ $Value ]>; }; }";
         var result = GrammarCompiler.Compile([new GrammarInput("match.ngr", text, "Demo")]);
-        Assert.True(result.HasErrors);
-        Assert.Empty(result.Sources);
+        Assert.False(result.HasErrors, string.Join("\n", result.Diagnostics));
+        Assert.Contains("QuoteHelperMatchSpec", Assert.Single(result.Sources).Code);
     }
 }

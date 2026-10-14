@@ -166,7 +166,7 @@ public sealed record QuoteMatchArm(EquatableArray<QuoteParameter> Captures,
 
 Nonfallback arms are ordered in Arms. Fallback's actual source remains Body.Span; parser detects duplicate/nonfinal/missing fallback before constructing a valid match body. No dummy quote bodies.
 
-- [ ] Add bootstrap and self-host parity fixtures containing:
+- [x] Add bootstrap and self-host parity fixtures containing:
 
 ```ngr
 syntax function Swap(Value: Expr) : Expr = match Value
@@ -177,12 +177,12 @@ syntax function Swap(Value: Expr) : Expr = match Value
 ```
 
   Also cover `Items: Expr*`, a capture-free arm, comments/blank lines, malformed arrows and ordinary helpers named `match` where legal. Compare all arm captures, quotes and spans in the model dump.
-- [ ] Run `dotnet test Nitrogen.Tests --filter 'FullyQualifiedName~QuoteHelperGrammarTests|FullyQualifiedName~SelfHostingTests'`; RED: parser rejects match body.
-- [ ] Add Arrow recognition before Equals; preserve normal assignment and raw semantic-block parsing. Parse match selector/braces/arms and mandatory final fallback. Extend the self-host grammar and semantic operations; NgrProjector must project typed HIR rather than reparse through the bootstrap parser.
-- [ ] Extend GrammarDumper and every helper-model visitor to include Match. Until Task 4 supplies semantics, QuoteHelperAnalysis emits a clear unsupported-match diagnostic and both writers refuse emitting a fallback-only helper. This temporary refusal prevents a parser-only commit from silently changing program behavior; Task 4 removes it.
-- [ ] Add missing/duplicate/nonfinal fallback, scalar/list capture syntax and existing simple-helper regressions. Review changed recovery/parity snapshots individually.
-- [ ] Run the same focused command; GREEN: parsing/parity tests pass and generation explicitly refuses new match helpers.
-- [ ] Commit: `feat: parse typed quote helper match arms`.
+- [x] Run `dotnet test Nitrogen.Tests --filter 'FullyQualifiedName~QuoteHelperGrammarTests|FullyQualifiedName~SelfHostingTests'`; RED: parser rejects match body.
+- [x] Add Arrow recognition before Equals; preserve normal assignment and raw semantic-block parsing. Parse match selector/braces/arms and mandatory final fallback. Extend the self-host grammar and semantic operations; NgrProjector must project typed HIR rather than reparse through the bootstrap parser.
+- [x] Extend GrammarDumper and every helper-model visitor to include Match. Until Task 4 supplies semantics, QuoteHelperAnalysis emits a clear unsupported-match diagnostic and both writers refuse emitting a fallback-only helper. This temporary refusal prevents a parser-only commit from silently changing program behavior; Task 4 removes it.
+- [x] Add missing/duplicate/nonfinal fallback, scalar/list capture syntax and existing simple-helper regressions. Review changed recovery/parity snapshots individually.
+- [x] Run the same focused command; GREEN: parsing/parity tests pass and generation explicitly refuses new match helpers.
+- [x] Commit: `feat: parse typed quote helper match arms`.
 
 ### Task 4: Declarative metadata and complete composed validation
 
@@ -206,14 +206,14 @@ public sealed record QuoteMatchArmSpec(string Pattern,
 
 Internal `QuoteMatchPlan` owns compiled patterns/result templates plus fallback. `Language.MatchPlan(string qualifiedHelperName)` returns one snapshot-local lazily cached plan, or its validation diagnostics; key by qualified name, not record reference identity. Workspace validation may compile/dispose a temporary plan. Never share plans across Language instances.
 
-- [ ] Add a workspace fixture with an unused match helper whose second arm has an invalid result category and a configured C# initializer that throws if executed. Assert validation reports the second arm's grammar path/span and does not execute the initializer. Repeat with an unused invalid pattern.
-- [ ] Run `dotnet test Nitrogen.Tests --filter FullyQualifiedName~QuoteHelperValidationTests`; RED: metadata/validation cannot represent all arms.
-- [ ] Validate selector is a scalar helper parameter; captures are unique, do not shadow params, have real categories and correct scalar/list shapes. Compile patterns with arm captures only and results with the union of parameters/captures. Compile fallback with parameters only. Enforce real parsed capture occurrences and result construction restrictions for every helper, even unused ones.
-- [ ] Emit the new declarative records and qualified MatchHelperName through shared writer routines. A result is not emitted as unconditional fallback. Remove Task 3's unsupported-feature refusal. While execution is not installed until Task 5, instance creation must report an explicit unsupported-match error for MatchHelperName, preserving ordinary helper behavior.
-- [ ] Route NQP diagnostics with PatternSource/ResultSource to CompositionDiagnostic locations. Reserve grammar diagnostics after the current registry's last code; add registry uniqueness assertions rather than guessing a conflicting number. MatchPlan cache stores immutable compiled plans for its owning language lifetime; transient validation compilations are disposed on every path.
-- [ ] Test missing selector, list selector, capture shadowing, duplicate captures, arm-local result misuse, wrong categories/shapes, unused declarations, opaque dollar text, unknown helper and imported helper ambiguity. Assert existing ordinary metadata/constructors still work.
-- [ ] Run grammar/workspace validation and source-generator tests; GREEN: all arms validate without configured C# execution and invalid metadata cannot fall back silently.
-- [ ] Commit: `feat: validate and emit declarative pattern helpers`.
+- [x] Add a workspace fixture with an unused match helper whose second arm has an invalid result category and a configured C# initializer that throws if executed. Assert validation reports the second arm's grammar path/span and does not execute the initializer. Repeat with an unused invalid pattern.
+- [x] Run `dotnet test Nitrogen.Tests --filter FullyQualifiedName~QuoteHelperValidationTests`; RED: metadata/validation cannot represent all arms.
+- [x] Validate selector is a scalar helper parameter; captures are unique, do not shadow params, have real categories and correct scalar/list shapes. Compile patterns with arm captures only and results with the union of parameters/captures. Compile fallback with parameters only. Enforce real parsed capture occurrences and result construction restrictions for every helper, even unused ones.
+- [x] Emit the new declarative records and qualified MatchHelperName through shared writer routines. A result is not emitted as unconditional fallback. Remove Task 3's unsupported-feature refusal. While execution is not installed until Task 5, instance creation must report an explicit unsupported-match error for MatchHelperName, preserving ordinary helper behavior.
+- [x] Route NQP diagnostics with PatternSource/ResultSource to CompositionDiagnostic locations. Reserve grammar diagnostics after the current registry's last code; add registry uniqueness assertions rather than guessing a conflicting number. MatchPlan cache stores immutable compiled plans for its owning language lifetime; transient validation compilations are disposed on every path.
+- [x] Test missing selector, list selector, capture shadowing, duplicate captures, arm-local result misuse, wrong categories/shapes, unused declarations, opaque dollar text, unknown helper and imported helper ambiguity. Assert existing ordinary metadata/constructors still work.
+- [x] Run grammar/workspace validation and source-generator tests; GREEN: all arms validate without configured C# execution and invalid metadata cannot fall back silently.
+- [x] Commit: `feat: validate and emit declarative pattern helpers`.
 
 ### Task 5: Ordered selection with caller-aware syntax provenance
 

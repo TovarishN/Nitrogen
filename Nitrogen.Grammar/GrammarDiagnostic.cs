@@ -63,6 +63,8 @@ public static class GrammarCodes
     public const string QuoteHelperArgumentCount = "NGR0145";
     public const string QuoteHelperShape = "NGR0146";
     public const string QuoteHelperCategory = "NGR0147";
+    public const string QuoteMatchSelector = "NGR0148";
+    public const string QuoteMatchCapture = "NGR0149";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";
