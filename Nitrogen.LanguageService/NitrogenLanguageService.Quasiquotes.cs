@@ -96,16 +96,28 @@ public sealed partial class NitrogenLanguageService
                     }
                 foreach (var helper in module.Helpers)
                 {
-                    var parameters = helper.Parameters.Select(parameter =>
+                    AddHelperQuote(helper.Body, helper.Parameters, helper.ReturnCategory.Name);
+                    if (helper.Match is { } match)
+                        foreach (var arm in match.Arms)
+                        {
+                            var selector = helper.Parameters.FirstOrDefault(parameter => parameter.Name.Name == match.Selector.Name);
+                            if (selector is not null) AddHelperQuote(arm.Pattern, arm.Captures, selector.Category.Name);
+                            AddHelperQuote(arm.Result, helper.Parameters.Concat(arm.Captures), helper.ReturnCategory.Name);
+                        }
+
+                    void AddHelperQuote(QuoteText quote, IEnumerable<QuoteParameter> scope, string resultCategory)
                     {
-                        Expr category = new ReferenceExpr(parameter.Category.Name, parameter.Category.Span);
-                        if (parameter.IsList) category = new RepeatExpr(RepeatKind.ZeroOrMore, category, parameter.Span);
-                        return (Expr)new LabeledExpr(parameter.Name.Name, category, parameter.Name.Span);
-                    }).ToArray();
-                    rules.Add(new(fileUri, text, module, helper.Name.Name, helper.ReturnCategory.Name,
-                        new SequenceExpr(parameters, helper.Body.Span), helper.Span,
-                        new[] { new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
-                            helper.Body.Span, Target: new(helper.Body.Text, helper.Body.Span)) }));
+                        var parameters = scope.Select(parameter =>
+                        {
+                            Expr category = new ReferenceExpr(parameter.Category.Name, parameter.Category.Span);
+                            if (parameter.IsList) category = new RepeatExpr(RepeatKind.ZeroOrMore, category, parameter.Span);
+                            return (Expr)new LabeledExpr(parameter.Name.Name, category, parameter.Name.Span);
+                        }).ToArray();
+                        rules.Add(new(fileUri, text, module, helper.Name.Name, resultCategory,
+                            new SequenceExpr(parameters, quote.Span), helper.Span,
+                            new[] { new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
+                                quote.Span, Target: new(quote.Text, quote.Span)) }));
+                    }
                 }
                 foreach (var extend in module.Extends)
                     foreach (var alternative in extend.Alternatives)
@@ -206,7 +218,7 @@ public sealed partial class NitrogenLanguageService
                 if (entry.TryGetProperty("usings", out var usings))
                     foreach (var u in usings.EnumerateArray()) workspace.Usings.Add(u.GetString()!);
                 foreach (string file in grammars)
-                    if (texts.TryGetValue(file, out var text)) workspace.SetGrammar(file, text);
+                    if (texts.TryGetValue(file, out var text)) workspace.SetGrammar(file, DocumentSignatures.Read(text).MaskedText);
                 foreach (string file in sources)
                     if (texts.TryGetValue(file, out var text)) workspace.Sources[file] = text;
                 var snapshot = workspace.Compile();

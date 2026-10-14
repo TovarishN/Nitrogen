@@ -49,7 +49,15 @@ public sealed partial class NitrogenLanguageService
             var composition = ExtractionCompositions(inputs).FirstOrDefault(c => c.Definition.Grammars.Any(g => SamePath(g.Path, source.LocalPath)));
             if (composition is null) return Refuse("No valid configured or declared language composes this grammar.");
             var selected = QuoteExtractionSelect(composition.Definition, source.LocalPath, input.Text, range, out var analysis);
-            if (selected is null) return Refuse("Place the caret inside an inline quote, or select the whole quote.");
+            if (selected is null)
+            {
+                int offset = new LineMap(input.Text).OffsetOf(range.Start);
+                var model = GrammarParser.Parse(DocumentSignatures.Read(input.Text).MaskedText).File;
+                if (model?.Modules.SelectMany(module => module.Helpers).Any(helper => helper.Match is not null &&
+                    helper.Span.Start <= offset && offset < helper.Span.End) == true)
+                    return Refuse("Match helpers and subpatterns cannot be extracted; select a complete inline return quote from a grammar rule.");
+                return Refuse("Place the caret inside an inline quote, or select the whole quote.");
+            }
             _ = QuoteExtractionParameters(composition.Definition, selected, analysis);
             foreach (string expired in _quoteExtractions.Where(e => DateTime.UtcNow - e.Value.Created > TimeSpan.FromMinutes(10)).Select(e => e.Key).ToArray())
                 _quoteExtractions.Remove(expired);

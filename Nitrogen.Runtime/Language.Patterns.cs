@@ -26,6 +26,7 @@ public sealed unsafe partial class Language
         else
         {
             var used = new HashSet<string>(StringComparer.Ordinal);
+            var invalidLists = new HashSet<int>();
             for (int node = 0; node < parsed.Tree.NodeCount; node++)
             {
                 int kind = parsed.Tree.Kind(node);
@@ -39,7 +40,8 @@ public sealed unsafe partial class Language
                         shape.Category != copied[name].Category ||
                         Enumerable.Range(0, parsed.Tree.ChildCount(parent)).Count(index =>
                             parsed.Tree.Kind(parsed.Tree.Child(parent, index)) == SyntaxKinds.ListHole) != 1)
-                        diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "A physical list requires one capture at a supported item site.", name));
+                        if (invalidLists.Add(parent))
+                            diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "A physical list requires one capture at a supported item site.", name));
                 }
             }
             foreach (string name in copied.Keys)

@@ -136,11 +136,15 @@ public sealed class QuoteHelperNavigationTests : IDisposable
         Assert.Throws<RenameRefusedException>(() => service.Rename(Uri("main.ngr"), At(main, "V:E"), "Input"));
     }
 
-    [Fact]
-    public void Shared_helper_rename_updates_every_known_composition()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Shared_helper_rename_updates_every_known_composition(bool matching)
     {
         const string common = "syntax module Common { extensible syntax E { | Atom=\"x\" } }";
-        const string shared = "syntax module Shared { syntax function F(V:Common.E):Common.E=<[ $V ]>; }";
+        string shared = matching
+            ? "syntax module Shared { syntax function F(V:Common.E):Common.E=match V { | (X:Common.E) <[ $X ]> => <[ $X ]>; | _ => <[ $V ]>; }; }"
+            : "syntax module Shared { syntax function F(V:Common.E):Common.E=<[ $V ]>; }";
         const string a = "syntax module A { using Common; using Shared; syntax Program=E; extend syntax Common.E { | Wrap=\"a\" X:E rewrites F(X) } }";
         string b = a.Replace("module A", "module B").Replace("Wrap=\"a\"", "Other=\"b\"");
         File.WriteAllText(Path.Combine(_root, "common.ngr"), common);
