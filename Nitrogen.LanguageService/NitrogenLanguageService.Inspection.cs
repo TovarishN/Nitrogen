@@ -53,7 +53,8 @@ public sealed partial class NitrogenLanguageService
         {
             var range = document.Lines.RangeOf(diagnostic.Origin.Span);
             if (s_blockedLowering.Contains(diagnostic.Code) || shown.Any(other => other.Range == range)) continue;
-            yield return new ServiceDiagnostic(range, ServiceSeverity.Error, diagnostic.Code, diagnostic.Message);
+            yield return new ServiceDiagnostic(range, ServiceSeverity.Error, diagnostic.Code, diagnostic.Message,
+                Related: QuoteHelperRelated(diagnostic.Related));
         }
     }
 

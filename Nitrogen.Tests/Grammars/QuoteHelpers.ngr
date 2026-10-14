@@ -1,5 +1,6 @@
 syntax module QuoteHelpers
 {
+    syntax Program = Expr ";";
     token Number = ['0'..'9']+;
     syntax function Twice(Input: Expr*) : Expr = <[ f(..$Input, ..$Input) ]>;
     syntax function Multiply(Value: Expr) : Expr = <[ $Value * 2 ]>;
@@ -20,6 +21,10 @@ syntax module QuoteHelpers
         | (Items:Expr*) <[ f(1, ..$Items, 2) ]> => <[ f(..$Items) ]>;
         | _ => <[ $Value ]>;
     };
+    syntax function RequireMiddle(Value:Expr):Expr=match Value {
+        | (Items:Expr*) <[ f(1, ..$Items, 2) ]> => <[ required(..$Items) ]>;
+        | _ => <[ $Value ]>;
+    };
     syntax function MakeNested(Value:Expr):Expr=<[ swap($Value + 1) ]>;
     syntax function MakeComposite(Value:Expr):Expr=<[ first($Value * 2 + 1) ]>;
     extensible syntax Expr
@@ -27,6 +32,7 @@ syntax module QuoteHelpers
         | Swapped = "swap" "(" Value:Expr ")" rewrites Swap(Value)
         | First = "first" "(" Value:Expr ")" rewrites SelectFirst(Value)
         | Middle = "middle" "(" Value:Expr ")" rewrites SelectMiddle(Value)
+        | RequiredMiddle = "requiredmiddle" "(" Value:Expr ")" rewrites RequireMiddle(Value)
         | Nested = "nested" "(" Value:Expr ")" rewrites MakeNested(Value)
         | Composite = "composite" "(" Value:Expr ")" rewrites MakeComposite(Value)
         | Paren = "(" Inner:Expr ")"

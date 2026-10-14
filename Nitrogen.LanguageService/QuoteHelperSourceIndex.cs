@@ -9,6 +9,8 @@ internal sealed class QuoteHelperSourceIndex
     readonly IReadOnlyDictionary<string, string> _texts;
     readonly List<(string Path, ModuleDecl Module)> _modules = [];
     readonly List<Occurrence> _occurrences = [];
+    sealed record QuotePart(int Kind, int Children, string Text, string? Capture);
+    readonly Dictionary<string, QuotePart[]> _quoteStructures = new(StringComparer.Ordinal);
     readonly GrammarAnalysis _analysis;
     readonly Language? _language;
     readonly HashSet<string> _unparsedHelpers = new(StringComparer.Ordinal);
@@ -66,7 +68,7 @@ internal sealed class QuoteHelperSourceIndex
                     .ToDictionary(parameter => parameter.Name.Name, parameter =>
                         (Shape: new QuoteHole(_analysis.Helpers.Category(parameter.Category, module)?.Key ?? parameter.Category.Name, parameter.IsList),
                          Identity: id + ":parameter:" + parameter.Name.Name), StringComparer.Ordinal);
-                IndexQuote(helper.Body, helper.ReturnCategory, parameters, id);
+                IndexQuote(helper.Body, helper.ReturnCategory, parameters, id, "fallback");
                 if (helper.Match is not { } match) continue;
                 if (parameters.TryGetValue(match.Selector.Name, out var selector))
                     Add(selector.Identity, path, match.Selector.Span, false, "parameter");
@@ -83,14 +85,14 @@ internal sealed class QuoteHelperSourceIndex
                         captures[capture.Name.Name] = (new(_analysis.Helpers.Category(capture.Category, module)?.Key ?? capture.Category.Name, capture.IsList), captureId);
                     }
                     var selectorParameter = helper.Parameters.FirstOrDefault(parameter => parameter.Name.Name == match.Selector.Name);
-                    if (selectorParameter is not null) IndexQuote(arm.Pattern, selectorParameter.Category, captures, scopeId);
+                    if (selectorParameter is not null) IndexQuote(arm.Pattern, selectorParameter.Category, captures, scopeId, "arm:" + armIndex + ":pattern");
                     var scope = new Dictionary<string, (QuoteHole Shape, string Identity)>(parameters, StringComparer.Ordinal);
                     foreach (var capture in captures) scope[capture.Key] = capture.Value;
-                    IndexQuote(arm.Result, helper.ReturnCategory, scope, scopeId);
+                    IndexQuote(arm.Result, helper.ReturnCategory, scope, scopeId, "arm:" + armIndex + ":result");
                 }
 
                 void IndexQuote(QuoteText quote, NameDecl categoryName,
-                    IReadOnlyDictionary<string, (QuoteHole Shape, string Identity)> scope, string scopeId)
+                    IReadOnlyDictionary<string, (QuoteHole Shape, string Identity)> scope, string scopeId, string slot)
                 {
                     try
                     {
@@ -104,6 +106,15 @@ internal sealed class QuoteHelperSourceIndex
                             return;
                         }
                         var tree = parsed.Tree;
+                        var structure = new QuotePart[tree.NodeCount];
+                        for (int node = 0; node < tree.NodeCount; node++)
+                        {
+                            int kind = tree.Kind(node), children = tree.ChildCount(node);
+                            bool hole = kind is SyntaxKinds.Hole or SyntaxKinds.ListHole;
+                            string? capture = hole ? scope[tree.GetText(node)[(kind == SyntaxKinds.Hole ? 1 : 3)..].ToString()].Identity : null;
+                            structure[node] = new(kind, children, !hole && children == 0 ? tree.GetText(node).ToString() : "", capture);
+                        }
+                        _quoteStructures[id + ":quote:" + slot] = structure;
                         for (int node = 0; node < tree.NodeCount; node++)
                         {
                             if (tree.Kind(node) is not (SyntaxKinds.Hole or SyntaxKinds.ListHole)) continue;
@@ -269,6 +280,14 @@ internal sealed class QuoteHelperSourceIndex
             .Select(o => (o.Identity, o.Path, o.Span.Start, o.Declaration)).ToHashSet();
         if (!beforeParameters.SetEquals(afterParameters))
             throw new RenameRefusedException("Rename would change the helper quote's parsed parameter structure.");
+        if (_quoteStructures.Count != after._quoteStructures.Count)
+            throw new RenameRefusedException("Rename would change the helper quote's parsed syntax structure.");
+        foreach (var (identity, parts) in _quoteStructures)
+        {
+            var expected = parts.Select(part => part.Capture is { } capture ? part with { Capture = Expected(capture) } : part);
+            if (!after._quoteStructures.TryGetValue(Expected(identity), out var actual) || !expected.SequenceEqual(actual))
+                throw new RenameRefusedException("Rename would change the helper quote's parsed syntax structure.");
+        }
         return changed;
     }
 }

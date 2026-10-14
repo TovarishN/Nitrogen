@@ -116,5 +116,27 @@ public sealed class PatternHelperNavigationTests : IDisposable
         Assert.NotNull(whole.UnavailableReason);
     }
 
+
+    [Fact]
+    public void Capture_rename_cannot_change_surrounding_parsed_pattern_structure()
+    {
+        const string grammar="""
+            syntax module M {
+              syntax Program=E;
+              syntax function F(Value:E):E=match Value {
+                | (Left:E) <[ f($Left) ]> => <[ $Left ]>;
+                | _ => <[ $Value ]>;
+              };
+              extensible syntax E {
+                | Atom="x"
+                | One="f" "(" &"$Left" Value:E ")"
+                | Two="f" "(" !"$Left" Value:E ")"
+              }
+            }
+            """;
+        using var service=Service(grammar);
+        Assert.Throws<RenameRefusedException>(()=>service.Rename(Uri("main.ngr"),At(grammar,"Left:E"),"First"));
+    }
+
     public void Dispose()=>Directory.Delete(_root,true);
 }

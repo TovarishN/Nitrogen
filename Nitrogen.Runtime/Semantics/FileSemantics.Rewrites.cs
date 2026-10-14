@@ -13,9 +13,11 @@ public sealed partial class FileSemantics
 
     readonly Dictionary<int, RewriteInstance?> _instances = new();
     readonly HashSet<int> _cyclic = new();
-    readonly Dictionary<int, QuoteDiagnostic> _instanceErrors = new();
+    sealed record RewriteFailure(QuoteDiagnostic Diagnostic, QuoteHelperSource? Source);
+    readonly Dictionary<int, RewriteFailure> _instanceErrors = new();
     readonly List<QuoteInstantiation> _ownedQuotes = [];
-    internal QuoteDiagnostic? RewriteError(int node) => _instanceErrors.GetValueOrDefault(node);
+    internal QuoteDiagnostic? RewriteError(int node) => _instanceErrors.GetValueOrDefault(node)?.Diagnostic;
+    internal QuoteHelperSource? RewriteErrorSource(int node) => _instanceErrors.GetValueOrDefault(node)?.Source;
 
     internal void ReleaseQuotes()
     {
@@ -44,6 +46,7 @@ public sealed partial class FileSemantics
             return null;
         if (_instances.TryGetValue(node, out var known)) return known;
         RewriteInstance? instance = null;
+        var selectedSource = spec.HelperSource;
         if (_chain.Contains(rule)) _cyclic.Add(node);
         else
         {
@@ -58,7 +61,6 @@ public sealed partial class FileSemantics
                     : QuoteArgument.Node(new QuoteNode(Tree, child));
             }
             SyntaxTree? template;
-            var selectedSource = spec.HelperSource;
             if (spec.MatchHelperName is { } helperName)
             {
                 var helper = _language.Modules.SelectMany(module => module.QuoteHelpers).Single(h => h.Name == helperName);
@@ -97,7 +99,7 @@ public sealed partial class FileSemantics
 
         RewriteInstance? Failure(QuoteDiagnostic diagnostic)
         {
-            _instanceErrors[node] = diagnostic;
+            _instanceErrors[node] = new(diagnostic, selectedSource);
             _instances[node] = null;
             return null;
         }

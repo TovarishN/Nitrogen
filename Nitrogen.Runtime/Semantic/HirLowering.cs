@@ -88,19 +88,26 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     public SemanticCheckScope CheckScope { get; } = checkScope;
     public LoweringAdmission Admission { get; } = admission;
     public SourceOrigin Origin(int node) => new(File.Path, SnapshotId, node, File.Tree.Span(node));
-    public void Report(string code, SourceOrigin origin, string message)
+    public void Report(string code, SourceOrigin origin, string message) => Report(code, origin, message, []);
+
+    public void Report(string code, SourceOrigin origin, string message, IReadOnlyList<CompositionDiagnosticLocation> related)
     {
+        ArgumentNullException.ThrowIfNull(related);
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentNullException.ThrowIfNull(message);
-        if (_caller is null) _reported.Add(new LoweringDiagnostic(code, origin, message));
+        if (_caller is null) _reported.Add(new LoweringDiagnostic(code, origin, message)
+        { Related = Array.AsReadOnly(related.ToArray()) });
         else if (_rewrite is { } rewrite && origin.Path == File.Path)
-            _caller.Report(code, rewrite.Use, $"in the expansion of {rewrite.Rule}: {message}");
-        else _caller.Report(code, origin, message);
+            _caller.Report(code, rewrite.Use, $"in the expansion of {rewrite.Rule}: {message}", related);
+        else _caller.Report(code, origin, message, related);
     }
     internal IReadOnlyList<LoweringDiagnostic> Reported => _reported;
 }
 
-public sealed record LoweringDiagnostic(string Code, SourceOrigin Origin, string Message);
+public sealed record LoweringDiagnostic(string Code, SourceOrigin Origin, string Message)
+{
+    public IReadOnlyList<CompositionDiagnosticLocation> Related { get; init; } = [];
+}
 public sealed record LoweringResult(IReadOnlyList<HirNode> Roots, IReadOnlyList<LoweringDiagnostic> Diagnostics);
 
 public static class HirLowering

@@ -88,4 +88,38 @@ public sealed class QuoteHelperRuntimeTests
         Assert.Empty(lowered.Diagnostics);
         Assert.Equal(expected, TemplateListInstantiationTests.Shape(Assert.Single(lowered.Roots)));
     }
+
+    [Fact]
+    public void Selected_arm_construction_failures_keep_the_result_definition_as_related_source()
+    {
+        var language=CreateLanguage();
+        using var parsed=language.ParseTemplate("requiredmiddle(f(1,2))","QuoteHelpers.Expr",new Dictionary<string,string>());
+        var project=new Nitrogen.Binding.Project(language);
+        project.Set("caller.quote",parsed.Tree);
+        using var semantics=new Nitrogen.Semantics.ProjectSemantics(project);
+        var lowered=HirLowering.Lower(semantics["caller.quote"],language.SemanticCatalog);
+        var error=Assert.Single(lowered.Diagnostics);
+        Assert.Equal("NH0010",error.Code);
+        Assert.Equal("caller.quote",error.Origin.Path);
+        var related=Assert.Single(error.Related);
+        var expected=QuoteHelpersModule.Instance.QuoteHelpers.Single(helper=>helper.Name=="QuoteHelpers.RequireMiddle").Match!.Arms[0].ResultSource;
+        Assert.Equal(expected.Path,related.Path);
+        Assert.Equal(new TextSpan(expected.Start,expected.Length),related.Span);
+    }
+
+    [Fact]
+    public void Editor_diagnostics_keep_the_selected_arm_for_failed_construction()
+    {
+        var language=CreateLanguage();
+        var registry=new Nitrogen.LanguageService.LanguageRegistry();
+        registry.Add(new("QuoteHelpers",language,new Dictionary<string,Rule> { [".quotehelpers"]=QuoteHelpersModule.Program }));
+        using var service=new Nitrogen.LanguageService.NitrogenLanguageService(registry);
+        const string uri="file:///tmp/selected-arm.quotehelpers";
+        service.Open(uri,1,"requiredmiddle(f(1,2));");
+        var error=Assert.Single(service.Diagnostics(uri),diagnostic=>diagnostic.Code=="NH0010");
+        var related=Assert.Single(error.Related!);
+        var expected=QuoteHelpersModule.Instance.QuoteHelpers.Single(helper=>helper.Name=="QuoteHelpers.RequireMiddle").Match!.Arms[0].ResultSource;
+        Assert.Equal(new Uri(expected.Path).AbsoluteUri,related.Uri);
+        Assert.Equal(new Nitrogen.LanguageService.LineMap(File.ReadAllText(expected.Path)).RangeOf(new(expected.Start,expected.Length)),related.Range);
+    }
 }

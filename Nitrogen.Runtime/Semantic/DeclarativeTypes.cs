@@ -569,7 +569,9 @@ public sealed class DeclarativeTypes
         {
             if (_file.RewriteError(node) is { } error)
             {
-                context.Report(error.Code == "NQ0005" ? "NH0010" : "NH0009", use, error.Message);
+                IReadOnlyList<CompositionDiagnosticLocation> related = _file.RewriteErrorSource(node) is { } source
+                    ? new[] { new CompositionDiagnosticLocation(source.Path, new(source.Start, source.Length)) } : [];
+                context.Report(error.Code == "NQ0005" ? "NH0010" : "NH0009", use, error.Message, related);
                 return null;
             }
             string reason = _file.Tree.Language!.RewriteTemplate(rule).Error ?? "it has no template";
