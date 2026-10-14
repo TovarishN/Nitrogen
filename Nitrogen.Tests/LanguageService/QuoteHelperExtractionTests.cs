@@ -209,5 +209,20 @@ public sealed class QuoteHelperExtractionTests : IDisposable
         Assert.Null(prepared.UnavailableReason);
         Assert.Contains("unrelated", service.ResolveQuoteHelperExtraction(new(prepared.Id!, Uri("sharedNew.ngr"), "Extracted", "Quote", false)).UnavailableReason!);
     }
+
+    [Fact]
+    public void Extraction_cannot_capture_an_existing_imported_helper_call()
+    {
+        string main = Grammar.Replace("syntax Program", "using Shared; syntax Program")
+            .Replace("| Wrap=", "| Existing=X:Expr \"existing\" precedence 30 rewrites Quote(X) | Wrap=");
+        using var service = Service(main);
+        File.WriteAllText(Path.Combine(_root, "shared.ngr"), "syntax module Shared { syntax function Quote(V:M.Expr):M.Expr=<[ x ]>; }");
+        int at = main.IndexOf("<[", StringComparison.Ordinal);
+        var lines = new LineMap(main);
+        var prepared = service.PrepareQuoteHelperExtraction(Uri("main.ngr"), new(lines.PositionOf(at + 3), lines.PositionOf(at + 3)));
+        Assert.Null(prepared.UnavailableReason);
+        var proposal = service.ResolveQuoteHelperExtraction(new(prepared.Id!, Uri("main.ngr"), "M", "Quote", true));
+        Assert.Contains("resolution", proposal.UnavailableReason!, StringComparison.OrdinalIgnoreCase);
+    }
     public void Dispose() => Directory.Delete(_root, true);
 }

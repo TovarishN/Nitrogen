@@ -151,12 +151,27 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Every reference to what the name at <paramref name="position"/> names, across the project; declarations first when asked.</summary>
     public IReadOnlyList<DocumentLocation> References(string uri, DocumentPosition position, bool includeDeclaration)
     {
-        if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is not null)
-            return helperIndex.References(new Uri(uri).LocalPath, position, includeDeclaration);
+        var helperIndex = QuoteHelperIndex(uri, position);
+        if (helperIndex is not null && helperIndex.At(new Uri(uri).LocalPath, position) is not null)
+        {
+            var helperReferences = helperIndex.References(new Uri(uri).LocalPath, position, includeDeclaration);
+            if (helperIndex.At(new Uri(uri).LocalPath, position)?.Kind == "category" &&
+                helperIndex.Definition(new Uri(uri).LocalPath, position).FirstOrDefault() is { } definition &&
+                GrammarRuleAt(definition.Uri, definition.Range.Start) is { } category)
+                return helperReferences.Concat(includeDeclaration ? category.Definitions.Concat(category.References) : category.References).Distinct().ToArray();
+            return helperReferences;
+        }
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpQuoteReferences(csharp, position, includeDeclaration);
         if (QuoteAt(uri, position) is { } quote) return QuoteReferences(quote, quote.Document.Lines.OffsetOf(position), includeDeclaration);
         if (GrammarRuleAt(uri, position) is { } grammar)
-            return (includeDeclaration ? grammar.Definitions.Concat(grammar.References) : grammar.References).Distinct().ToArray();
+        {
+            IEnumerable<DocumentLocation> references = includeDeclaration ? grammar.Definitions.Concat(grammar.References) : grammar.References;
+            if (helperIndex is not null)
+                foreach (var definition in grammar.Definitions)
+                    if (helperIndex.At(new Uri(definition.Uri).LocalPath, definition.Range.Start)?.Kind == "category")
+                        references = references.Concat(helperIndex.References(new Uri(definition.Uri).LocalPath, definition.Range.Start, includeDeclaration));
+            return references.Distinct().ToArray();
+        }
         if (AssistedNavigation(uri, position) is { } assisted)
             return AssistedReferences(assisted.Scope, assisted.Name, includeDeclaration ? assisted.Definitions : []);
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? References(inner.Uri, inner.Position, includeDeclaration) : [];

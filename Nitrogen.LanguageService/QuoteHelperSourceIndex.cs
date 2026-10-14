@@ -10,13 +10,16 @@ internal sealed class QuoteHelperSourceIndex
     readonly List<(string Path, ModuleDecl Module)> _modules = [];
     readonly List<Occurrence> _occurrences = [];
     readonly GrammarAnalysis _analysis;
+    readonly Language? _language;
+    readonly HashSet<string> _unparsedHelpers = new(StringComparer.Ordinal);
+    internal IEnumerable<string> Paths => _texts.Keys;
 
-    public QuoteHelperSourceIndex(IReadOnlyDictionary<string, string> texts, string? completingPath = null, int completingOffset = 0)
+    public QuoteHelperSourceIndex(IReadOnlyDictionary<string, string> texts, string? completingPath = null, int completingOffset = 0, Language? language = null, Func<Language?>? languageFactory = null)
     {
         _texts = texts;
         foreach (var (path, original) in texts)
         {
-            string text = original;
+            string text = DocumentSignatures.Read(original).MaskedText;
             var parsed = GrammarParser.Parse(text);
             if (parsed.File is null && path == completingPath)
             {
@@ -31,6 +34,7 @@ internal sealed class QuoteHelperSourceIndex
                 _modules.AddRange(file.Modules.Select(module => (path, module)));
         }
         _analysis = new(_modules.Select(m => m.Module));
+        _language = language ?? (_modules.Any(m => m.Module.Helpers.Count > 0) ? languageFactory?.Invoke() : null);
         foreach (var (path, module) in _modules)
         {
             foreach (var helper in module.Helpers)
@@ -43,13 +47,27 @@ internal sealed class QuoteHelperSourceIndex
                     string parameterId = id + ":parameter:" + parameter.Name.Name;
                     Add(parameterId, path, parameter.Name.Span, true, "parameter");
                     AddCategory(path, module, parameter.Category);
-                    foreach (var hole in QuotationWriter.Holes(helper.Body.Text, _analysis,
-                        _analysis.Helpers.Category(helper.ReturnCategory, module)).Where(h => h.Name == parameter.Name.Name))
+                }
+                var category = _analysis.Helpers.Category(helper.ReturnCategory, module);
+                var parameters = helper.Parameters.GroupBy(p => p.Name.Name).Select(group => group.First()).ToDictionary(p => p.Name.Name,
+                    p => new QuoteHole(_analysis.Helpers.Category(p.Category, module)?.Key ?? p.Category.Name, p.IsList));
+                try
+                {
+                    using var parsedBody = category is null ? null : _language?.ParseTemplate(helper.Body.Text, category.Key, parameters);
+                    if (parsedBody is not { Success: true }) { _unparsedHelpers.Add(id); continue; }
+                    var tree = parsedBody.Tree;
+                    for (int node = 0; node < tree.NodeCount; node++)
                     {
-                        int marker = hole.IsList ? 3 : 1;
-                        Add(parameterId, path, new(helper.Body.Span.Start + hole.Start + marker, hole.Name.Length), false, "parameter");
+                        if (tree.Kind(node) is not (SyntaxKinds.Hole or SyntaxKinds.ListHole)) continue;
+                        int marker = tree.Kind(node) == SyntaxKinds.ListHole ? 3 : 1;
+                        var span = tree.Span(node);
+                        string name = tree.GetText(node).ToString()[marker..];
+                        Add(id + ":parameter:" + name, path,
+                            new(helper.Body.Span.Start + span.Start + marker, name.Length), false, "parameter");
                     }
                 }
+                catch (ArgumentException) { _unparsedHelpers.Add(id); }
+
             }
             foreach (var rule in module.Rules)
                 if (rule is SyntaxRule syntax) Calls(path, module, syntax.Body, syntax.Clauses);
@@ -144,6 +162,8 @@ internal sealed class QuoteHelperSourceIndex
         if (target.Kind is not ("helper" or "parameter"))
             throw new RenameRefusedException("This syntax category/field is used by a quote helper; update its resolved consumers together.");
         if (!Regex.IsMatch(newName, @"^[A-Za-z_]\w*$")) throw new RenameRefusedException("Choose a valid helper/parameter name.");
+        if (target.Kind == "parameter" && _unparsedHelpers.Contains(target.Identity[..target.Identity.IndexOf(":parameter:", StringComparison.Ordinal)]))
+            throw new RenameRefusedException("The helper quote must parse before renaming its parameters.");
         var changed = new Dictionary<string, IReadOnlyList<DocumentEdit>>(StringComparer.Ordinal);
         var proposed = new Dictionary<string, string>(_texts, StringComparer.Ordinal);
         foreach (var group in _occurrences.Where(o => o.Identity == target.Identity).Distinct().GroupBy(o => o.Path))
@@ -155,8 +175,29 @@ internal sealed class QuoteHelperSourceIndex
                 text = text.Remove(occurrence.Span.Start, occurrence.Span.Length).Insert(occurrence.Span.Start, newName);
             proposed[group.Key] = text;
         }
-        var checkedGrammar = GrammarCompiler.Compile(proposed.Select(p => new GrammarInput(p.Key, p.Value, "Nitrogen.Rename")));
+        var checkedGrammar = GrammarCompiler.Compile(proposed.Select(p => new GrammarInput(p.Key, DocumentSignatures.Read(p.Value).MaskedText, "Nitrogen.Rename")));
         if (checkedGrammar.HasErrors) throw new RenameRefusedException("Rename would make the grammar invalid: " + checkedGrammar.Diagnostics.First().Diagnostic.Message);
+        var replacements = _occurrences.Where(o => o.Identity == target.Identity).DistinctBy(o => (o.Path, o.Span)).ToArray();
+        var sourceEdits = replacements.Select(o => new ExtractionTextEdit(new Uri(o.Path).AbsoluteUri, o.Span, newName)).ToArray();
+        var renames = target.Kind == "helper" ? new Dictionary<string, string>
+        {
+            [target.Identity["helper:".Length..]] = target.Identity["helper:".Length..(target.Identity.LastIndexOf('.') + 1)] + newName,
+        } : null;
+        if (!QuoteHelperBindings.Preserved(_texts.Select(p => new ExtractionSource(new Uri(p.Key).AbsoluteUri, p.Value)),
+            proposed.Select(p => new ExtractionSource(new Uri(p.Key).AbsoluteUri, p.Value)), sourceEdits, renames))
+            throw new RenameRefusedException("Rename would change an existing helper call's resolution.");
+        var after = new QuoteHelperSourceIndex(proposed, language: _language);
+        string Expected(string identity) => target.Kind == "helper"
+            ? identity == target.Identity || identity.StartsWith(target.Identity + ":parameter:", StringComparison.Ordinal)
+                ? "helper:" + renames![target.Identity["helper:".Length..]] + identity[target.Identity.Length..] : identity
+            : identity == target.Identity ? target.Identity[..(target.Identity.LastIndexOf(':') + 1)] + newName : identity;
+        var beforeParameters = _occurrences.Where(o => o.Kind == "parameter").Distinct()
+            .Select(o => (Identity: Expected(o.Identity), o.Path, Start: o.Span.Start + replacements.Where(e => e.Path == o.Path && e.Span.End <= o.Span.Start).Sum(e => newName.Length - e.Span.Length), o.Declaration))
+            .ToHashSet();
+        var afterParameters = after._occurrences.Where(o => o.Kind == "parameter").Distinct()
+            .Select(o => (o.Identity, o.Path, o.Span.Start, o.Declaration)).ToHashSet();
+        if (!beforeParameters.SetEquals(afterParameters))
+            throw new RenameRefusedException("Rename would change the helper quote's parsed parameter structure.");
         return changed;
     }
 }

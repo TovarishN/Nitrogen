@@ -17,9 +17,20 @@ public sealed partial class NitrogenLanguageService
             !DocumentSignatures.Read(TextOf(uri) ?? "").Signatures.Any(s => s.Mode == SignatureMode.Grammar)) return null;
         var configured = _grammarLanguages.FirstOrDefault(l => l.Workspace.Paths.Contains(path, StringComparer.Ordinal));
         var files = configured?.Files() ?? QuoteGrammarFiles(path) ?? NavigationScopeFor(path)?.Grammars.ToList() ?? [path];
-        var texts = files.Append(path).Distinct().Select(file => (Path: file, Text: ReadNavigationText(file)))
+        var connected = files.Append(path).ToHashSet(StringComparer.Ordinal);
+        var compositions = _grammarLanguages.Select(l => (IEnumerable<string>)l.Files())
+            .Concat(_signatureDefinitions.Values.Select(d => d.Grammars.Select(g => g.Path))).ToArray();
+        bool grew;
+        do
+        {
+            int count = connected.Count;
+            foreach (var composition in compositions)
+                if (composition.Any(connected.Contains)) connected.UnionWith(composition);
+            grew = connected.Count != count;
+        } while (grew);
+        var texts = connected.Select(file => (Path: file, Text: ReadNavigationText(file)))
             .Where(input => input.Text is not null).ToDictionary(input => input.Path, input => input.Text!, StringComparer.Ordinal);
-        return new(texts, completing ? path : null, completing ? document.Lines.OffsetOf(position) : 0);
+        return new(texts, completing ? path : null, completing ? document.Lines.OffsetOf(position) : 0, languageFactory: () => LanguageForQuote(uri));
     }
 
     IReadOnlyDictionary<string, IReadOnlyList<DocumentEdit>>? RenameQuoteHelper(string uri, DocumentPosition position, string newName)

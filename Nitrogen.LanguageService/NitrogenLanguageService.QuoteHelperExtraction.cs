@@ -140,6 +140,9 @@ public sealed partial class NitrogenLanguageService
                 if (ValidateExtractionComposition(before.Definition) is { } baseline) return Refuse("The original language must compile: " + baseline);
                 var after = proposed.FirstOrDefault(c => c.Id == before.Id);
                 if (after is null || !after.Definition.Grammars.Any(g => SamePath(g.Path, destinationPath))) return Refuse("The proposed configuration does not compose the helper module.");
+                if (!QuoteHelperBindings.Preserved(before.Definition.Grammars.Select(g => new ExtractionSource(new Uri(g.Path).AbsoluteUri, g.Text)),
+                    after.Definition.Grammars.Select(g => new ExtractionSource(new Uri(g.Path).AbsoluteUri, g.Text)), edits))
+                    return Refuse("Extraction would change an existing helper call's resolution; choose a different helper name or module.");
                 if (ValidateExtractionComposition(after.Definition) is { } error) return Refuse("Extraction cannot preserve the language: " + error);
             }
             if (Changed(ExtractionInputs(pending.Root)) is { } finalChanged) return Refuse(Stale(finalChanged));

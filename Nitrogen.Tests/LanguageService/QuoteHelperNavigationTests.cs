@@ -89,5 +89,82 @@ public sealed class QuoteHelperNavigationTests : IDisposable
         Assert.Equal(2, Assert.Single(edits).Value.Count);
     }
 
+
+    [Fact]
+    public void Renaming_a_local_helper_cannot_capture_an_imported_call()
+    {
+        using var service = Service();
+        string main = Main.Replace("syntax Program", "syntax function Local(V:E):E=<[ x ]>; syntax Program");
+        service.Change(Uri("main.ngr"), 2, main);
+        var error = Assert.Throws<RenameRefusedException>(() => service.Rename(Uri("main.ngr"), At(main, "Local(V"), "F"));
+        Assert.Contains("resolution", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
+    [Fact]
+    public void Signed_non_ngr_helpers_support_navigation_rename_and_quoted_keywords()
+    {
+        string text = "#!nitrogen grammar\nlanguage M { start M.Program; extensions \".m\"; }\n" + Main + "\n" + Shared;
+        File.WriteAllText(Path.Combine(_root, "main.syntax"), text);
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.ConfigureWorkspace(_root);
+        service.Open(Uri("main.syntax"), 1, text);
+        Assert.Empty(service.Diagnostics(Uri("main.syntax")));
+        Assert.Equal(At(text, "F(V"), Assert.Single(service.Definition(Uri("main.syntax"), At(text, "F(X)"))).Range.Start);
+        Assert.Equal(2, service.Rename(Uri("main.syntax"), At(text, "F(V"), "Expand").Values.Sum(e => e.Count));
+        Assert.Equal(At(text, "V:M.E"), Assert.Single(service.Definition(Uri("main.syntax"), At(text, "$V", 1))).Range.Start);
+        Assert.NotEmpty(service.Definition(Uri("main.syntax"), At(text, "f($V)")));
+    }
+
+    [Fact]
+    public void Parameter_rename_uses_actual_holes_even_when_a_token_matches_the_same_text()
+    {
+        const string main = "syntax module M { token Dollar=\"$V\"; syntax Program=E; syntax function F(V:E):E=<[ $V ]>; extensible syntax E { | Atom=\"x\" | Money=Dollar | Wrap=X:E \"wrap\" precedence 30 rewrites F(X) } }";
+        using var service = Service();
+        service.Change(Uri("main.ngr"), 2, main);
+        service.Change(Uri("shared.ngr"), 2, "syntax module Shared { }");
+        var changes = service.Rename(Uri("main.ngr"), At(main, "V:E"), "Input");
+        string changed = RenameTests.Apply(main, changes[Uri("main.ngr")]);
+        Assert.Contains("F(Input:E):E=<[ $Input ]>", changed);
+        Assert.Contains("token Dollar=\"$V\"", changed);
+    }
+    [Fact]
+    public void Parameter_rename_cannot_turn_opaque_token_text_into_an_additional_hole()
+    {
+        const string main = "syntax module M { token Dollar=\"$Input\"; syntax Program=E; syntax function F(V:E):E=<[ f($V, $Input) ]>; extensible syntax E { | Atom=\"x\" | Money=Dollar | Call=\"f\" \"(\" A:E \",\" B:E \")\" | Wrap=X:E \"wrap\" precedence 30 rewrites F(X) } }";
+        using var service = Service();
+        service.Change(Uri("shared.ngr"), 2, "syntax module Shared { }");
+        service.Change(Uri("main.ngr"), 2, main);
+        Assert.Throws<RenameRefusedException>(() => service.Rename(Uri("main.ngr"), At(main, "V:E"), "Input"));
+    }
+
+    [Fact]
+    public void Shared_helper_rename_updates_every_known_composition()
+    {
+        const string common = "syntax module Common { extensible syntax E { | Atom=\"x\" } }";
+        const string shared = "syntax module Shared { syntax function F(V:Common.E):Common.E=<[ $V ]>; }";
+        const string a = "syntax module A { using Common; using Shared; syntax Program=E; extend syntax Common.E { | Wrap=\"a\" X:E rewrites F(X) } }";
+        string b = a.Replace("module A", "module B").Replace("Wrap=\"a\"", "Other=\"b\"");
+        File.WriteAllText(Path.Combine(_root, "common.ngr"), common);
+        File.WriteAllText(Path.Combine(_root, "shared.ngr"), shared);
+        File.WriteAllText(Path.Combine(_root, "a.ngr"), a);
+        File.WriteAllText(Path.Combine(_root, "b.ngr"), b);
+        File.WriteAllText(Path.Combine(_root, "nitrogen.json"), "{\"languages\":[{\"name\":\"A\",\"extensions\":[\".a\"],\"start\":\"A.Program\",\"grammars\":[\"common.ngr\",\"shared.ngr\",\"a.ngr\"]},{\"name\":\"B\",\"extensions\":[\".b\"],\"start\":\"B.Program\",\"grammars\":[\"common.ngr\",\"shared.ngr\",\"b.ngr\"]}]}");
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.ConfigureWorkspace(_root);
+        service.Open(Uri("shared.ngr"), 1, shared);
+        var changes = service.Rename(Uri("shared.ngr"), At(shared, "F(V"), "G");
+        Assert.Equal(new[] { Uri("a.ngr"), Uri("b.ngr"), Uri("shared.ngr") }.Order(), changes.Keys.Order());
+        Assert.All(changes.Values, edits => Assert.Single(edits));
+    }
+    [Fact]
+    public void Category_references_include_ordinary_grammar_uses_and_helper_annotations()
+    {
+        using var service = Service();
+        var references = service.References(Uri("main.ngr"), At(Main, "syntax E", 7), true);
+        Assert.Contains(references, r => r.Uri == Uri("main.ngr") && r.Range.Start == At(Main, "Program=E", 8));
+        Assert.Contains(references, r => r.Uri == Uri("main.ngr") && r.Range.Start == At(Main, "Wrap=X:E", 7));
+        Assert.Contains(references, r => r.Uri == Uri("shared.ngr") && r.Range.Start == At(Shared, "M.E"));
+        Assert.Equal(references.OrderBy(r => r.Uri).ThenBy(r => r.Range.Start.Line).ThenBy(r => r.Range.Start.Character),
+            service.References(Uri("main.ngr"), At(Main, "Program=E", 8), true).OrderBy(r => r.Uri).ThenBy(r => r.Range.Start.Line).ThenBy(r => r.Range.Start.Character));
+    }
     public void Dispose() => Directory.Delete(_root, true);
 }
