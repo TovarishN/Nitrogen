@@ -1,6 +1,6 @@
 import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { extractGrammar, ExtractionHost, ExtractionSelection, extractionPreview, confirmedExtractionEdit } from './extractGrammarFlow';
+import { extractQuoteHelper, extractGrammar, ExtractionHost, ExtractionSelection, extractionPreview, confirmedExtractionEdit } from './extractGrammarFlow';
 
 const selection: ExtractionSelection = { textDocument: { uri: 'file:///a.ngr' }, range: { start: { line: 0, character: 18 }, end: { line: 0, character: 36 } } };
 function fixture() {
@@ -130,4 +130,21 @@ test('successful extraction reports completion for the applied proposal only', a
   host.apply = async () => false;
   await extractGrammar(host, selection);
   assert.equal(completed, false);
+});
+
+test('quote helper collects typed request and revalidates before shared apply', async () => {
+  const { host, calls } = fixture();
+  const requests: unknown[] = [];
+  await extractQuoteHelper({ ...host,
+    prepare: async () => ({ id: 'quote', suggestedHelperName: 'WrapQuote', sourceModule: 'M', sourceUri: 'file:///a.ngr' }),
+    helperInputs: async () => ({ destinationUri: 'file:///a.ngr', module: 'M', helperName: 'WrapQuote', existingDestination: true }),
+    resolve: async request => { requests.push(request); return { action: { edit: {} }, expectedDocuments: [], notices: [] }; },
+  }, selection);
+  assert.deepEqual(requests, Array(2).fill({ id: 'quote', destinationUri: 'file:///a.ngr', module: 'M', helperName: 'WrapQuote', existingDestination: true }));
+  assert.deepEqual(calls, ['review', 'apply', 'open:file:///a.ngr']);
+});
+test('quote helper cancellation never resolves or applies', async () => {
+  const { host, calls } = fixture();
+  await extractQuoteHelper({ ...host, prepare: async () => ({ id: 'quote' }), helperInputs: async () => undefined }, selection);
+  assert.deepEqual(calls, []);
 });

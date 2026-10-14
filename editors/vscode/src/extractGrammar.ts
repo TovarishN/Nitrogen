@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { commands, ExtensionContext, StatusBarAlignment, Uri, window, workspace } from 'vscode';
 import type { LanguageClient } from 'vscode-languageclient/node';
-import { extractGrammar, ExtractionHost, ExtractionPreparation, ExtractionResolution, ExtractionSelection, extractionPreview, confirmedExtractionEdit } from './extractGrammarFlow';
+import { extractQuoteHelper, QuoteHelperPreparation, extractGrammar, ExtractionHost, ExtractionPreparation, ExtractionResolution, ExtractionSelection, extractionPreview, confirmedExtractionEdit } from './extractGrammarFlow';
 import { ExtractionReview } from './extractionReview';
 
 export function registerGrammarExtraction(context: ExtensionContext, client: LanguageClient): void {
@@ -28,7 +28,9 @@ export function registerGrammarExtraction(context: ExtensionContext, client: Lan
   context.subscriptions.push(workspace.registerTextDocumentContentProvider('nitrogen-extraction', {
     provideTextDocumentContent: uri => previews.get(uri.toString()) ?? '',
   }));
-  context.subscriptions.push(commands.registerCommand('nitrogen.extractGrammar', async (argument?: ExtractionSelection) => {
+  const runExtraction = async (helper: boolean, argument?: ExtractionSelection): Promise<void> => {
+    const command = helper ? 'nitrogen.extractQuoteHelper' : 'nitrogen.extractGrammar';
+    const title = helper ? 'Extract Quote Helper' : 'Extract Block';
     if (running) {
       void window.showWarningMessage('An extraction is already in progress. Apply or cancel the current review first.');
       return;
@@ -44,7 +46,7 @@ export function registerGrammarExtraction(context: ExtensionContext, client: Lan
         if (choice !== 'Retry') return;
         // Restore the source's current editor selection, never the stale proposal range.
         await window.showTextDocument(Uri.parse(selection.textDocument.uri), { preview: false });
-        await commands.executeCommand('nitrogen.extractGrammar');
+        await commands.executeCommand(command);
       }).then(undefined, error => {
         void window.showWarningMessage('Could not retry extraction: ' + String(error));
       });
@@ -54,14 +56,14 @@ export function registerGrammarExtraction(context: ExtensionContext, client: Lan
       destination: async fileName => {
         const source = Uri.parse(selection.textDocument.uri);
         const selected = await window.showSaveDialog({
-          title: 'Extract Block — destination grammar', saveLabel: 'Choose destination',
+          title: `${title} — destination grammar`, saveLabel: 'Choose destination',
           defaultUri: source.with({ path: path.posix.join(path.posix.dirname(source.path), fileName) }),
           filters: { 'Nitrogen grammar': ['ngr'] },
         });
         return selected?.toString();
       },
       moduleName: suggested => Promise.resolve(window.showInputBox({
-        title: 'Extract Block — module name', value: suggested, prompt: 'Name of the reusable syntax module',
+        title: `${title} — module name`, value: suggested, prompt: 'Name of the reusable syntax module',
         validateInput: value => /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$/.test(value)
           ? undefined : 'Use a module name such as Shared.Expressions.',
       })),
@@ -78,7 +80,7 @@ export function registerGrammarExtraction(context: ExtensionContext, client: Lan
           previews.set(after.toString(), change.after);
           return [Uri.parse(change.uri), before, after];
         });
-        await commands.executeCommand('vscode.changes', 'Extract Block — review all changes', diffs);
+        await commands.executeCommand('vscode.changes', `${title} — review all changes`, diffs);
         applyButton.text = '$(check) Apply all changes';
         applyButton.command = 'nitrogen.applyGrammarExtraction';
         applyButton.tooltip = `Apply the complete extraction to ${changes.length} files. ${result.notices.join(' ')}`;
@@ -116,7 +118,38 @@ export function registerGrammarExtraction(context: ExtensionContext, client: Lan
       warn,
     };
     running = true;
-    try { await extractGrammar(host, selection); }
+    try {
+      if (!helper) await extractGrammar(host, selection);
+      else await extractQuoteHelper({ ...host,
+        prepare: value => client.sendRequest<QuoteHelperPreparation>('nitrogen/prepareQuoteHelperExtraction', value),
+        resolve: request => client.sendRequest<ExtractionResolution>('nitrogen/resolveQuoteHelperExtraction', request),
+        helperInputs: async prepared => {
+          const helperName = await window.showInputBox({ title: 'Extract Quote Helper — name',
+            value: prepared.suggestedHelperName, prompt: 'Name of the reusable quote helper',
+            validateInput: value => /^[A-Za-z_]\w*$/.test(value) ? undefined : 'Use a helper name such as FortnightDuration.',
+          });
+          if (helperName === undefined) return;
+          const kind = await window.showQuickPick(['Current module', 'Existing module', 'New module'],
+            { title: 'Extract Quote Helper — destination', placeHolder: 'Choose where to declare the helper' });
+          if (!kind) return;
+          if (kind === 'Current module') return { helperName, destinationUri: prepared.sourceUri!, module: prepared.sourceModule!, existingDestination: true };
+          if (kind === 'Existing module') {
+            const target = await window.showQuickPick((prepared.destinations ?? []).map(d => ({
+              label: d.module, description: workspace.asRelativePath(Uri.parse(d.uri)), target: d,
+            })), { title: 'Extract Quote Helper — existing module', matchOnDescription: true });
+            return target && { helperName, destinationUri: target.target.uri, module: target.target.module, existingDestination: true };
+          }
+          const destinationUri = await host.destination('Shared.ngr');
+          if (!destinationUri) return;
+          const module = await host.moduleName('Shared');
+          if (module === undefined) return;
+          return { helperName, destinationUri, module, existingDestination: false };
+        },
+      }, selection);
+    }
     finally { running = false; review.cancel(); applyButton.hide(); }
-  }));
+  };
+  context.subscriptions.push(
+    commands.registerCommand('nitrogen.extractGrammar', argument => runExtraction(false, argument)),
+    commands.registerCommand('nitrogen.extractQuoteHelper', argument => runExtraction(true, argument)));
 }

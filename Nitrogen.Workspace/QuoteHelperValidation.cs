@@ -12,9 +12,17 @@ public static class QuoteHelperValidation
         var files = inputs.ToArray();
         if (!files.Any(input => GrammarParser.Parse(input.Text).File?.Modules.Any(m => m.Helpers.Count > 0) == true))
             return [];
+        using var snapshot = CompileSyntax(files);
+        return snapshot.Diagnostics;
+    }
+
+    /// <summary>Compiles a disposable parser without loading configured semantic helpers.</summary>
+    public static WorkspaceSnapshot CompileSyntax(IEnumerable<GrammarInput> inputs)
+    {
+        var files = inputs.ToArray();
         var emitted = GrammarCompiler.CompileQuotationSyntax(files);
         if (emitted.HasErrors)
-            return emitted.Diagnostics.Select(d => new WorkspaceDiagnostic(d.Path, 1, 1, d.Diagnostic.Code, d.Diagnostic.Message, true)).ToArray();
+            return new(0, emitted.Diagnostics.Select(d => new WorkspaceDiagnostic(d.Path, 1, 1, d.Diagnostic.Code, d.Diagnostic.Message, true)).ToArray());
         var references = GrammarWorkspace.QuoteReferences;
         var compilation = CSharpCompilation.Create("NitrogenQuoteValidation" + Guid.NewGuid().ToString("N"),
             emitted.Sources.Select(source => CSharpSyntaxTree.ParseText(source.Code, new CSharpParseOptions(LanguageVersion.Latest))),
@@ -22,18 +30,19 @@ public static class QuoteHelperValidation
         using var image = new MemoryStream();
         var result = compilation.Emit(image);
         if (!result.Success)
-            return result.Diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
-                .Select(d => new WorkspaceDiagnostic("", 1, 1, d.Id, d.GetMessage(), true)).ToArray();
+            return new(0, result.Diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+                .Select(d => new WorkspaceDiagnostic("", 1, 1, d.Id, d.GetMessage(), true)).ToArray());
         image.Position = 0;
         var context = new WorkspaceLoadContext();
         try
         {
             var assembly = context.LoadFromStream(image);
             var builder = new LanguageBuilder();
-            foreach (var type in assembly.GetTypes().Where(t => t.IsSubclassOf(typeof(SyntaxModule)) && !t.IsAbstract))
-                builder.Add((SyntaxModule)type.GetField("Instance")!.GetValue(null)!);
-            builder.TryBuild(out _, out var diagnostics);
-            return diagnostics.Select(diagnostic =>
+            var modules = assembly.GetTypes().Where(t => t.IsSubclassOf(typeof(SyntaxModule)) && !t.IsAbstract)
+                .Select(type => (SyntaxModule)type.GetField("Instance")!.GetValue(null)!).ToArray();
+            foreach (var module in modules) builder.Add(module);
+            builder.TryBuild(out var language, out var diagnostics);
+            var errors = diagnostics.Select(diagnostic =>
             {
                 string path = diagnostic.Location?.Path ?? "";
                 int start = diagnostic.Location?.Span.Start ?? 0;
@@ -44,7 +53,10 @@ public static class QuoteHelperValidation
                     else column++;
                 return new WorkspaceDiagnostic(path, line, column, diagnostic.Code, diagnostic.Message, true);
             }).ToArray();
+            if (language is not null) return new(0, errors, language, context, modules);
+            context.Unload();
+            return new(0, errors);
         }
-        finally { context.Unload(); }
+        catch { context.Unload(); throw; }
     }
 }

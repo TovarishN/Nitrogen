@@ -16,6 +16,7 @@
   ],
   "contributes": {
     "commands": [
+      { "command": "nitrogen.extractQuoteHelper", "title": "Nitrogen: Extract Quote Helper\u2026" },
       {
         "command": "nitrogen.extractGrammar",
         "title": "Nitrogen: Extract Block\u2026"
