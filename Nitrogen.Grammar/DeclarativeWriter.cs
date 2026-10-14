@@ -92,6 +92,7 @@ internal static class DeclarativeWriter
             {
                 var resolved = model.Analysis.Helpers.Bind(helperCall, info.Module,
                     kind.Alternative?.Body ?? ((SyntaxRule)kind.Rule!).Body, Category(model, info, kind), implicitModule)!;
+                if (resolved.Symbol.Declaration.Match is not null) throw new InvalidOperationException("Match helpers require pattern-aware emission.");
                 text = resolved.Symbol.Declaration.Body.Text;
                 var sourceSpan = resolved.Symbol.Declaration.Body.Span;
                 helperSource = " { HelperSource = new(" + CSharpText.Literal(model.InputOf(resolved.Symbol.Module)?.Path ?? "") +

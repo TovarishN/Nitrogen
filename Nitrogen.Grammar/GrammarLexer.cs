@@ -20,6 +20,7 @@ internal enum TokenKind
     Semicolon,
     Colon,
     Equals,
+    Arrow,
     Bar,
     Slash,
     Question,
@@ -110,6 +111,11 @@ internal static class GrammarLexer
             return new GrammarToken(TokenKind.DotDot, start, 2, "..");
         }
 
+        if (c == '=' && i + 1 < text.Length && text[i + 1] == '>')
+        {
+            i += 2;
+            return new GrammarToken(TokenKind.Arrow, start, 2, "=>");
+        }
         var punctuation = c switch
         {
             '{' => TokenKind.LBrace,

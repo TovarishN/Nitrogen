@@ -16,6 +16,9 @@ public static class GrammarSemantics
         public static readonly SemanticType LanguageSetting = Named("LanguageSetting");
         public static readonly SemanticType Module = Named("Module");
         public static readonly SemanticType QuoteParameter = Named("QuoteParameter");
+        public static readonly SemanticType QuoteMatchBody = Named("QuoteMatchBody");
+        public static readonly SemanticType QuoteMatchArm = Named("QuoteMatchArm");
+        public static readonly SemanticType QuoteCaptures = Named("QuoteCaptures");
         public static readonly SemanticType Member = Named("Member");
         public static readonly SemanticType Except = Named("Except");
         public static readonly SemanticType End = Named("End");
@@ -35,7 +38,7 @@ public static class GrammarSemantics
 
         internal static readonly SemanticType[] All =
         [
-            File, LanguageDeclaration, LanguageSetting, Module, QuoteParameter, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
+            File, LanguageDeclaration, LanguageSetting, Module, QuoteParameter, QuoteMatchBody, QuoteMatchArm, QuoteCaptures, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
             OperationSpec, LoweringArgument, Semantics, SemanticItem, Expression, Tail, ClassItem,
         ];
 
@@ -62,6 +65,10 @@ public static class GrammarSemantics
         Op("Module", Types.Module, Text, Seq(Types.Member)),
         Op("Using", Types.Member, Text),
         Op("QuoteHelper", Types.Member, Text, Seq(Types.QuoteParameter), Text, Text),
+        Op("QuoteMatchHelper", Types.Member, Text, Seq(Types.QuoteParameter), Text, Types.QuoteMatchBody),
+        Op("QuoteMatchBody", Types.QuoteMatchBody, Text, Seq(Types.QuoteMatchArm), Text),
+        Op("QuoteMatchArm", Types.QuoteMatchArm, Opt(Types.QuoteCaptures), Text, Text),
+        Op("QuoteCaptures", Types.QuoteCaptures, Seq(Types.QuoteParameter)),
         Op("QuoteParameter", Types.QuoteParameter, Text, Text, Opt(Text)),
         Op("HelperRewrite", Types.Clause, Text, Seq(Text)),
         Op("Symbols", Types.Member, Seq(Text)),

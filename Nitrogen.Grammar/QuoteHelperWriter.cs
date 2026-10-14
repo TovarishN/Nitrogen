@@ -10,6 +10,7 @@ internal static class QuoteHelperWriter
         output.Append("    public override global::System.Collections.Generic.IReadOnlyList<global::Nitrogen.QuoteHelper> QuoteHelpers => new global::Nitrogen.QuoteHelper[]\n    {\n");
         foreach (var helper in info.Module.Helpers)
         {
+            if (helper.Match is not null) throw new InvalidOperationException("Match helpers require pattern-aware emission.");
             var category = model.Analysis.Helpers.Category(helper.ReturnCategory, info.Module)!;
             output.Append("        new(").Append(CSharpText.Literal(info.Module.Name + "." + helper.Name.Name)).Append(", ")
                 .Append(CSharpText.Literal(category.Key)).Append(", ").Append(CSharpText.Literal(helper.Body.Text))

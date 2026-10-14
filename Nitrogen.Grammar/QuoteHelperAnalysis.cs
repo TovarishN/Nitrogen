@@ -47,6 +47,8 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
         {
             if (!names.Add(helper.Name.Name))
                 report(GrammarCodes.DuplicateQuoteHelper, $"duplicate rule/helper '{helper.Name.Name}'", helper.Name.Span, module);
+            if (helper.Match is not null)
+                report(GrammarCodes.QuoteHelperShape, "match helper execution is not yet supported", helper.Match.Span, module);
             var category = Category(helper.ReturnCategory, module, report);
             var parameters = new Dictionary<string, QuoteParameter>(StringComparer.Ordinal);
             foreach (var parameter in helper.Parameters)

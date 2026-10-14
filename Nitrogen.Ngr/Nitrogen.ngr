@@ -51,9 +51,17 @@ syntax module Nitrogen
                           lowers Grammar.LanguagePresentationSetting(text Kind, text Name, text Value);
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
                           lowers Grammar.Module(text Name, sequence Grammar.Member Members);
-  syntax Member         = QuoteHelper / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax Member         = QuoteMatchHelper / QuoteHelper / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
   syntax QuoteHelper = "syntax" "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:TemplateString ";"
                        lowers Grammar.QuoteHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, text Body);
+  syntax QuoteMatchHelper = "syntax" "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:QuoteMatchBody ";"
+                       lowers Grammar.QuoteMatchHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, Body);
+  syntax QuoteMatchBody = "match" Selector:Identifier "{" Arms:QuoteMatchArm* "|" "_" "=>" Fallback:TemplateString ";" "}"
+                       lowers Grammar.QuoteMatchBody(text Selector, sequence Grammar.QuoteMatchArm Arms, text Fallback);
+  syntax QuoteMatchArm = "|" Captures:QuoteCaptures? Pattern:TemplateString "=>" Result:TemplateString ";"
+                       lowers Grammar.QuoteMatchArm(optional Grammar.QuoteCaptures Captures, text Pattern, text Result);
+  syntax QuoteCaptures = "(" Parameters:(QuoteParameter; ",")* ")"
+                       lowers Grammar.QuoteCaptures(sequence Grammar.QuoteParameter Parameters);
   syntax QuoteParameter = Name:Identifier ":" Category:QualifiedName List:ListMarker?
                        lowers Grammar.QuoteParameter(text Name, text Category, optional Core.Text List);
   syntax ListMarker = Value:"*" lowers text Core.Text Value;
