@@ -87,11 +87,15 @@ internal static class DeclarativeWriter
             string Qualified(GrammarSymbol symbol) => symbol.Module.Name + "." + symbol.Rule.Name;
             var holes = new List<string>();
             string text = lowers.Target?.Name ?? "";
+            string helperSource = "";
             if (lowers.HelperCall is { } helperCall)
             {
                 var resolved = model.Analysis.Helpers.Bind(helperCall, info.Module,
                     kind.Alternative?.Body ?? ((SyntaxRule)kind.Rule!).Body, Category(model, info, kind), implicitModule)!;
                 text = resolved.Symbol.Declaration.Body.Text;
+                var sourceSpan = resolved.Symbol.Declaration.Body.Span;
+                helperSource = " { HelperSource = new(" + CSharpText.Literal(model.InputOf(resolved.Symbol.Module)?.Path ?? "") +
+                    $", {sourceSpan.Start}, {sourceSpan.Length}) }}";
                 foreach (var input in resolved.Inputs)
                     holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(input.Parameter)}, {input.Child}, {CSharpText.Literal(input.Category)}" +
                         (input.IsList ? $", true, {input.Stride}" : "") + ")");
@@ -106,7 +110,7 @@ internal static class DeclarativeWriter
                 holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(name)}, {BindingWriter.ChildIndex(elements, name)}, {CSharpText.Literal(Qualified(rule))}{extra})");
             }
             extraArguments += $", rewrite: new global::Nitrogen.Semantic.RewriteSpec({CSharpText.Literal(text)}, " +
-                $"{CSharpText.Literal(Category(model, info, kind))}, new global::Nitrogen.Semantic.RewriteHole[] {{ {string.Join(", ", holes)} }})";
+                $"{CSharpText.Literal(Category(model, info, kind))}, new global::Nitrogen.Semantic.RewriteHole[] {{ {string.Join(", ", holes)} }})" + helperSource;
         }
         else if (lowers is not null)
         {

@@ -24,7 +24,10 @@ public enum DeclarativeForm
 public sealed record RewriteHole(string Name, int Child, string Rule, bool IsList = false, int Stride = 1);
 
 /// <summary>A rule's rewrite: the template text (verbatim), the qualified rule it parses as, and its holes.</summary>
-public sealed record RewriteSpec(string Text, string Category, IReadOnlyList<RewriteHole> Holes);
+public sealed record RewriteSpec(string Text, string Category, IReadOnlyList<RewriteHole> Holes)
+{
+    public QuoteHelperSource? HelperSource { get; init; }
+}
 
 /// <summary>One syntax kind's declarative typing and lowering clauses (issue 251), emitted by the generator as data.</summary>
 public sealed class DeclarativeRule

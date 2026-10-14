@@ -1,0 +1,162 @@
+using System.Text.RegularExpressions;
+using Nitrogen.Grammar;
+
+namespace Nitrogen.LanguageService;
+
+internal sealed class QuoteHelperSourceIndex
+{
+    internal sealed record Occurrence(string Identity, string Path, GrammarSpan Span, bool Declaration, string Kind);
+    readonly IReadOnlyDictionary<string, string> _texts;
+    readonly List<(string Path, ModuleDecl Module)> _modules = [];
+    readonly List<Occurrence> _occurrences = [];
+    readonly GrammarAnalysis _analysis;
+
+    public QuoteHelperSourceIndex(IReadOnlyDictionary<string, string> texts, string? completingPath = null, int completingOffset = 0)
+    {
+        _texts = texts;
+        foreach (var (path, original) in texts)
+        {
+            string text = original;
+            var parsed = GrammarParser.Parse(text);
+            if (parsed.File is null && path == completingPath)
+            {
+                var prefix = Regex.Match(text[..Math.Min(completingOffset, text.Length)], @"\brewrites\s+([A-Za-z_][\w.]*|)$");
+                if (prefix.Success)
+                {
+                    text = text[..prefix.Groups[1].Index] + "<[ ]>" + text[completingOffset..];
+                    parsed = GrammarParser.Parse(text);
+                }
+            }
+            if (parsed.File is { } file)
+                _modules.AddRange(file.Modules.Select(module => (path, module)));
+        }
+        _analysis = new(_modules.Select(m => m.Module));
+        foreach (var (path, module) in _modules)
+        {
+            foreach (var helper in module.Helpers)
+            {
+                string id = "helper:" + module.Name + "." + helper.Name.Name;
+                Add(id, path, helper.Name.Span, true, "helper");
+                AddCategory(path, module, helper.ReturnCategory);
+                foreach (var parameter in helper.Parameters)
+                {
+                    string parameterId = id + ":parameter:" + parameter.Name.Name;
+                    Add(parameterId, path, parameter.Name.Span, true, "parameter");
+                    AddCategory(path, module, parameter.Category);
+                    foreach (var hole in QuotationWriter.Holes(helper.Body.Text, _analysis,
+                        _analysis.Helpers.Category(helper.ReturnCategory, module)).Where(h => h.Name == parameter.Name.Name))
+                    {
+                        int marker = hole.IsList ? 3 : 1;
+                        Add(parameterId, path, new(helper.Body.Span.Start + hole.Start + marker, hole.Name.Length), false, "parameter");
+                    }
+                }
+            }
+            foreach (var rule in module.Rules)
+                if (rule is SyntaxRule syntax) Calls(path, module, syntax.Body, syntax.Clauses);
+                else if (rule is ExtensibleRule point)
+                    foreach (var alternative in point.Alternatives) Calls(path, module, alternative.Body, alternative.Clauses);
+            foreach (var extend in module.Extends)
+                foreach (var alternative in extend.Alternatives) Calls(path, module, alternative.Body, alternative.Clauses);
+        }
+    }
+
+    void Add(string id, string path, GrammarSpan span, bool declaration, string kind) =>
+        _occurrences.Add(new(id, path, span, declaration, kind));
+
+    void AddCategory(string path, ModuleDecl module, NameDecl name)
+    {
+        if (_analysis.Helpers.Category(name, module) is not { } category) return;
+        string id = "category:" + category.Key;
+        Add(id, path, name.Span, false, "category");
+        var owner = _modules.FirstOrDefault(m => ReferenceEquals(m.Module, category.Module));
+        if (owner.Module is null) return;
+        int position = category.Rule.Span.Start;
+        int skip = category.Rule is ExtensibleRule ? 2 : 1;
+        for (int i = 0; i < skip; i++) GrammarLexer.Next(_texts[owner.Path], ref position);
+        var token = GrammarLexer.Next(_texts[owner.Path], ref position);
+        Add(id, owner.Path, token.Span, true, "category");
+    }
+
+    void Calls(string path, ModuleDecl module, Expr body, IEnumerable<BindingClause> clauses)
+    {
+        foreach (var call in clauses.Select(c => c.HelperCall).OfType<QuoteHelperCall>())
+        {
+            if (_analysis.Helpers.Resolve(call.Helper.Name, module) is { } helper)
+            {
+                int dot = call.Helper.Name.LastIndexOf('.');
+                Add("helper:" + helper.Key, path,
+                    new(call.Helper.Span.Start + dot + 1, call.Helper.Name.Length - dot - 1), false, "helper");
+            }
+            foreach (var argument in call.Arguments)
+                if (SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>().FirstOrDefault(f => f.Label == argument.Name) is { } field)
+                {
+                    string id = "field:" + path + ":" + body.Span.Start + ":" + field.Label;
+                    Add(id, path, new(field.Span.Start, field.Label.Length), true, "field");
+                    Add(id, path, argument.Span, false, "field");
+                }
+        }
+    }
+
+    public Occurrence? At(string path, DocumentPosition position)
+    {
+        if (!_texts.TryGetValue(path, out string? text)) return null;
+        int offset = new LineMap(text).OffsetOf(position);
+        return _occurrences.FirstOrDefault(o => o.Path == path && o.Span.Start <= offset && offset < o.Span.End);
+    }
+
+    DocumentLocation Location(Occurrence occurrence) => new(new Uri(occurrence.Path).AbsoluteUri,
+        new LineMap(_texts[occurrence.Path]).RangeOf(new(occurrence.Span.Start, occurrence.Span.Length)));
+
+    public IReadOnlyList<DocumentLocation> Definition(string path, DocumentPosition position) => At(path, position) is { } at
+        ? _occurrences.Where(o => o.Identity == at.Identity && o.Declaration).Select(Location).Distinct().ToArray() : [];
+
+    public IReadOnlyList<DocumentLocation> References(string path, DocumentPosition position, bool includeDeclaration) => At(path, position) is { } at
+        ? _occurrences.Where(o => o.Identity == at.Identity && (includeDeclaration || !o.Declaration)).Select(Location).Distinct().ToArray() : [];
+
+    public IReadOnlyList<CompletionItem>? Completion(string path, DocumentPosition position)
+    {
+        if (!_texts.TryGetValue(path, out string? text)) return null;
+        int offset = new LineMap(text).OffsetOf(position);
+        var prefix = Regex.Match(text[..offset], @"\brewrites\s+([A-Za-z_][\w.]*|)$");
+        if (!prefix.Success) return null;
+        var module = _modules.FirstOrDefault(m => m.Path == path && m.Module.Span.Start <= offset && offset <= m.Module.Span.End).Module;
+        if (module is null) return [];
+        var visible = _modules.Where(m => ReferenceEquals(m.Module, module) || module.Usings.Any(u => u.Module == m.Module.Name));
+        var result = new List<CompletionItem>();
+        foreach (var (_, owner) in visible)
+            foreach (var helper in owner.Helpers)
+            {
+                var resolved = _analysis.Helpers.Resolve(helper.Name.Name, module);
+                string name = resolved?.Module.Name == owner.Name ? helper.Name.Name : owner.Name + "." + helper.Name.Name;
+                if (!name.StartsWith(prefix.Groups[1].Value, StringComparison.Ordinal)) continue;
+                string detail = name + "(" + string.Join(", ", helper.Parameters.Select(p => p.Name.Name + ": " +
+                    (_analysis.Helpers.Category(p.Category, owner)?.Key ?? p.Category.Name) + (p.IsList ? "*" : ""))) + ") : " +
+                    (_analysis.Helpers.Category(helper.ReturnCategory, owner)?.Key ?? helper.ReturnCategory.Name);
+                result.Add(new(name, CompletionKind.Function, detail,
+                    new LineMap(text).RangeOf(new(prefix.Groups[1].Index, offset - prefix.Groups[1].Index))));
+            }
+        return result;
+    }
+
+    public IReadOnlyDictionary<string, IReadOnlyList<DocumentEdit>> Rename(string path, DocumentPosition position, string newName)
+    {
+        var target = At(path, position) ?? throw new RenameRefusedException("Nothing to rename here.");
+        if (target.Kind is not ("helper" or "parameter"))
+            throw new RenameRefusedException("This syntax category/field is used by a quote helper; update its resolved consumers together.");
+        if (!Regex.IsMatch(newName, @"^[A-Za-z_]\w*$")) throw new RenameRefusedException("Choose a valid helper/parameter name.");
+        var changed = new Dictionary<string, IReadOnlyList<DocumentEdit>>(StringComparer.Ordinal);
+        var proposed = new Dictionary<string, string>(_texts, StringComparer.Ordinal);
+        foreach (var group in _occurrences.Where(o => o.Identity == target.Identity).Distinct().GroupBy(o => o.Path))
+        {
+            var edits = group.Select(o => new DocumentEdit(Location(o).Range, newName)).Distinct().ToArray();
+            changed[new Uri(group.Key).AbsoluteUri] = edits;
+            string text = proposed[group.Key];
+            foreach (var occurrence in group.DistinctBy(o => o.Span).OrderByDescending(o => o.Span.Start))
+                text = text.Remove(occurrence.Span.Start, occurrence.Span.Length).Insert(occurrence.Span.Start, newName);
+            proposed[group.Key] = text;
+        }
+        var checkedGrammar = GrammarCompiler.Compile(proposed.Select(p => new GrammarInput(p.Key, p.Value, "Nitrogen.Rename")));
+        if (checkedGrammar.HasErrors) throw new RenameRefusedException("Rename would make the grammar invalid: " + checkedGrammar.Diagnostics.First().Diagnostic.Message);
+        return changed;
+    }
+}

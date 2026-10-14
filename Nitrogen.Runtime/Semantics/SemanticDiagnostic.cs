@@ -2,6 +2,8 @@ namespace Nitrogen.Semantics;
 
 public sealed record SemanticDiagnostic(string Code, TextSpan Span, string Message)
 {
+    public IReadOnlyList<Nitrogen.Semantic.CompositionDiagnosticLocation> Related { get; init; } = [];
+
     public override string ToString() => $"{Code} {Span}: {Message}";
 }
 

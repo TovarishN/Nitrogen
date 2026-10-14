@@ -111,7 +111,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
             foreach (var diagnostic in SemanticsOf(document.Language)[uri].Diagnostics())
                 diagnostics.Add(new ServiceDiagnostic(document.Lines.RangeOf(diagnostic.Span),
                     diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal) ? ServiceSeverity.Warning : ServiceSeverity.Error,
-                    diagnostic.Code, diagnostic.Message));
+                    diagnostic.Code, diagnostic.Message, Related: QuoteHelperRelated(diagnostic.Related)));
         diagnostics.AddRange(LoweringDiagnostics(document, diagnostics));
         if (!IsEmbedded(uri)) diagnostics.AddRange(GrammarDiagnostics(uri));
         if (AssistOf(document) is { } assisted)
@@ -136,6 +136,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Where the name at <paramref name="position"/> is declared; built-ins have no location.</summary>
     public IReadOnlyList<DocumentLocation> Definition(string uri, DocumentPosition position)
     {
+        if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is not null)
+            return helperIndex.Definition(new Uri(uri).LocalPath, position);
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpNameAt(csharp, position) is { } found ? [found.Target] : [];
         if (QuoteAt(uri, position) is { } quote) return QuoteDefinitions(quote, quote.Document.Lines.OffsetOf(position));
         if (GrammarDeclarationDefinition(uri, position) is { Count: > 0 } declarations) return declarations;
@@ -149,6 +151,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Every reference to what the name at <paramref name="position"/> names, across the project; declarations first when asked.</summary>
     public IReadOnlyList<DocumentLocation> References(string uri, DocumentPosition position, bool includeDeclaration)
     {
+        if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is not null)
+            return helperIndex.References(new Uri(uri).LocalPath, position, includeDeclaration);
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpQuoteReferences(csharp, position, includeDeclaration);
         if (QuoteAt(uri, position) is { } quote) return QuoteReferences(quote, quote.Document.Lines.OffsetOf(position), includeDeclaration);
         if (GrammarRuleAt(uri, position) is { } grammar)
@@ -304,6 +308,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>Names visible at the cursor of the kinds the grammar allows there (those of the expected type first), then the keywords it expects; empty when not open.</summary>
     public IReadOnlyList<CompletionItem> Completion(string uri, DocumentPosition position)
     {
+        if (QuoteHelperIndex(uri, position, completing: true)?.Completion(new Uri(uri).LocalPath, position) is { } helperItems) return helperItems;
         if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpQuoteCompletion(csharp, position);
         if (QuoteAt(uri, position) is { } quote) return QuoteCompletion(quote, quote.Document.Lines.OffsetOf(position));
         if (_hosts.ContainsKey(uri))
@@ -327,6 +332,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>The name a rename at <paramref name="position"/> would change; throws <see cref="RenameRefusedException"/> when it cannot.</summary>
     public DocumentRange PrepareRename(string uri, DocumentPosition position)
     {
+        if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is { Kind: "helper" or "parameter" } helper)
+            return new LineMap(TextOf(uri)!).RangeOf(new(helper.Span.Start, helper.Span.Length));
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner ? OutOf(inner.Uri, PrepareRename(inner.Uri, inner.Position))
                 : throw new RenameRefusedException("Nothing to rename here.");
@@ -342,6 +349,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<DocumentEdit>> Rename(string uri, DocumentPosition position, string newName)
     {
+        if (Uri.TryCreate(uri, UriKind.Absolute, out var helperUri) && helperUri.IsFile && RenameQuoteHelper(uri, position, newName) is { } helperEdits)
+            return helperEdits;
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner ? Rename(inner.Uri, inner.Position, newName)
                 : throw new RenameRefusedException("Nothing to rename here.");

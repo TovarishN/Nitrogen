@@ -36,4 +36,27 @@ public sealed class DateCalcQuoteHelperTests
         }).ToArray();
         Assert.Equal(new[] { "3", "42 days", "42 days", "2026-11-02 Mon" }, lines);
     }
+    [Fact]
+    public void An_expansion_error_retains_the_helper_definition_as_related_source()
+    {
+        string root = Directory.CreateTempSubdirectory("datecalc-helper-origin-").FullName;
+        try
+        {
+            string directory = Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage");
+            foreach (string file in Directory.GetFiles(directory)) File.Copy(file, Path.Combine(root, Path.GetFileName(file)));
+            string path = Path.Combine(root, "DateCalc.ngr");
+            string grammar = File.ReadAllText(path).Replace("  extensible syntax Expr",
+                "  syntax function Duration(Value:Expr):Expr=<[ $Value * 2 weeks ]>;\n  extensible syntax Expr")
+                .Replace("rewrites <[ $Count * 2 weeks ]>", "rewrites Duration(Count)");
+            File.WriteAllText(path, grammar);
+            using var service = new Nitrogen.LanguageService.NitrogenLanguageService(Nitrogen.Cli.LspCommand.Registry());
+            service.ConfigureWorkspace(root);
+            string uri = new Uri(Path.Combine(root, "test.datecalc")).AbsoluteUri;
+            service.Open(uri, 1, "2026-10-05 fortnights;");
+            var diagnostic = Assert.Single(service.Diagnostics(uri), d => d.Code == "DC0002");
+            Assert.NotNull(diagnostic.Related);
+            Assert.Contains(diagnostic.Related!, location => location.Uri == new Uri(path).AbsoluteUri);
+        }
+        finally { Directory.Delete(root, true); }
+    }
 }

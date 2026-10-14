@@ -93,6 +93,19 @@ public sealed partial class NitrogenLanguageService
                                 Add(alternative, module.Name + "." + extensible.Name);
                             break;
                     }
+                foreach (var helper in module.Helpers)
+                {
+                    var parameters = helper.Parameters.Select(parameter =>
+                    {
+                        Expr category = new ReferenceExpr(parameter.Category.Name, parameter.Category.Span);
+                        if (parameter.IsList) category = new RepeatExpr(RepeatKind.ZeroOrMore, category, parameter.Span);
+                        return (Expr)new LabeledExpr(parameter.Name.Name, category, parameter.Name.Span);
+                    }).ToArray();
+                    rules.Add(new(fileUri, text, module, helper.Name.Name, helper.ReturnCategory.Name,
+                        new SequenceExpr(parameters, helper.Body.Span), helper.Span,
+                        new[] { new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
+                            helper.Body.Span, Target: new(helper.Body.Text, helper.Body.Span)) }));
+                }
                 foreach (var extend in module.Extends)
                     foreach (var alternative in extend.Alternatives)
                         Add(alternative, extend.Target);
