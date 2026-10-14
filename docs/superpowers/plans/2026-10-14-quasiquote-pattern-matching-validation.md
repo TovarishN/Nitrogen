@@ -19,7 +19,7 @@ passes 36/36; the complete Release suite passes **1757/1757** with no skipped te
 
 Logs: `/tmp/nitrogen-reference-hint-red.log`, `/tmp/nitrogen-reference-hint-final-green.log`,
 `/tmp/nitrogen-reference-hint-final-full.log`, and `/tmp/nitrogen-reference-hint-bundled-red.log`.
-The scratch VSIX is being refreshed for the user's next native check; visual confirmation remains pending.
+Canonical packaging passes with 0 build warnings/errors and all 1757 tests. VSIX and Rider bundled-server smoke checks pass. The actual VSIX server returns exactly one expected hint on each of the five sample statements; `/tmp/nitrogen-reference-hint-bundled-green.log` records the result. Build `0.14.0+build.171.8fcc9db3847428df76ba715b8ff2ea5ebe1fffb4` is installed in the isolated scratch VS Code profile, and its language-service DLL matches the verified artifact. Native visual confirmation remains pending a window reload. Packaging log: `/tmp/nitrogen-reference-hint-package.log`.
 
 ## Automated evidence before native acceptance
 
