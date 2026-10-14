@@ -33,7 +33,14 @@ public sealed unsafe partial class Language
                 string name = parsed.Tree.GetText(node)[(kind == SyntaxKinds.Hole ? 1 : 3)..].ToString();
                 used.Add(name);
                 if (kind == SyntaxKinds.ListHole)
-                    diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "This pattern list layout is not supported.", name));
+                {
+                    int parent = parsed.Tree.Parent(node);
+                    if (!parsed.Tree.TemplateLists.TryGetValue(parent, out var shape) ||
+                        shape.Category != copied[name].Category ||
+                        Enumerable.Range(0, parsed.Tree.ChildCount(parent)).Count(index =>
+                            parsed.Tree.Kind(parsed.Tree.Child(parent, index)) == SyntaxKinds.ListHole) != 1)
+                        diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "A physical list requires one capture at a supported item site.", name));
+                }
             }
             foreach (string name in copied.Keys)
                 if (!used.Contains(name)) diagnostics.Add(new("NQP0002", default, "A declared capture must occur in the parsed pattern.", name));

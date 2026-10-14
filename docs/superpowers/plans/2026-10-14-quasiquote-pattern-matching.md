@@ -1,6 +1,6 @@
 # Typed Quasiquote Pattern Matching Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Match typed syntax through a reusable C# API, then expose ordered pattern arms in grammar quote helpers without losing caller bindings.
 
@@ -57,7 +57,7 @@ For each commit, stage only its listed files with `git add -- <paths>` and use t
 - Produces: `public QuoteMatchResult QuotePattern.Match(QuoteNode input)`; `public sealed record QuoteMatchResult(bool Matched, IReadOnlyDictionary<string, QuoteArgument> Captures, IReadOnlyList<QuoteDiagnostic> Diagnostics)`.
 - Internal shared entry: `QuoteMatchResult QuotePattern.MatchResolved(QuoteNode input, Func<QuoteNode, QuoteNode> resolve)`; public Match calls the same engine without a resolver. Only Task 5 supplies a resolver for owned runtime proxies.
 
-- [ ] Add this regression using the existing QuoteLists language factory:
+- [x] Add this regression using the existing QuoteLists language factory:
 
 ```csharp
 [Fact]
@@ -76,9 +76,9 @@ public void Repeated_scalar_capture_uses_structural_equality()
 }
 ```
 
-- [ ] Run `dotnet test Nitrogen.Tests --filter FullyQualifiedName~QuotePatternTests`. RED: CompilePattern does not exist.
-- [ ] Implement compilation: copy the map; validate syntax/extensible categories; parse through ParseTemplate; scan actual Hole/ListHole nodes and reject unused contracts. Do not invoke construction's declaration rejection. Classify parse/category failures NQP0001, contract failures NQP0002, unsupported list layouts NQP0003. List compilation remains explicitly rejected until Task 2.
-- [ ] Implement a work-stack matcher. A work item carries pattern/source nodes; resolve source nodes before validation when an internal resolver exists. Scalar holes validate category, capture their original QuoteNode, and compare later occurrences using an iterative structural-equality work stack. Ordinary nodes compare kinds, child counts/order and ordinal leaf text. Freeze captures only on full success; never return partial captures.
+- [x] Run `dotnet test Nitrogen.Tests --filter FullyQualifiedName~QuotePatternTests`. RED: CompilePattern does not exist.
+- [x] Implement compilation: copy the map; validate syntax/extensible categories; parse through ParseTemplate; scan actual Hole/ListHole nodes and reject unused contracts. Do not invoke construction's declaration rejection. Classify parse/category failures NQP0001, contract failures NQP0002, unsupported list layouts NQP0003. List compilation remains explicitly rejected until Task 2.
+- [x] Implement a work-stack matcher. A work item carries pattern/source nodes; resolve source nodes before validation when an internal resolver exists. Scalar holes validate category, capture their original QuoteNode, and compare later occurrences using an iterative structural-equality work stack. Ordinary nodes compare kinds, child counts/order and ordinal leaf text. Freeze captures only on full success; never return partial captures.
 
 ```csharp
 // Matcher control flow; concrete work-item storage belongs in QuotePatternMatcher.
@@ -91,9 +91,9 @@ while (work.Count != 0)
 }
 ```
 
-- [ ] Add capture-free success, exact token spelling, retained parentheses/wrappers, subtree matching, invalid category/token category, unused capture, dictionary mutation, declaration-pattern, comments/opaque-dollar and overlapping lexical-terminal tests. Use a test grammar literal/token containing `$X` to prove it is not a parsed hole. Assert no tree or semantic state mutation.
-- [ ] Run the focused suite plus `QuoteApiTests` and `QuoteOwnershipTests`; GREEN: new tests and existing construction tests pass.
-- [ ] Commit only Task 1 files: `feat: add typed scalar quasiquote pattern matching`.
+- [x] Add capture-free success, exact token spelling, retained parentheses/wrappers, subtree matching, invalid category/token category, unused capture, dictionary mutation, declaration-pattern, comments/opaque-dollar and overlapping lexical-terminal tests. Use a test grammar literal/token containing `$X` to prove it is not a parsed hole. Assert no tree or semantic state mutation.
+- [x] Run the focused suite plus `QuoteApiTests` and `QuoteOwnershipTests`; GREEN: new tests and existing construction tests pass.
+- [x] Commit only Task 1 files: `feat: add typed scalar quasiquote pattern matching`.
 
 ### Task 2: Deterministic list matching and ownership boundaries
 
@@ -105,11 +105,11 @@ while (work.Count != 0)
 
 **Interfaces:** Consumes Task 1 public API and `TemplateListShape`; produces the same API with list support and full NQP0004/NQP0005 validation. No new public list tree representation.
 
-- [ ] Add a theory matching `f(1, ..$Args, 2)` against `f(1, 2)`, `f(1, 3, 2)`, `f(1, 3, 4, 2)` and `f(0, 3, 2)`. Expected matched values are true/true/true/false and captured counts 0/1/2/0. Capture item texts in source order through QuoteArgument's existing list representation.
-- [ ] Run `dotnet test Nitrogen.Tests --filter FullyQualifiedName~QuotePattern`; RED: list pattern compilation rejects the supported pattern.
-- [ ] Compile each physical pattern list into fixed prefix, optional list capture and fixed suffix, recording separator layout from TemplateLists. Reject two list holes in one physical list even when names repeat. Match fixed ends then capture exactly the remaining item nodes; separators participate in layout validation but never enter captured lists. Nested lists receive independent compiled sites.
-- [ ] Add unseparated lists, optional/forbidden/required trailing separators, nested lists and the same list capture in two different lists. Repeated lists compare ordered item structures. Unsupported token-list sites report NQP0003, not a mismatch.
-- [ ] Add the following lifetime/snapshot matrix:
+- [x] Add a theory matching `f(1, ..$Args, 2)` against `f(1, 2)`, `f(1, 3, 2)`, `f(1, 3, 4, 2)` and `f(0, 3, 2)`. Expected matched values are true/true/true/false and captured counts 0/1/2/0. Capture item texts in source order through QuoteArgument's existing list representation.
+- [x] Run `dotnet test Nitrogen.Tests --filter FullyQualifiedName~QuotePattern`; RED: list pattern compilation rejects the supported pattern.
+- [x] Compile each physical pattern list into fixed prefix, optional list capture and fixed suffix, recording separator layout from TemplateLists. Reject two list holes in one physical list even when names repeat. Match fixed ends then capture exactly the remaining item nodes; separators participate in layout validation but never enter captured lists. Nested lists receive independent compiled sites.
+- [x] Add unseparated lists, optional/forbidden/required trailing separators, nested lists and the same list capture in two different lists. Repeated lists compare ordered item structures. Unsupported token-list sites report NQP0003, not a mismatch.
+- [x] Add the following lifetime/snapshot matrix:
 
 ```csharp
 [Theory]
@@ -142,10 +142,10 @@ public void Invalid_input_never_returns_partial_captures(string scenario, string
 ```
 
   Add a wrong-category test using another syntax category in the fixture. Add recovered/error/ambiguous/skipped/missing/uninstantiated-hole trees using existing parser recovery fixtures. Check validity before reading pooled storage. Public matching rejects unresolved template holes.
-- [ ] Verify explicit origins survive captures, absent origins do not invent paths, first repeated capture identity is retained, captured lists/maps are immutable, and captured nodes remain usable after disposing only PatternCompilation. Instantiate a replacement quote from captures, dispose input after instantiation, then bind/check/lower the owned result.
-- [ ] Exercise a deeply nested valid tree within parser limits and a large list; matcher/equality use iterative stacks. Record timing only as an observation, not a performance guarantee.
-- [ ] Run `dotnet test Nitrogen.Tests --filter 'FullyQualifiedName~QuotePattern|FullyQualifiedName~QuoteOrigin|FullyQualifiedName~QuoteOwnership|FullyQualifiedName~TemplateList'`; GREEN: all selected tests pass.
-- [ ] Commit: `feat: match list splices with explicit capture lifetimes`.
+- [x] Verify explicit origins survive captures, absent origins do not invent paths, first repeated capture identity is retained, captured lists/maps are immutable, and captured nodes remain usable after disposing only PatternCompilation. Instantiate a replacement quote from captures, dispose input after instantiation, then bind/check/lower the owned result.
+- [x] Exercise a deeply nested valid tree within parser limits and a large list; matcher/equality use iterative stacks. Record timing only as an observation, not a performance guarantee.
+- [x] Run `dotnet test Nitrogen.Tests --filter 'FullyQualifiedName~QuotePattern|FullyQualifiedName~QuoteOrigin|FullyQualifiedName~QuoteOwnership|FullyQualifiedName~TemplateList'`; GREEN: all selected tests pass.
+- [x] Commit: `feat: match list splices with explicit capture lifetimes`.
 
 ### Task 3: Bootstrap and self-hosted match-helper syntax
 

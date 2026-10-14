@@ -3,10 +3,11 @@ using System.Collections.ObjectModel;
 namespace Nitrogen;
 
 internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionary<string, QuoteHole> contracts,
-    Func<QuoteNode, QuoteNode>? resolve)
+    IReadOnlyDictionary<int, QuotePatternList> lists, Func<QuoteNode, QuoteNode>? resolve)
 {
     static readonly IReadOnlyDictionary<string, QuoteArgument> s_empty =
         new ReadOnlyDictionary<string, QuoteArgument>(new Dictionary<string, QuoteArgument>());
+    sealed record Work(int Pattern, QuoteNode Input, QuoteNode[]? Items = null);
     readonly Dictionary<string, QuoteArgument> _captures = new(StringComparer.Ordinal);
 
     internal static QuoteMatchResult Invalid(string code, string message) => new(false, s_empty,
@@ -36,12 +37,27 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
 
     internal QuoteMatchResult Match(QuoteNode input)
     {
-        var work = new Stack<(int Pattern, QuoteNode Input)>();
-        work.Push((pattern.Root, input));
+        var work = new Stack<Work>();
+        work.Push(new(pattern.Root, input));
         while (work.TryPop(out var pair))
         {
             var source = Resolve(pair.Input);
             int kind = pattern.Kind(pair.Pattern);
+            if (kind == SyntaxKinds.ListHole)
+            {
+                string name = pattern.GetText(pair.Pattern)[3..].ToString();
+                var items = pair.Items!;
+                if (items.Any(item => !pattern.Language!.AcceptsQuoteNode(contracts[name].Category, item.Tree.Kind(item.Node)))) return Mismatch();
+                if (_captures.TryGetValue(name, out var previous))
+                {
+                    var first = ((QuoteArgument.Many)previous).Values;
+                    if (first.Count != items.Length) return Mismatch();
+                    for (int i = 0; i < items.Length; i++)
+                        if (!Equal(first[i], items[i])) return Mismatch();
+                }
+                else _captures[name] = QuoteArgument.List(Array.AsReadOnly(items));
+                continue;
+            }
             if (kind == SyntaxKinds.Hole)
             {
                 string name = pattern.GetText(pair.Pattern)[1..].ToString();
@@ -53,11 +69,35 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 else _captures[name] = QuoteArgument.Node(source);
                 continue;
             }
-            if (kind != source.Tree.Kind(source.Node) || pattern.ChildCount(pair.Pattern) != source.Tree.ChildCount(source.Node)) return Mismatch();
+            if (kind != source.Tree.Kind(source.Node)) return Mismatch();
+            if (lists.TryGetValue(pair.Pattern, out var list))
+            {
+                int stride = list.Shape.Separator is null ? 1 : 2;
+                int childCount = source.Tree.ChildCount(source.Node);
+                if (stride == 2 && childCount != 0 && childCount % 2 == 0) return Mismatch();
+                int itemCount = (childCount + stride - 1) / stride;
+                int prefix = list.HoleIndex, suffix = list.Items.Length - prefix - 1;
+                if (itemCount < prefix + suffix || itemCount < list.Shape.MinimumCount) return Mismatch();
+                if (stride == 2)
+                    for (int i = 1; i < childCount; i += 2)
+                    {
+                        int separator = source.Tree.Child(source.Node, i);
+                        if (source.Tree.Kind(separator) != SyntaxKinds.Literal ||
+                            !source.Tree.GetText(separator).SequenceEqual(list.Shape.Separator.AsSpan())) return Mismatch();
+                    }
+                var items = Enumerable.Range(0, itemCount).Select(index =>
+                    Resolve(new(source.Tree, source.Tree.Child(source.Node, index * stride), source.Origin))).ToArray();
+                for (int i = suffix - 1; i >= 0; i--)
+                    work.Push(new(list.Items[prefix + 1 + i], items[itemCount - suffix + i]));
+                work.Push(new(list.Items[prefix], source, items[prefix..(itemCount - suffix)]));
+                for (int i = prefix - 1; i >= 0; i--) work.Push(new(list.Items[i], items[i]));
+                continue;
+            }
+            if (pattern.ChildCount(pair.Pattern) != source.Tree.ChildCount(source.Node)) return Mismatch();
             int count = pattern.ChildCount(pair.Pattern);
             if (count == 0 && !pattern.GetText(pair.Pattern).SequenceEqual(source.Tree.GetText(source.Node))) return Mismatch();
             for (int i = count - 1; i >= 0; i--)
-                work.Push((pattern.Child(pair.Pattern, i), new(source.Tree, source.Tree.Child(source.Node, i), source.Origin)));
+                work.Push(new(pattern.Child(pair.Pattern, i), new(source.Tree, source.Tree.Child(source.Node, i), source.Origin)));
         }
         return new(true, new ReadOnlyDictionary<string, QuoteArgument>(_captures), Array.Empty<QuoteDiagnostic>());
     }
