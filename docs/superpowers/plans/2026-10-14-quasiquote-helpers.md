@@ -271,7 +271,7 @@ python3 eng/test-composition-inputs.py
 git diff --check
 ```
 
-- [ ] **4. Verify native VS Code in a scratch copy, not the user's DateCalc files:** launch the built development extension with the worktree's rebuilt server. Record baseline file bytes and sample values. Invoke Extract Quote Helper on the DateCalc quote, choose a new shared module, inspect every file in review, Cancel once, then repeat and Apply. Verify persistent controls, success feedback, unqualified helper navigation, parameter/keyword navigation, values and zero new diagnostics. Edit helper text and observe refresh; undo that edit; undo extraction once; verify original files/config byte-for-byte and new-file removal. Repeat using an existing-file destination to confirm no overwrite/CreateFile failure. If the Mac is locked, report native acceptance as blocked and do not claim it passed.
+- [x] **4. Verify native VS Code in a scratch copy, not the user's DateCalc files:** launch the built development extension with the worktree's rebuilt server. Record baseline file bytes and sample values. Invoke Extract Quote Helper on the DateCalc quote, choose a new shared module, inspect every file in review, Cancel once, then repeat and Apply. Verify persistent controls, success feedback, unqualified helper navigation, parameter/keyword navigation, values and zero new diagnostics. Edit helper text and observe refresh; undo that edit; undo extraction once; verify original files/config byte-for-byte and new-file removal. Repeat using an existing-file destination to confirm no overwrite/CreateFile failure. If the Mac is locked, report native acceptance as blocked and do not claim it passed.
 - [x] **5. Request one independent whole-branch review:** give the reviewer spec/plan, exact base/head, diff, fresh test evidence and native acceptance results. Address actionable findings, rerun only affected/new checks, then commit final docs/evidence as `"Document and verify typed quote helper extraction"`.
 
 ## Self-review coverage
@@ -304,15 +304,16 @@ At completion report implemented behavior, commit/branch/worktree, .NET/client/g
 - Native VS Code verified new-file review/cancel/apply, current-module apply, helper/parameter/keyword navigation,
   zero grammar diagnostics, and single extraction undo with original byte hashes/new-file removal.
   Initial sample values came from the installed DateCalc client; they are excluded as new-server refresh evidence.
-  Remaining native live-refresh/existing-module acceptance is blocked by unavailable native app controls.
+  The user completed the supplied existing-module/live-refresh/undo checklist and confirmed all UI checks work.
 - Independent whole-branch review found six Important defects and no Critical/Minor findings. The single fix pass
   adds RED/GREEN coverage for helper rename/extraction capture, actual parsed parameter holes (including overlapping
   opaque tokens), every connected composition's consumers, signed-file navigation, and complete category references.
 - Post-review full gate: 1,649 tests passed; solution build has zero warnings/errors
   (`/tmp/nitrogen-helper-review-suite.log`, `/tmp/nitrogen-helper-review-build.log`).
-- All automated stages and review fixes are committed. Native step 4 remains pending: the user approved trust for the scratch folder and trust was applied,
-  but native app controls became unavailable before the remaining interactions could be performed;
-  Task 6 is not marked complete. Large-composition latency was not benchmarked.
+- Native step 4 is accepted: after scratch-only trust was applied and native automation became unavailable,
+  the user ran the supplied UI checklist and reported "ui checked - all works". This is user-reported acceptance,
+  supplementing the earlier agent-observed review/apply/navigation/undo and automated live-buffer checks.
+- All six implementation stages are complete. Large-composition latency was not benchmarked.
 - No PR, merge, version bump or release requested for this feature.
 
 Native continuation: `/tmp/nitrogen-composition-ui` alone was trusted (canonical
@@ -320,4 +321,8 @@ Native continuation: `/tmp/nitrogen-composition-ui` alone was trusted (canonical
 is prepared with `Shared.ngr`, an unrelated `Marker` rule, and the `QuoteCalc` alias to isolate
 the consuming client. VS Code was reloaded and the whole inline quote selected. On continuation,
 `cua.getApp` was unavailable and `cua.getState()` reported no native apps, only browser surfaces.
-Do not count the remaining existing-module Apply/live-refresh/undo checks as passed.
+The remaining existing-module Apply/live-refresh/undo checks were subsequently accepted by the user after following the supplied checklist.
+
+Closeout: user-reported UI acceptance recorded on 2026-10-14. Fresh full tests passed
+1,649/1,649 and client tests passed 40/40; Markdown links and diff whitespace checks passed.
+The agreed branch/worktree are retained. No integration or publication was performed.
