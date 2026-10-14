@@ -29,12 +29,20 @@ syntax module DateCalc
   // Reusable typed syntax; callers supply expression nodes rather than substituted text.
   syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;
 
+  // Match original syntax; parentheses remain structure and therefore use the fallback.
+  syntax function SwapAddition(Value: Expr) : Expr = match Value
+  {
+    | (Left: Expr, Right: Expr) <[ $Left + $Right ]> => <[ $Right + $Left ]>;
+    | _ => <[ $Value ]>;
+  };
+
   extensible syntax Expr
   {
     out hover Type : Nitrogen.Semantic.SemanticType? = null;
     out Selected : Nitrogen.Semantic.OperationSignature? = null;
     out Source : int? = null;
 
+    | Swapped = Value:Expr "swapped" precedence 5 rewrites SwapAddition(Value) { Type = Value.Type; }
     | Day     = Value:Date  lowers DateCalc.Date(text Value)
       {
         Type = DateCalcLanguage.Date;

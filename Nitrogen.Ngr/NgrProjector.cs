@@ -50,6 +50,18 @@ internal static class NgrProjector
         return new GrammarFile(modules.ToArray(), languages.ToArray());
     }
 
+    static QuoteParameter QuoteParameter(HirNode node)
+    {
+        var parts = Expect(node, "QuoteParameter").Arguments;
+        return new(Name(parts[0]), Name(parts[1]), Value(parts[2]) is not null, Span(node));
+    }
+
+    static QuoteText Quote(HirNode node)
+    {
+        var span = Span(node);
+        return new(Text(node)[2..^2], GrammarSpan.FromBounds(span.Start + 2, span.End - 2));
+    }
+
     static ModuleDecl Module(HirNode node)
     {
         var module = Expect(node, "Module");
@@ -67,13 +79,23 @@ internal static class NgrProjector
             switch (Kind(member))
             {
                 case "QuoteHelper":
-                    var quote = Span(a[3]);
-                    helpers.Add(new(Name(a[0]), Items(a[1]).Select(parameter =>
-                    {
-                        var parts = Expect(parameter, "QuoteParameter").Arguments;
-                        return new QuoteParameter(Name(parts[0]), Name(parts[1]), Value(parts[2]) is not null, Span(parameter));
-                    }).ToArray(), Name(a[2]), new(Text(a[3])[2..^2], GrammarSpan.FromBounds(quote.Start + 2, quote.End - 2)), Span(member)));
+                    helpers.Add(new(Name(a[0]), Items(a[1]).Select(QuoteParameter).ToArray(), Name(a[2]), Quote(a[3]), Span(member)));
                     break;
+                case "QuoteMatchHelper":
+                {
+                    var body = Expect(a[3], "QuoteMatchBody");
+                    var arms = Items(body.Arguments[1]).Select(arm =>
+                    {
+                        var parts = Expect(arm, "QuoteMatchArm").Arguments;
+                        var captures = Value(parts[0]) is { } captureList
+                            ? Items(Expect(captureList, "QuoteCaptures").Arguments[0]).Select(QuoteParameter).ToArray()
+                            : Array.Empty<QuoteParameter>();
+                        return new QuoteMatchArm(captures, Quote(parts[1]), Quote(parts[2]), Span(arm));
+                    }).ToArray();
+                    helpers.Add(new(Name(a[0]), Items(a[1]).Select(QuoteParameter).ToArray(), Name(a[2]), Quote(body.Arguments[2]), Span(member))
+                    { Match = new(Name(body.Arguments[0]), arms, Span(body)) });
+                    break;
+                }
                 case "Using":
                     usings.Add(new UsingDecl(Text(a[0]), Span(member)));
                     break;

@@ -9,6 +9,8 @@ internal sealed class QuoteHelperSourceIndex
     readonly IReadOnlyDictionary<string, string> _texts;
     readonly List<(string Path, ModuleDecl Module)> _modules = [];
     readonly List<Occurrence> _occurrences = [];
+    sealed record QuotePart(int Kind, int Children, string Text, string? Capture);
+    readonly Dictionary<string, QuotePart[]> _quoteStructures = new(StringComparer.Ordinal);
     readonly GrammarAnalysis _analysis;
     readonly Language? _language;
     readonly HashSet<string> _unparsedHelpers = new(StringComparer.Ordinal);
@@ -17,6 +19,7 @@ internal sealed class QuoteHelperSourceIndex
     public QuoteHelperSourceIndex(IReadOnlyDictionary<string, string> texts, string? completingPath = null, int completingOffset = 0, Language? language = null, Func<Language?>? languageFactory = null)
     {
         _texts = texts;
+        var completionRepairs = new HashSet<string>(StringComparer.Ordinal);
         foreach (var (path, original) in texts)
         {
             string text = DocumentSignatures.Read(original).MaskedText;
@@ -28,6 +31,17 @@ internal sealed class QuoteHelperSourceIndex
                 {
                     text = text[..prefix.Groups[1].Index] + "<[ ]>" + text[completingOffset..];
                     parsed = GrammarParser.Parse(text);
+                    if (parsed.File is not null) completionRepairs.Add(path);
+                }
+                else
+                {
+                    var typed = Regex.Match(text[..Math.Min(completingOffset, text.Length)], @"(?:\bmatch\s+|:\s*)([A-Za-z_][\w.]*|)$");
+                    if (typed.Success)
+                    {
+                        text = text[..typed.Groups[1].Index] + "NitrogenCompletionCategory" + text[completingOffset..];
+                        parsed = GrammarParser.Parse(text);
+                        if (parsed.File is not null) completionRepairs.Add(path);
+                    }
                 }
             }
             if (parsed.File is { } file)
@@ -37,6 +51,8 @@ internal sealed class QuoteHelperSourceIndex
         _language = language ?? (_modules.Any(m => m.Module.Helpers.Count > 0) ? languageFactory?.Invoke() : null);
         foreach (var (path, module) in _modules)
         {
+            // Completion-only repairs shift later offsets; never expose them as navigation identities.
+            if (completionRepairs.Contains(path)) continue;
             foreach (var helper in module.Helpers)
             {
                 string id = "helper:" + module.Name + "." + helper.Name.Name;
@@ -48,25 +64,69 @@ internal sealed class QuoteHelperSourceIndex
                     Add(parameterId, path, parameter.Name.Span, true, "parameter");
                     AddCategory(path, module, parameter.Category);
                 }
-                var category = _analysis.Helpers.Category(helper.ReturnCategory, module);
-                var parameters = helper.Parameters.GroupBy(p => p.Name.Name).Select(group => group.First()).ToDictionary(p => p.Name.Name,
-                    p => new QuoteHole(_analysis.Helpers.Category(p.Category, module)?.Key ?? p.Category.Name, p.IsList));
-                try
+                var parameters = helper.Parameters.GroupBy(parameter => parameter.Name.Name).Select(group => group.First())
+                    .ToDictionary(parameter => parameter.Name.Name, parameter =>
+                        (Shape: new QuoteHole(_analysis.Helpers.Category(parameter.Category, module)?.Key ?? parameter.Category.Name, parameter.IsList),
+                         Identity: id + ":parameter:" + parameter.Name.Name), StringComparer.Ordinal);
+                IndexQuote(helper.Body, helper.ReturnCategory, parameters, id, "fallback");
+                if (helper.Match is not { } match) continue;
+                if (parameters.TryGetValue(match.Selector.Name, out var selector))
+                    Add(selector.Identity, path, match.Selector.Span, false, "parameter");
+                for (int armIndex = 0; armIndex < match.Arms.Count; armIndex++)
                 {
-                    using var parsedBody = category is null ? null : _language?.ParseTemplate(helper.Body.Text, category.Key, parameters);
-                    if (parsedBody is not { Success: true }) { _unparsedHelpers.Add(id); continue; }
-                    var tree = parsedBody.Tree;
-                    for (int node = 0; node < tree.NodeCount; node++)
+                    var arm = match.Arms[armIndex];
+                    string scopeId = id + ":arm:" + armIndex;
+                    var captures = new Dictionary<string, (QuoteHole Shape, string Identity)>(StringComparer.Ordinal);
+                    foreach (var capture in arm.Captures)
                     {
-                        if (tree.Kind(node) is not (SyntaxKinds.Hole or SyntaxKinds.ListHole)) continue;
-                        int marker = tree.Kind(node) == SyntaxKinds.ListHole ? 3 : 1;
-                        var span = tree.Span(node);
-                        string name = tree.GetText(node).ToString()[marker..];
-                        Add(id + ":parameter:" + name, path,
-                            new(helper.Body.Span.Start + span.Start + marker, name.Length), false, "parameter");
+                        string captureId = scopeId + ":parameter:" + capture.Name.Name;
+                        Add(captureId, path, capture.Name.Span, true, "parameter");
+                        AddCategory(path, module, capture.Category);
+                        captures[capture.Name.Name] = (new(_analysis.Helpers.Category(capture.Category, module)?.Key ?? capture.Category.Name, capture.IsList), captureId);
                     }
+                    var selectorParameter = helper.Parameters.FirstOrDefault(parameter => parameter.Name.Name == match.Selector.Name);
+                    if (selectorParameter is not null) IndexQuote(arm.Pattern, selectorParameter.Category, captures, scopeId, "arm:" + armIndex + ":pattern");
+                    var scope = new Dictionary<string, (QuoteHole Shape, string Identity)>(parameters, StringComparer.Ordinal);
+                    foreach (var capture in captures) scope[capture.Key] = capture.Value;
+                    IndexQuote(arm.Result, helper.ReturnCategory, scope, scopeId, "arm:" + armIndex + ":result");
                 }
-                catch (ArgumentException) { _unparsedHelpers.Add(id); }
+
+                void IndexQuote(QuoteText quote, NameDecl categoryName,
+                    IReadOnlyDictionary<string, (QuoteHole Shape, string Identity)> scope, string scopeId, string slot)
+                {
+                    try
+                    {
+                        var category = _analysis.Helpers.Category(categoryName, module);
+                        using var parsed = category is null ? null : _language?.ParseTemplate(quote.Text, category.Key,
+                            scope.ToDictionary(pair => pair.Key, pair => pair.Value.Shape, StringComparer.Ordinal));
+                        if (parsed is not { Success: true, HasErrors: false })
+                        {
+                            _unparsedHelpers.Add(scopeId);
+                            _unparsedHelpers.Add(id);
+                            return;
+                        }
+                        var tree = parsed.Tree;
+                        var structure = new QuotePart[tree.NodeCount];
+                        for (int node = 0; node < tree.NodeCount; node++)
+                        {
+                            int kind = tree.Kind(node), children = tree.ChildCount(node);
+                            bool hole = kind is SyntaxKinds.Hole or SyntaxKinds.ListHole;
+                            string? capture = hole ? scope[tree.GetText(node)[(kind == SyntaxKinds.Hole ? 1 : 3)..].ToString()].Identity : null;
+                            structure[node] = new(kind, children, !hole && children == 0 ? tree.GetText(node).ToString() : "", capture);
+                        }
+                        _quoteStructures[id + ":quote:" + slot] = structure;
+                        for (int node = 0; node < tree.NodeCount; node++)
+                        {
+                            if (tree.Kind(node) is not (SyntaxKinds.Hole or SyntaxKinds.ListHole)) continue;
+                            int marker = tree.Kind(node) == SyntaxKinds.ListHole ? 3 : 1;
+                            var span = tree.Span(node);
+                            string name = tree.GetText(node)[marker..].ToString();
+                            if (scope.TryGetValue(name, out var capture))
+                                Add(capture.Identity, path, new(quote.Span.Start + span.Start + marker, name.Length), false, "parameter");
+                        }
+                    }
+                    catch (ArgumentException) { _unparsedHelpers.Add(scopeId); _unparsedHelpers.Add(id); }
+                }
 
             }
             foreach (var rule in module.Rules)
@@ -135,6 +195,28 @@ internal sealed class QuoteHelperSourceIndex
     {
         if (!_texts.TryGetValue(path, out string? text)) return null;
         int offset = new LineMap(text).OffsetOf(position);
+        var selectorPrefix = Regex.Match(text[..offset], @"\bmatch\s+([A-Za-z_][\w]*|)$");
+        var helperContext = _modules.Where(module => module.Path == path).SelectMany(module => module.Module.Helpers)
+            .FirstOrDefault(helper => helper.Span.Start <= offset && offset <= helper.Span.End);
+        bool inQuote = helperContext is not null && new[] { helperContext.Body }
+            .Concat(helperContext.Match?.Arms.SelectMany(arm => new[] { arm.Pattern, arm.Result }) ?? [])
+            .Any(quote => quote.Span.Start <= offset && offset <= quote.Span.End);
+        if (selectorPrefix.Success && helperContext is not null && !inQuote)
+            return helperContext.Parameters.Where(parameter => !parameter.IsList && parameter.Name.Name.StartsWith(selectorPrefix.Groups[1].Value, StringComparison.Ordinal))
+                .Select(parameter => new CompletionItem(parameter.Name.Name, CompletionKind.Field, "scalar match selector",
+                    new LineMap(text).RangeOf(new(selectorPrefix.Groups[1].Index, offset - selectorPrefix.Groups[1].Index)))).ToArray();
+        var categoryPrefix = Regex.Match(text[..offset], @":\s*([A-Za-z_][\w.]*|)$");
+        if (categoryPrefix.Success && helperContext is not null && !inQuote)
+        {
+            var owner = _modules.First(module => module.Path == path && module.Module.Helpers.Contains(helperContext)).Module;
+            return _modules.SelectMany(module => module.Module.Rules.Where(rule => rule is SyntaxRule or ExtensibleRule)
+                    .Select(rule => (Owner: module.Module, Rule: rule)))
+                .Where(entry => ReferenceEquals(entry.Owner, owner) || owner.Usings.Any(imported => imported.Module == entry.Owner.Name) || categoryPrefix.Groups[1].Value.Contains('.'))
+                .Select(entry => ReferenceEquals(entry.Owner, owner) ? entry.Rule.Name : entry.Owner.Name + "." + entry.Rule.Name)
+                .Where(name => name.StartsWith(categoryPrefix.Groups[1].Value, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal)
+                .Select(name => new CompletionItem(name, CompletionKind.Class, "syntax category",
+                    new LineMap(text).RangeOf(new(categoryPrefix.Groups[1].Index, offset - categoryPrefix.Groups[1].Index)))).ToArray();
+        }
         var prefix = Regex.Match(text[..offset], @"\brewrites\s+([A-Za-z_][\w.]*|)$");
         if (!prefix.Success) return null;
         var module = _modules.FirstOrDefault(m => m.Path == path && m.Module.Span.Start <= offset && offset <= m.Module.Span.End).Module;
@@ -188,7 +270,7 @@ internal sealed class QuoteHelperSourceIndex
             throw new RenameRefusedException("Rename would change an existing helper call's resolution.");
         var after = new QuoteHelperSourceIndex(proposed, language: _language);
         string Expected(string identity) => target.Kind == "helper"
-            ? identity == target.Identity || identity.StartsWith(target.Identity + ":parameter:", StringComparison.Ordinal)
+            ? identity == target.Identity || identity.StartsWith(target.Identity + ":", StringComparison.Ordinal)
                 ? "helper:" + renames![target.Identity["helper:".Length..]] + identity[target.Identity.Length..] : identity
             : identity == target.Identity ? target.Identity[..(target.Identity.LastIndexOf(':') + 1)] + newName : identity;
         var beforeParameters = _occurrences.Where(o => o.Kind == "parameter").Distinct()
@@ -198,6 +280,14 @@ internal sealed class QuoteHelperSourceIndex
             .Select(o => (o.Identity, o.Path, o.Span.Start, o.Declaration)).ToHashSet();
         if (!beforeParameters.SetEquals(afterParameters))
             throw new RenameRefusedException("Rename would change the helper quote's parsed parameter structure.");
+        if (_quoteStructures.Count != after._quoteStructures.Count)
+            throw new RenameRefusedException("Rename would change the helper quote's parsed syntax structure.");
+        foreach (var (identity, parts) in _quoteStructures)
+        {
+            var expected = parts.Select(part => part.Capture is { } capture ? part with { Capture = Expected(capture) } : part);
+            if (!after._quoteStructures.TryGetValue(Expected(identity), out var actual) || !expected.SequenceEqual(actual))
+                throw new RenameRefusedException("Rename would change the helper quote's parsed syntax structure.");
+        }
         return changed;
     }
 }

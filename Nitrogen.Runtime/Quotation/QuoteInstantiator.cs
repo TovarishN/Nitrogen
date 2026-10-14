@@ -7,7 +7,7 @@ namespace Nitrogen;
 internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary<string, QuoteArgument> arguments, bool proxies, SourceOrigin? templateOrigin = null)
 {
     sealed record Built(int Kind, int Start, int Length, NodeFlags Flags, IReadOnlyList<Built> Children,
-        SourceOrigin? Origin = null, int? Proxy = null);
+        SourceOrigin? Origin = null, QuoteNode? Proxy = null);
     sealed class Failure(QuoteDiagnostic diagnostic) : Exception
     {
         internal QuoteDiagnostic Diagnostic { get; } = diagnostic;
@@ -25,15 +25,20 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             var tree = TreeFreezer.Freeze(arena, oldRoot, _text.ToString(), template.Language);
             var origins = new Dictionary<int, SourceOrigin>();
             var children = new Dictionary<int, int>();
+            var sources = new Dictionary<int, QuoteNode>();
             int index = 0;
             Visit(root);
-            return new(tree, [], origins, children);
+            return new(tree, [], origins, children) { ProxyNodes = sources };
 
             void Visit(Built node)
             {
                 int n = index++;
                 if (node.Origin is { } origin) origins[n] = origin;
-                if (node.Proxy is { } child) children[n] = child;
+                if (node.Proxy is { } child)
+                {
+                    children[n] = child.Node;
+                    sources[n] = child;
+                }
                 foreach (var item in node.Children) Visit(item);
             }
         }
@@ -55,7 +60,7 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
         if (!proxies) return Copy(source.Tree, source.Node, false, source.Origin);
         int start = _text.Length;
         _text.Append('$').Append(name);
-        return new(SyntaxKinds.Hole, start, _text.Length - start, NodeFlags.None, [], source.Origin, source.Node);
+        return new(SyntaxKinds.Hole, start, _text.Length - start, NodeFlags.None, [], source.Origin, source);
     }
 
     Built Copy(SyntaxTree source, int node, bool holes, SourceOrigin? origin)

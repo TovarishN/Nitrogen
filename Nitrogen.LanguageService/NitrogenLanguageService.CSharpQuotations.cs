@@ -5,28 +5,48 @@ public sealed partial class NitrogenLanguageService
     sealed record CSharpQuote(Host Host, CSharpQuotations.Quote Quote, Language Language, IReadOnlyList<QuoteRule> Rules);
     readonly Dictionary<string, (Dictionary<string, string> Sources, IReadOnlyList<CSharpQuotations.Quote> Quotes)> _csharpQuotes = new(StringComparer.Ordinal);
 
-    CSharpQuote? CSharpQuoteAt(string uri, DocumentPosition position)
+    CSharpQuote? CSharpQuoteAt(string uri, DocumentPosition position) => _hosts.TryGetValue(uri, out var host)
+        ? CSharpQuoteContexts(host).FirstOrDefault(context => context.Quote.Text.ValueOffset(host.Lines.OffsetOf(position)) is not null)
+        : null;
+
+    IEnumerable<CSharpQuote> CSharpQuoteContexts(Host host)
     {
-        if (!_hosts.TryGetValue(uri, out var host) || !System.Uri.TryCreate(uri, UriKind.Absolute, out var url) || !url.IsFile) return null;
+        if (!System.Uri.TryCreate(host.Uri, UriKind.Absolute, out var url) || !url.IsFile) yield break;
         string path = url.LocalPath;
         var scope = NavigationScopeFor(path);
-        if (scope is null) return null;
+        if (scope is null) yield break;
         var sources = scope.Sources.Where(p => ReadNavigationText(p) is not null)
             .ToDictionary(p => p, p => ReadNavigationText(p)!, StringComparer.Ordinal);
         sources[path] = host.Text;
-        if (!_csharpQuotes.TryGetValue(uri, out var cached) || cached.Sources.Count != sources.Count ||
+        if (!_csharpQuotes.TryGetValue(host.Uri, out var cached) || cached.Sources.Count != sources.Count ||
             !sources.All(p => cached.Sources.TryGetValue(p.Key, out var text) && text == p.Value))
-            _csharpQuotes[uri] = cached = (sources, CSharpQuotations.Find(path, sources));
-        int offset = host.Lines.OffsetOf(position);
-        var quote = cached.Quotes.FirstOrDefault(q => q.Text.ValueOffset(offset) is not null);
-        if (quote is null) return null;
-        var languages = Registry.Entries.Select(e => e.Language)
-            .Concat(scope.Grammars.Select(p => LanguageForQuote(new Uri(p).AbsoluteUri)).OfType<Language>())
-            .Where(l => l.Modules.Any(m => m.QuoteCategoryNames.Contains(quote.Category, StringComparer.Ordinal)))
-            .Distinct().Take(2).ToArray();
-        if (languages.Length != 1) return null;
+            _csharpQuotes[host.Uri] = cached = (sources, CSharpQuotations.Find(path, sources));
+        if (cached.Quotes.Count == 0) yield break;
+        var available = Registry.Entries.Select(entry => entry.Language)
+            .Concat(scope.Grammars.Select(p => LanguageForQuote(new Uri(p).AbsoluteUri)).OfType<Language>()).Distinct().ToArray();
         var rules = scope.Grammars.SelectMany(p => QuoteRules(new Uri(p).AbsoluteUri).Rules).DistinctBy(r => (r.Uri, r.Id)).ToArray();
-        return new(host, quote, languages[0], rules);
+        foreach (var quote in cached.Quotes)
+        {
+            var languages = available.Where(language => language.Modules.Any(module => module.QuoteCategoryNames.Contains(quote.Category, StringComparer.Ordinal)))
+                .Take(2).ToArray();
+            if (languages.Length == 1) yield return new(host, quote, languages[0], rules);
+        }
+    }
+
+    IEnumerable<ServiceDiagnostic> CSharpPatternDiagnostics(Host host)
+    {
+        foreach (var context in CSharpQuoteContexts(host).Where(context => context.Quote.IsPattern))
+        {
+            using var compilation = context.Language.CompilePattern(context.Quote.Category, context.Quote.Text.Value, Shapes(context));
+            foreach (var diagnostic in compilation.Diagnostics)
+            {
+                TextSpan? span = diagnostic.Span.Length > 0 ? HostSpan(context, diagnostic.Span)
+                    : diagnostic.Hole is { } name && context.Quote.Holes.TryGetValue(name, out var hole) ? hole.Span
+                    : HostSpan(context, new(0, context.Quote.Text.Value.Length));
+                if (span is { } source)
+                    yield return new(host.Lines.RangeOf(source), ServiceSeverity.Error, diagnostic.Code, diagnostic.Message);
+            }
+        }
     }
 
     static Dictionary<string, QuoteHole> Shapes(CSharpQuote context) => context.Quote.Holes.ToDictionary(p => p.Key, p => p.Value.Shape, StringComparer.Ordinal);

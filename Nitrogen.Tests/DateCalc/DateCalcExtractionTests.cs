@@ -16,7 +16,7 @@ public sealed class DateCalcExtractionTests
         string root = Directory.CreateTempSubdirectory("datecalc-extraction-").FullName;
         try
         {
-            foreach (string name in new[] { "DateCalc.ngr", "nitrogen.json", "DateCalcLanguage.cs", "MathModule.cs", "DateCalcEvaluator.cs", "DateCalcFixes.cs" })
+            foreach (string name in new[] { "DateCalc.ngr", "nitrogen.json", "DateCalcLanguage.cs", "MathModule.cs", "DateCalcEvaluator.cs", "DateCalcFixes.cs", "PatternMatching.cs" })
                 File.Copy(Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage", name), Path.Combine(root, name));
             string grammarPath = Path.Combine(root, "DateCalc.ngr");
             string grammar = File.ReadAllText(grammarPath);
@@ -31,7 +31,7 @@ public sealed class DateCalcExtractionTests
             Assert.True(at >= 0);
             var map = new LineMap(grammar);
             var preparation = service.PrepareExtraction(uri, new(map.PositionOf(at), map.PositionOf(at + selected.Length)));
-            Assert.Null(preparation.UnavailableReason);
+            Assert.True(preparation.UnavailableReason is null, preparation.UnavailableReason);
             var proposal = service.ResolveExtraction(new(preparation.Id!, new Uri(Path.Combine(root, "Shared.ngr")).AbsoluteUri, "Shared"));
             Assert.True(proposal.UnavailableReason is null, proposal.UnavailableReason);
             using var before = Compile(root);

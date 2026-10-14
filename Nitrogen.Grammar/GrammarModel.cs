@@ -16,7 +16,12 @@ public sealed record ModuleDecl(
 public sealed record QuoteText(string Text, GrammarSpan Span);
 public sealed record QuoteParameter(NameDecl Name, NameDecl Category, bool IsList, GrammarSpan Span);
 public sealed record QuoteHelperDecl(NameDecl Name, EquatableArray<QuoteParameter> Parameters,
-    NameDecl ReturnCategory, QuoteText Body, GrammarSpan Span);
+    NameDecl ReturnCategory, QuoteText Body, GrammarSpan Span)
+{
+    public QuoteHelperMatch? Match { get; init; }
+}
+public sealed record QuoteHelperMatch(NameDecl Selector, EquatableArray<QuoteMatchArm> Arms, GrammarSpan Span);
+public sealed record QuoteMatchArm(EquatableArray<QuoteParameter> Captures, QuoteText Pattern, QuoteText Result, GrammarSpan Span);
 public sealed record QuoteHelperCall(NameDecl Helper, EquatableArray<NameDecl> Arguments, GrammarSpan Span);
 
 public sealed record UsingDecl(string Module, GrammarSpan Span);

@@ -484,6 +484,54 @@ public static class GrammarParser
         {
             ExpectKeyword("function");
             var name = Name(Expect(TokenKind.Identifier, "a helper name"));
+            var parameters = ReadQuoteParameters();
+            Expect(TokenKind.Colon, "':'");
+            var result = ReadCategory();
+            var equals = Expect(TokenKind.Equals, "'='");
+            int next = GrammarLexer.SkipTrivia(_text, equals.End);
+            QuoteHelperMatch? match = null;
+            QuoteText body;
+            if (string.CompareOrdinal(_text, next, "match", 0, 5) == 0)
+            {
+                var matchKeyword = ExpectKeyword("match");
+                var selector = Name(Expect(TokenKind.Identifier, "a scalar helper parameter"));
+                Expect(TokenKind.LBrace, "'{'");
+                var arms = new List<QuoteMatchArm>();
+                QuoteText? fallback = null;
+                while (!At(TokenKind.RBrace))
+                {
+                    var bar = Expect(TokenKind.Bar, "'|'");
+                    if (fallback is not null)
+                        throw new GrammarSyntaxException("the fallback must be the final arm", bar.Span);
+                    int armStart = GrammarLexer.SkipTrivia(_text, bar.End);
+                    if (armStart < _text.Length && _text[armStart] == '_')
+                    {
+                        ExpectKeyword("_");
+                        var arrow = Expect(TokenKind.Arrow, "'=>'");
+                        fallback = ReadQuote(arrow.End);
+                        Expect(TokenKind.Semicolon, "';'");
+                        continue;
+                    }
+                    bool hasCaptures = armStart < _text.Length && _text[armStart] == '(';
+                    var captures = hasCaptures ? ReadQuoteParameters() : Array.Empty<QuoteParameter>();
+                    int afterCaptures = hasCaptures ? _tokens[_position - 1].End : bar.End;
+                    var pattern = ReadQuote(afterCaptures);
+                    var resultArrow = Expect(TokenKind.Arrow, "'=>'");
+                    var returned = ReadQuote(resultArrow.End);
+                    var armEnd = Expect(TokenKind.Semicolon, "';'");
+                    arms.Add(new(captures, pattern, returned, GrammarSpan.FromBounds(bar.Start, armEnd.End)));
+                }
+                var close = Expect(TokenKind.RBrace, "'}'");
+                body = fallback ?? throw new GrammarSyntaxException("a match helper requires a final fallback", close.Span);
+                match = new(selector, arms.ToArray(), GrammarSpan.FromBounds(matchKeyword.Start, close.End));
+            }
+            else body = ReadQuote(equals.End);
+            var semicolon = Expect(TokenKind.Semicolon, "';'");
+            return new(name, parameters, result, body, GrammarSpan.FromBounds(keyword.Start, semicolon.End)) { Match = match };
+        }
+
+        QuoteParameter[] ReadQuoteParameters()
+        {
             Expect(TokenKind.LParen, "'('");
             var parameters = new List<QuoteParameter>();
             if (!At(TokenKind.RParen))
@@ -499,12 +547,7 @@ public static class GrammarParser
                     Advance();
                 } while (true);
             Expect(TokenKind.RParen, "')'");
-            Expect(TokenKind.Colon, "':'");
-            var result = ReadCategory();
-            var equals = Expect(TokenKind.Equals, "'='");
-            var body = ReadQuote(equals.End);
-            var semicolon = Expect(TokenKind.Semicolon, "';'");
-            return new(name, parameters.ToArray(), result, body, GrammarSpan.FromBounds(keyword.Start, semicolon.End));
+            return parameters.ToArray();
         }
 
         NameDecl ReadCategory()

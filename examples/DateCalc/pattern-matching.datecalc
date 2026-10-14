@@ -1,0 +1,8 @@
+// `swapped` uses SwapAddition's ordered pattern arms in DateCalc.ngr.
+// It recognizes the original addition syntax, then constructs the reversed operands.
+let count = 3;
+count + 2 swapped;               // 5, from 2 + count; count keeps its caller binding
+2 weeks + count days swapped;   // 17 days, from count days + 2 weeks
+count swapped;                   // 3, through the explicit fallback
+(count + 2) swapped;             // 5, through fallback: parentheses remain syntax
+// Syntax matching makes no claim of semantic equivalence. Reversed operands still type-check normally.

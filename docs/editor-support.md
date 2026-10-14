@@ -217,6 +217,27 @@ definition, because Rider itself injects the language named by a `language=` com
 server for semantic tokens in every file it serves (the platform asks only in plain-text and TextMate
 files by default, so Rider showed no Nitrogen coloring before).
 
+## Typed quote patterns
+
+Grammar match helpers support definition/declaration, references and completion for the scalar
+selector, arm capture declarations, capture occurrences, categories and quoted keywords. Rename
+updates real parsed captures in one arm, including its result quote, and leaves identically named
+captures in other arms and opaque dollar text alone. Renaming a helper updates its resolved callers
+across connected compositions. Signed grammar files retain their original source offsets.
+
+In C# helpers, calls to the actual `Language.CompilePattern(category, text, captures)` API support
+quotation navigation and completion for constant category/text and explicit capture-map initializers.
+Regular, verbatim, raw and concatenated constant strings retain their C# source locations. Pattern
+compilation diagnostics appear at those locations. Unrelated methods with the same name and dynamic
+patterns receive no guessed assistance. Native C# diagnostics and navigation remain available.
+
+Every match arm is checked, including unused ones; development mode refreshes consumers after edits.
+Use [DateCalc's match helper](../examples/DateCalc/DateCalc.ngr) and
+[pattern sample](../examples/DateCalc/pattern-matching.datecalc) to try selector/capture navigation,
+rename one arm capture, introduce an invalid unselected pattern, and fix it without restarting LSP.
+Extract Quote Helper continues to accept complete inline return quotes. Extracting subpatterns or
+moving a whole match helper is refused with an explanation; no refactoring drops match arms.
+
 ## Extract typed quote helpers (VS Code)
 
 Place the caret in an inline `rewrites <[ ... ]>` body, or select its complete quote, and choose

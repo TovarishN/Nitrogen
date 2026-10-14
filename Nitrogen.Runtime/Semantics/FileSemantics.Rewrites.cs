@@ -7,13 +7,17 @@ namespace Nitrogen.Semantics;
 public sealed partial class FileSemantics
 {
     /// <summary>A rewrite's use as a per-use instantiation of its template: its semantics, the template's root, and its rule.</summary>
-    internal sealed record RewriteInstance(FileSemantics File, int Root, DeclarativeRule Rule);
+    internal sealed record RewriteInstance(FileSemantics File, int Root, DeclarativeRule Rule, QuoteHelperSource? Source);
+    internal sealed record RewriteSource(FileSemantics File, int Node);
+    Dictionary<SyntaxTree, FileSemantics> _quoteOwners = new();
 
     readonly Dictionary<int, RewriteInstance?> _instances = new();
     readonly HashSet<int> _cyclic = new();
-    readonly Dictionary<int, QuoteDiagnostic> _instanceErrors = new();
+    sealed record RewriteFailure(QuoteDiagnostic Diagnostic, QuoteHelperSource? Source);
+    readonly Dictionary<int, RewriteFailure> _instanceErrors = new();
     readonly List<QuoteInstantiation> _ownedQuotes = [];
-    internal QuoteDiagnostic? RewriteError(int node) => _instanceErrors.GetValueOrDefault(node);
+    internal QuoteDiagnostic? RewriteError(int node) => _instanceErrors.GetValueOrDefault(node)?.Diagnostic;
+    internal QuoteHelperSource? RewriteErrorSource(int node) => _instanceErrors.GetValueOrDefault(node)?.Source;
 
     internal void ReleaseQuotes()
     {
@@ -27,7 +31,7 @@ public sealed partial class FileSemantics
     ImmutableHashSet<DeclarativeRule> _chain = ImmutableHashSet<DeclarativeRule>.Empty;
 
     /// <summary>In an instantiation: the use's document, and for each Hole node the use's child it stands for.</summary>
-    internal (FileSemantics File, IReadOnlyDictionary<int, int> Children)? Holes { get; private set; }
+    internal IReadOnlyDictionary<int, RewriteSource>? Holes { get; private set; }
 
     /// <summary>Whether <paramref name="node"/> uses a rewrite that reaches itself (NH0008 when lowered).</summary>
     internal bool IsCyclicRewrite(int node) => Instance(node) is null && _cyclic.Contains(node);
@@ -42,9 +46,11 @@ public sealed partial class FileSemantics
             return null;
         if (_instances.TryGetValue(node, out var known)) return known;
         RewriteInstance? instance = null;
+        var selectedSource = spec.HelperSource;
         if (_chain.Contains(rule)) _cyclic.Add(node);
-        else if (_language.RewriteTemplate(rule).Tree is { } template)
+        else
         {
+            _quoteOwners[Tree] = this;
             var arguments = new Dictionary<string, QuoteArgument>();
             foreach (var hole in spec.Holes)
             {
@@ -54,23 +60,63 @@ public sealed partial class FileSemantics
                         .Select(i => new QuoteNode(Tree, Tree.Child(child, i * hole.Stride))).ToArray())
                     : QuoteArgument.Node(new QuoteNode(Tree, child));
             }
-            var constructed = new QuoteInstantiator(template, arguments, proxies: true).Build();
-            if (!constructed.Success)
+            SyntaxTree? template;
+            if (spec.MatchHelperName is { } helperName)
             {
-                _instanceErrors[node] = constructed.Diagnostics[0];
-                _instances[node] = null;
-                return null;
+                var helper = _language.Modules.SelectMany(module => module.QuoteHelpers).Single(h => h.Name == helperName);
+                var plan = _language.MatchPlan(helperName);
+                if (plan.Errors.Count > 0) return Failure(plan.Errors[0].Diagnostic);
+                template = plan.Fallback!.Syntax;
+                var selector = ((QuoteArgument.Scalar)arguments[helper.Match!.Selector]).Value;
+                foreach (var arm in plan.Arms)
+                {
+                    var match = arm.Pattern.MatchResolved(selector, ResolveQuoteNode);
+                    if (match.Diagnostics.Count > 0) return Failure(match.Diagnostics[0]);
+                    if (!match.Matched) continue;
+                    foreach (var capture in match.Captures) arguments.Add(capture.Key, capture.Value);
+                    template = arm.Result.Syntax;
+                    selectedSource = arm.Source;
+                    break;
+                }
             }
+            else template = _language.RewriteTemplate(rule).Tree;
+            if (template is null) { _instances[node] = null; return null; }
+            var constructed = new QuoteInstantiator(template, arguments, proxies: true).Build();
+            if (!constructed.Success) return Failure(constructed.Diagnostics[0]);
             _ownedQuotes.Add(constructed);
             var project = new Nitrogen.Binding.Project(_language);
             project.Set(Language.RewritePath, constructed.Tree!);
             var file = new ProjectSemantics(project)[Language.RewritePath];
-            file.Holes = (this, constructed.Proxies);
+            file.Holes = constructed.ProxyNodes.ToDictionary(pair => pair.Key,
+                pair => new RewriteSource(_quoteOwners[pair.Value.Tree], pair.Value.Node));
+            file._quoteOwners = _quoteOwners;
+            _quoteOwners[constructed.Tree!] = file;
             file._chain = _chain.Add(rule);
-            instance = new RewriteInstance(file, constructed.Tree!.Root, rule);
+            instance = new RewriteInstance(file, constructed.Tree!.Root, rule, selectedSource);
         }
         _instances[node] = instance;
         return instance;
+
+        RewriteInstance? Failure(QuoteDiagnostic diagnostic)
+        {
+            _instanceErrors[node] = new(diagnostic, selectedSource);
+            _instances[node] = null;
+            return null;
+        }
+    }
+
+    QuoteNode ResolveQuoteNode(QuoteNode value)
+    {
+        var seen = new HashSet<(SyntaxTree, int)>();
+        while (!value.Tree.IsDisposed && (uint)value.Node < (uint)value.Tree.NodeCount &&
+            _quoteOwners.TryGetValue(value.Tree, out var owner))
+        {
+            if (!seen.Add((value.Tree, value.Node))) return value with { Node = -1 };
+            if (value.Tree.Kind(value.Node) != SyntaxKinds.Hole) return value;
+            if (owner.Holes is null || !owner.Holes.TryGetValue(value.Node, out var source)) return value with { Node = -1 };
+            value = new(source.File.Tree, source.Node, value.Origin);
+        }
+        return value with { Node = -1 };
     }
 
     /// <summary>The unqualified name of the rule <paramref name="node"/> uses, for messages about its expansion.</summary>
@@ -93,7 +139,7 @@ public sealed partial class FileSemantics
             {
                 string name = RewriteName(node);
                 var file = instance.File;
-                var helper = instance.Rule.Rewrite?.HelperSource;
+                var helper = instance.Source;
                 IReadOnlyList<CompositionDiagnosticLocation> related = helper is null ? [] :
                     new[] { new CompositionDiagnosticLocation(helper.Path, new(helper.Start, helper.Length)) };
                 foreach (var diagnostic in file._project.Project.Diagnostics(file.Path))

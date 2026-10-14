@@ -162,6 +162,7 @@ public sealed partial class NitrogenLanguageService
     IReadOnlyList<ServiceDiagnostic> HostDiagnostics(Host host) => host.Embedded
         .SelectMany(uri => Diagnostics(uri).Select(d => d with { Range = OutOf(uri, d.Range) }))
         .Concat(GrammarDiagnostics(host.Uri))
+        .Concat(CSharpPatternDiagnostics(host))
         .ToList();
 
     /// <summary>Tokens of a virtual document at its host's positions; a token whose characters are not contiguous in the host (an escape) keeps its first line's part.</summary>

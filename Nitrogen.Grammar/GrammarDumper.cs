@@ -21,9 +21,21 @@ public static class GrammarDumper
                 .Append(string.Join(" ", builtin.Names.Select(n => n.Name))).Append(')');
         foreach (var property in module.SymbolProperties) builder.Append(SymbolProperty(property));
         foreach (var helper in module.Helpers)
+        {
             builder.Append(" (function ").Append(helper.Name.Name).Append(" (")
                 .Append(string.Join(" ", helper.Parameters.Select(p => p.Name.Name + ":" + p.Category.Name + (p.IsList ? "*" : ""))))
-                .Append(") : ").Append(helper.ReturnCategory.Name).Append(" ").Append(CSharpText.Literal(helper.Body.Text)).Append(")");
+                .Append(") : ").Append(helper.ReturnCategory.Name);
+            if (helper.Match is { } match)
+            {
+                builder.Append(" (match ").Append(match.Selector.Name);
+                foreach (var arm in match.Arms)
+                    builder.Append(" (arm (").Append(string.Join(" ", arm.Captures.Select(p => p.Name.Name + ":" + p.Category.Name + (p.IsList ? "*" : ""))))
+                        .Append(") ").Append(CSharpText.Literal(arm.Pattern.Text)).Append(" ").Append(CSharpText.Literal(arm.Result.Text)).Append(')');
+                builder.Append(" (fallback ").Append(CSharpText.Literal(helper.Body.Text)).Append("))");
+            }
+            else builder.Append(" ").Append(CSharpText.Literal(helper.Body.Text));
+            builder.Append(')');
+        }
         foreach (var rule in module.Rules) builder.Append(' ').Append(Dump(rule));
         foreach (var extend in module.Extends)
         {

@@ -95,7 +95,8 @@ internal static class DeclarativeWriter
                 text = resolved.Symbol.Declaration.Body.Text;
                 var sourceSpan = resolved.Symbol.Declaration.Body.Span;
                 helperSource = " { HelperSource = new(" + CSharpText.Literal(model.InputOf(resolved.Symbol.Module)?.Path ?? "") +
-                    $", {sourceSpan.Start}, {sourceSpan.Length}) }}";
+                    $", {sourceSpan.Start}, {sourceSpan.Length})" +
+                    (resolved.Symbol.Declaration.Match is null ? "" : ", MatchHelperName = " + CSharpText.Literal(resolved.Symbol.Key)) + " }";
                 foreach (var input in resolved.Inputs)
                     holes.Add($"new global::Nitrogen.Semantic.RewriteHole({CSharpText.Literal(input.Parameter)}, {input.Child}, {CSharpText.Literal(input.Category)}" +
                         (input.IsList ? $", true, {input.Stride}" : "") + ")");

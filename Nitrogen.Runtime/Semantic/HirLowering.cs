@@ -4,7 +4,10 @@ namespace Nitrogen.Semantic;
 
 public sealed record LoweringRegistration(int SyntaxKind, string OperationId,
     Func<LoweringContext, int, HirNode?> Lower, bool HandlesUnresolvedReferences = false,
-    bool DynamicOperation = false);
+    bool DynamicOperation = false)
+{
+    internal bool StructuralResult { get; init; }
+}
 
 public enum SemanticCheckScope { WholeFile, SubtreeAndAncestors }
 
@@ -65,24 +68,46 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     internal LoweringContext Rewriting(FileSemantics instance, IReadOnlyDictionary<int, HirNode> holes, SourceOrigin use, string rule) =>
         new(instance, this, holes, use, rule);
 
+    LoweringContext(FileSemantics source, LoweringContext caller)
+        : this(source, caller.SnapshotId, caller.CheckScope, caller.Admission)
+    {
+        _reported = caller._reported;
+        _activeTemplates = caller._activeTemplates;
+        _caller = caller;
+    }
+
+    internal LoweringContext ForSource(FileSemantics source)
+    {
+        for (LoweringContext? current = this; current is not null; current = current._caller)
+            if (ReferenceEquals(current.File, source)) return current;
+        return new(source, this);
+    }
+
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
     public SemanticCheckScope CheckScope { get; } = checkScope;
     public LoweringAdmission Admission { get; } = admission;
     public SourceOrigin Origin(int node) => new(File.Path, SnapshotId, node, File.Tree.Span(node));
-    public void Report(string code, SourceOrigin origin, string message)
+    public void Report(string code, SourceOrigin origin, string message) => Report(code, origin, message, []);
+
+    public void Report(string code, SourceOrigin origin, string message, IReadOnlyList<CompositionDiagnosticLocation> related)
     {
+        ArgumentNullException.ThrowIfNull(related);
         ArgumentException.ThrowIfNullOrWhiteSpace(code);
         ArgumentNullException.ThrowIfNull(message);
-        if (_caller is null) _reported.Add(new LoweringDiagnostic(code, origin, message));
+        if (_caller is null) _reported.Add(new LoweringDiagnostic(code, origin, message)
+        { Related = Array.AsReadOnly(related.ToArray()) });
         else if (_rewrite is { } rewrite && origin.Path == File.Path)
-            _caller.Report(code, rewrite.Use, $"in the expansion of {rewrite.Rule}: {message}");
-        else _caller.Report(code, origin, message);
+            _caller.Report(code, rewrite.Use, $"in the expansion of {rewrite.Rule}: {message}", related);
+        else _caller.Report(code, origin, message, related);
     }
     internal IReadOnlyList<LoweringDiagnostic> Reported => _reported;
 }
 
-public sealed record LoweringDiagnostic(string Code, SourceOrigin Origin, string Message);
+public sealed record LoweringDiagnostic(string Code, SourceOrigin Origin, string Message)
+{
+    public IReadOnlyList<CompositionDiagnosticLocation> Related { get; init; } = [];
+}
 public sealed record LoweringResult(IReadOnlyList<HirNode> Roots, IReadOnlyList<LoweringDiagnostic> Diagnostics);
 
 public static class HirLowering
@@ -218,10 +243,12 @@ public static class HirLowering
                     if (root is null) continue;
                     var dynamicOperation = root as HirOperation;
                     var operationId = registration.DynamicOperation ? dynamicOperation?.Signature.Id : registration.OperationId;
-                    if (root.Type.Equals(SemanticTypes.Error) || operationId is null ||
+                    bool syntaxValue = registration.StructuralResult && root is not HirOperation &&
+                        root.Type.Equals(file.DeclarativeTypes.TypeOf(node));
+                    if (root.Type.Equals(SemanticTypes.Error) || !syntaxValue && (operationId is null ||
                         !catalog.Operations.TryGetValue(operationId, out var signature) ||
                         !root.Type.Equals(signature.Result) ||
-                        root is HirOperation operation && !operation.Signature.Equals(signature))
+                        root is HirOperation operation && !operation.Signature.Equals(signature)))
                     {
                         diagnostics.Add(new LoweringDiagnostic("NH0003", root.Origins[0],
                             "The lowered value does not match its registered operation."));

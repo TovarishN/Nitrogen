@@ -9,7 +9,7 @@ namespace Nitrogen.LanguageService;
 internal static class CSharpQuotations
 {
     internal sealed record Hole(QuoteHole Shape, TextSpan Span);
-    internal sealed record Quote(string Category, EmbeddedString Text, IReadOnlyDictionary<string, Hole> Holes);
+    internal sealed record Quote(string Category, EmbeddedString Text, IReadOnlyDictionary<string, Hole> Holes, bool IsPattern = false);
 
     internal static IReadOnlyList<Quote> Find(string path, IReadOnlyDictionary<string, string> sources)
     {
@@ -19,15 +19,20 @@ internal static class CSharpQuotations
         var tree = trees.FirstOrDefault(t => t.FilePath == path);
         if (tree is null) return [];
         var model = compilation.GetSemanticModel(tree);
+        var runtime = compilation.SourceModule.ReferencedAssemblySymbols.FirstOrDefault(assembly => assembly.Identity.Name == typeof(Language).Assembly.GetName().Name);
+        var languageType = runtime?.GetTypeByMetadataName("Nitrogen.Language");
+        var holeType = runtime?.GetTypeByMetadataName("Nitrogen.QuoteHole");
         var found = new List<Quote>();
         foreach (var syntax in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             if (model.GetOperation(syntax) is not IInvocationOperation call ||
-                call.TargetMethod.Name != "CompileQuote" || call.TargetMethod.ContainingType.ToDisplayString() != "Nitrogen.Language") continue;
+                call.TargetMethod.Name is not ("CompileQuote" or "CompilePattern") ||
+                !SymbolEqualityComparer.Default.Equals(call.TargetMethod.ContainingType, languageType)) continue;
+            bool isPattern = call.TargetMethod.Name == "CompilePattern";
             ExpressionSyntax? Argument(string name) => call.Arguments.FirstOrDefault(a => a.Parameter?.Name == name)?.Value.Syntax as ExpressionSyntax;
             if (Argument("category") is not { } category || Constant(category) is not { } categoryText ||
                 Argument("text") is not { } template || Decode(template, new HashSet<ISymbol>(SymbolEqualityComparer.Default)) is not { } decoded ||
-                Argument("holes") is not BaseObjectCreationExpressionSyntax creation) continue;
+                Argument(isPattern ? "captures" : "holes") is not BaseObjectCreationExpressionSyntax creation) continue;
             var initializer = creation switch
             {
                 ObjectCreationExpressionSyntax explicitNew => explicitNew.Initializer,
@@ -42,7 +47,7 @@ internal static class CSharpQuotations
                 if (element is not AssignmentExpressionSyntax { Left: ImplicitElementAccessSyntax key, Right: InvocationExpressionSyntax value } ||
                     key.ArgumentList.Arguments.Count != 1 || Constant(key.ArgumentList.Arguments[0].Expression) is not { } name ||
                     model.GetOperation(value) is not IInvocationOperation holeCall ||
-                    holeCall.TargetMethod.ContainingType.ToDisplayString() != "Nitrogen.QuoteHole" ||
+                    !SymbolEqualityComparer.Default.Equals(holeCall.TargetMethod.ContainingType, holeType) ||
                     holeCall.TargetMethod.Name is not ("Node" or "List") ||
                     holeCall.Arguments.FirstOrDefault()?.Value.ConstantValue is not { HasValue: true, Value: string holeCategory } ||
                     holes.ContainsKey(name))
@@ -52,7 +57,7 @@ internal static class CSharpQuotations
                 }
                 holes[name] = new(new(holeCategory, holeCall.TargetMethod.Name == "List"), new TextSpan(key.SpanStart, key.Span.Length));
             }
-            if (supported) found.Add(new(categoryText, decoded, holes));
+            if (supported) found.Add(new(categoryText, decoded, holes, isPattern));
         }
         return found;
 

@@ -1,0 +1,46 @@
+syntax module PatternRefs
+{
+    symbols { value }
+    symbol property Initializer for value : int? = null;
+    token Word = ['a'..'z']+ except "let" "input" "emit";
+    token Number = ['0'..'9']+;
+    syntax File = Declarations:Declaration* "emit" Value:Expr lowers Init.Emit(Value);
+    syntax Declaration = Let / Input;
+    syntax Let = "let" Name:Word "=" Value:Expr ";" declares value Name type Core.Scalar
+    { symbol.Initializer = Value.Node; }
+    syntax Input = "input" Name:Word ";" declares value Name type Core.Scalar;
+    syntax function Swap(V:Expr):Expr=match V {
+        | (L:Expr, R:Expr) <[ $L + $R ]> => <[ $R + $L ]>;
+        | _ => <[ $V ]>;
+    };
+    syntax function First(V:Expr):Expr=match V {
+        | (L:Expr, R:Expr) <[ $L + $R ]> => <[ $L ]>;
+        | _ => <[ $V ]>;
+    };
+    syntax function Middle(V:Expr):Expr=match V {
+        | (Args:Expr*) <[ f(1, ..$Args, 2) ]> => <[ f(..$Args) ]>;
+        | _ => <[ $V ]>;
+    };
+    syntax function Nested(V:Expr):Expr=<[ swap($V + 1) ]>;
+    syntax function Composite(V:Expr):Expr=<[ first($V + $V + 1) ]>;
+    syntax function Danger(V:Expr):Expr=match V {
+        | <[ 1 ]> => <[ missing ]>;
+        | _ => <[ $V ]>;
+    };
+    extensible syntax Expr
+    {
+        out Resolved : Nitrogen.Semantic.SemanticType? = Nitrogen.Semantic.SemanticTypes.Scalar;
+        out Source : int? = null;
+        | Num = Value:Number lowers literal Core.Scalar Value { Source = null; }
+        | Ref = Name:Word references value Name lowers reference type Resolved initializer Source
+          { Source = Symbol?.Initializer; }
+        | Add = Left:Expr "+" Right:Expr precedence 10 left lowers Init.Add(Left, Right) { Source = null; }
+        | Call = "f" "(" Args:(Expr; ",")* ")" lowers Init.Sum(sequence Core.Scalar Args) { Source = null; }
+        | Swapped = "swap" "(" Value:Expr ")" rewrites Swap(Value)
+        | Selected = "first" "(" Value:Expr ")" rewrites First(Value)
+        | List = "middle" "(" Value:Expr ")" rewrites Middle(Value)
+        | Wrapped = "nested" "(" Value:Expr ")" rewrites Nested(Value)
+        | Combined = "composite" "(" Value:Expr ")" rewrites Composite(Value)
+        | Dangerous = "danger" "(" Value:Expr ")" rewrites Danger(Value)
+    }
+}

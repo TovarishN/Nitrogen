@@ -26,6 +26,7 @@ public sealed record RewriteHole(string Name, int Child, string Rule, bool IsLis
 /// <summary>A rule's rewrite: the template text (verbatim), the qualified rule it parses as, and its holes.</summary>
 public sealed record RewriteSpec(string Text, string Category, IReadOnlyList<RewriteHole> Holes)
 {
+    public string? MatchHelperName { get; init; }
     public QuoteHelperSource? HelperSource { get; init; }
 }
 

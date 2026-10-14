@@ -19,6 +19,15 @@ public sealed class QuoteHelperRuntimeTests
     [InlineData("twice(3; 4)", "f(3, 4, 3, 4)")]
     [InlineData("(1 + 2) times", "(1 + 2) * 2")]
     [InlineData("3 duplicate", "3 + 3")]
+    [InlineData("swap(1 + 2)", "2 + 1")]
+    [InlineData("f(swap(1))", "f(9)")]
+    [InlineData("f(swap(2))", "f(2)")]
+    [InlineData("swap(swap(1 + 2))", "2 + 1")]
+    [InlineData("nested(2)", "1 + 2")]
+    [InlineData("composite(3)", "3 * 2")]
+    [InlineData("middle(f(1, 3, 4, 2))", "f(3, 4)")]
+    [InlineData("middle(f(1, 2))", "f()")]
+    [InlineData("middle(f(3, 4))", "f(3, 4)")]
     public void Helper_expansion_matches_explicit_structural_lowering(string text, string expanded)
     {
         var language = CreateLanguage();
@@ -66,5 +75,51 @@ public sealed class QuoteHelperRuntimeTests
         using var parsed = language.ParseTemplate(text, "QuoteHelpers.Expr", new Dictionary<string, string>());
         Assert.True(parsed.Success);
         Assert.Contains(TemplateListInstantiationTests.Lower(language, parsed.Tree).Diagnostics, d => d.Code == code);
+    }
+
+    [Theory]
+    [InlineData("swap(1)", "9:Core.Scalar")]
+    [InlineData("swap(2)", "2:Core.Scalar")]
+    public void Match_helpers_can_return_typed_non_operation_roots(string input, string expected)
+    {
+        var language = CreateLanguage();
+        using var parsed = language.ParseTemplate(input, "QuoteHelpers.Expr", new Dictionary<string, string>());
+        var lowered = TemplateListInstantiationTests.Lower(language, parsed.Tree);
+        Assert.Empty(lowered.Diagnostics);
+        Assert.Equal(expected, TemplateListInstantiationTests.Shape(Assert.Single(lowered.Roots)));
+    }
+
+    [Fact]
+    public void Selected_arm_construction_failures_keep_the_result_definition_as_related_source()
+    {
+        var language=CreateLanguage();
+        using var parsed=language.ParseTemplate("requiredmiddle(f(1,2))","QuoteHelpers.Expr",new Dictionary<string,string>());
+        var project=new Nitrogen.Binding.Project(language);
+        project.Set("caller.quote",parsed.Tree);
+        using var semantics=new Nitrogen.Semantics.ProjectSemantics(project);
+        var lowered=HirLowering.Lower(semantics["caller.quote"],language.SemanticCatalog);
+        var error=Assert.Single(lowered.Diagnostics);
+        Assert.Equal("NH0010",error.Code);
+        Assert.Equal("caller.quote",error.Origin.Path);
+        var related=Assert.Single(error.Related);
+        var expected=QuoteHelpersModule.Instance.QuoteHelpers.Single(helper=>helper.Name=="QuoteHelpers.RequireMiddle").Match!.Arms[0].ResultSource;
+        Assert.Equal(expected.Path,related.Path);
+        Assert.Equal(new TextSpan(expected.Start,expected.Length),related.Span);
+    }
+
+    [Fact]
+    public void Editor_diagnostics_keep_the_selected_arm_for_failed_construction()
+    {
+        var language=CreateLanguage();
+        var registry=new Nitrogen.LanguageService.LanguageRegistry();
+        registry.Add(new("QuoteHelpers",language,new Dictionary<string,Rule> { [".quotehelpers"]=QuoteHelpersModule.Program }));
+        using var service=new Nitrogen.LanguageService.NitrogenLanguageService(registry);
+        const string uri="file:///tmp/selected-arm.quotehelpers";
+        service.Open(uri,1,"requiredmiddle(f(1,2));");
+        var error=Assert.Single(service.Diagnostics(uri),diagnostic=>diagnostic.Code=="NH0010");
+        var related=Assert.Single(error.Related!);
+        var expected=QuoteHelpersModule.Instance.QuoteHelpers.Single(helper=>helper.Name=="QuoteHelpers.RequireMiddle").Match!.Arms[0].ResultSource;
+        Assert.Equal(new Uri(expected.Path).AbsoluteUri,related.Uri);
+        Assert.Equal(new Nitrogen.LanguageService.LineMap(File.ReadAllText(expected.Path)).RangeOf(new(expected.Start,expected.Length)),related.Range);
     }
 }

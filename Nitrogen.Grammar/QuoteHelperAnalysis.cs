@@ -56,13 +56,36 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
                 else parameters.Add(parameter.Name.Name, parameter);
                 Category(parameter.Category, module, report);
             }
-            foreach (var hole in QuotationWriter.Holes(helper.Body.Text, analysis, category))
+            CheckQuote(helper.Body, parameters);
+            if (helper.Match is not { } match) continue;
+            if (!parameters.TryGetValue(match.Selector.Name, out var selector) || selector.IsList)
+                report(GrammarCodes.QuoteMatchSelector, "a match selector must name a scalar helper parameter", match.Selector.Span, module);
+            foreach (var arm in match.Arms)
             {
-                var span = new GrammarSpan(helper.Body.Span.Start + hole.Start, hole.Length);
-                if (!parameters.TryGetValue(hole.Name, out var parameter))
-                    report(GrammarCodes.UnknownHole, $"'${hole.Name}' is not a helper parameter", span, module);
-                else if (parameter.IsList != hole.IsList)
-                    report(GrammarCodes.HoleShapeMismatch, $"'${hole.Name}' has the wrong scalar/list shape", span, module);
+                var captures = new Dictionary<string, QuoteParameter>(StringComparer.Ordinal);
+                foreach (var capture in arm.Captures)
+                {
+                    if (parameters.ContainsKey(capture.Name.Name) || captures.ContainsKey(capture.Name.Name))
+                        report(GrammarCodes.QuoteMatchCapture, $"capture '{capture.Name.Name}' is duplicated or shadows a helper parameter", capture.Name.Span, module);
+                    else captures.Add(capture.Name.Name, capture);
+                    Category(capture.Category, module, report);
+                }
+                CheckQuote(arm.Pattern, captures, selector is null ? null : Category(selector.Category, module));
+                var scope = new Dictionary<string, QuoteParameter>(parameters, StringComparer.Ordinal);
+                foreach (var capture in captures) scope[capture.Key] = capture.Value;
+                CheckQuote(arm.Result, scope);
+            }
+
+            void CheckQuote(QuoteText quote, IReadOnlyDictionary<string, QuoteParameter> scope, GrammarSymbol? quoteCategory = null)
+            {
+                foreach (var hole in QuotationWriter.Holes(quote.Text, analysis, quoteCategory ?? category))
+                {
+                    var span = new GrammarSpan(quote.Span.Start + hole.Start, hole.Length);
+                    if (!scope.TryGetValue(hole.Name, out var parameter))
+                        report(GrammarCodes.UnknownHole, $"'${hole.Name}' is not in this quote's scope", span, module);
+                    else if (parameter.IsList != hole.IsList)
+                        report(GrammarCodes.HoleShapeMismatch, $"'${hole.Name}' has the wrong scalar/list shape", span, module);
+                }
             }
         }
     }

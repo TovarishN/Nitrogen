@@ -89,8 +89,8 @@ public sealed partial class FileSemantics
     public T Get<T>(int node, Property<T> property)
     {
         // A template's hole reads every property on the use's child it stands for.
-        if (Holes is { } holes && Tree.Kind(node) == SyntaxKinds.Hole && holes.Children.TryGetValue(node, out int child))
-            return holes.File.Get(child, property);
+        if (Holes is { } holes && Tree.Kind(node) == SyntaxKinds.Hole && holes.TryGetValue(node, out var source))
+            return source.File.Get(source.Node, property);
         if (!_slots.TryGetValue(property, out var boxed)) _slots[property] = boxed = new Slot<T>(Tree.NodeCount);
         var slot = (Slot<T>)boxed;
         slot.Read(node, out byte state, out T cached);

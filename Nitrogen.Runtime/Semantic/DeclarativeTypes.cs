@@ -85,8 +85,8 @@ public sealed class DeclarativeTypes
         int kind = tree.Kind(node);
         // A template's hole has the type of the use's child it stands for.
         if (kind == SyntaxKinds.Hole)
-            return _file.Holes is { } holes && holes.Children.TryGetValue(node, out int child)
-                ? holes.File.DeclarativeTypes.TypeOf(child) : SemanticTypes.Error;
+            return _file.Holes is { } holes && holes.TryGetValue(node, out var source)
+                ? source.File.DeclarativeTypes.TypeOf(source.Node) : SemanticTypes.Error;
         if (kind == SyntaxKinds.Ambiguous)
             return tree.ChildCount(node) > 0 ? TypeOf(tree.Child(node, 0)) : SemanticTypes.Error;
         if (_lowering.RuleFor(kind) is { } rule && rule.Rule.Form != DeclarativeForm.None)
@@ -306,7 +306,11 @@ public sealed class DeclarativeTypes
     HirNode? Lower(LoweringContext context, int node)
     {
         if (_file.Tree.Kind(node) == SyntaxKinds.Hole)
-            return context.Holes is { } holes && holes.TryGetValue(node, out var lowered) ? lowered : null;
+        {
+            if (context.Holes is { } holes && holes.TryGetValue(node, out var lowered)) return lowered;
+            return _file.Holes is { } sources && sources.TryGetValue(node, out var source)
+                ? source.File.DeclarativeTypes.LowerNested(context.ForSource(source.File), source.Node) : null;
+        }
         if (_lowering.RuleFor(_file.Tree.Kind(node)) is { Rule.Form: DeclarativeForm.Rewrite } rewrite)
             return LowerRewrite(context, node, rewrite.Rule);
         if (_lowering.RuleFor(_file.Tree.Kind(node)) is { Rule.Form: DeclarativeForm.Expand } expand)
@@ -565,7 +569,9 @@ public sealed class DeclarativeTypes
         {
             if (_file.RewriteError(node) is { } error)
             {
-                context.Report(error.Code == "NQ0005" ? "NH0010" : "NH0009", use, error.Message);
+                IReadOnlyList<CompositionDiagnosticLocation> related = _file.RewriteErrorSource(node) is { } source
+                    ? new[] { new CompositionDiagnosticLocation(source.Path, new(source.Start, source.Length)) } : [];
+                context.Report(error.Code == "NQ0005" ? "NH0010" : "NH0009", use, error.Message, related);
                 return null;
             }
             string reason = _file.Tree.Language!.RewriteTemplate(rule).Error ?? "it has no template";
@@ -573,10 +579,11 @@ public sealed class DeclarativeTypes
             return null;
         }
         var holes = new Dictionary<int, HirNode>();
-        var byChild = new Dictionary<int, HirNode?>();
-        foreach (var (hole, child) in instance.File.Holes!.Value.Children)
+        var byChild = new Dictionary<FileSemantics.RewriteSource, HirNode?>();
+        foreach (var (hole, source) in instance.File.Holes!)
         {
-            if (!byChild.TryGetValue(child, out var lowered)) byChild[child] = lowered = Lower(context, child);
+            if (!byChild.TryGetValue(source, out var lowered))
+                byChild[source] = lowered = source.File.DeclarativeTypes.LowerNested(context.ForSource(source.File), source.Node);
             if (lowered is null) return null;
             holes[hole] = lowered;
         }
