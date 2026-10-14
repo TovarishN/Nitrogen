@@ -1,6 +1,6 @@
 # Typed quasiquote pattern matching
 
-Status: written specification for review; product implementation has not started.
+Status: approved by the user on 2026-10-14; product implementation has not started.
 
 ## Intent and agreed scope
 
