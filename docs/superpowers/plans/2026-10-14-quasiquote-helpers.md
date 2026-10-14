@@ -304,12 +304,20 @@ At completion report implemented behavior, commit/branch/worktree, .NET/client/g
 - Native VS Code verified new-file review/cancel/apply, current-module apply, helper/parameter/keyword navigation,
   zero grammar diagnostics, and single extraction undo with original byte hashes/new-file removal.
   Initial sample values came from the installed DateCalc client; they are excluded as new-server refresh evidence.
-  Remaining native live-refresh/existing-module acceptance awaits scratch-folder trust approval.
+  Remaining native live-refresh/existing-module acceptance is blocked by unavailable native app controls.
 - Independent whole-branch review found six Important defects and no Critical/Minor findings. The single fix pass
   adds RED/GREEN coverage for helper rename/extraction capture, actual parsed parameter holes (including overlapping
   opaque tokens), every connected composition's consumers, signed-file navigation, and complete category references.
 - Post-review full gate: 1,649 tests passed; solution build has zero warnings/errors
   (`/tmp/nitrogen-helper-review-suite.log`, `/tmp/nitrogen-helper-review-build.log`).
-- All automated stages and review fixes are committed. Native step 4 remains pending scratch-folder trust approval;
+- All automated stages and review fixes are committed. Native step 4 remains pending: the user approved trust for the scratch folder and trust was applied,
+  but native app controls became unavailable before the remaining interactions could be performed;
   Task 6 is not marked complete. Large-composition latency was not benchmarked.
 - No PR, merge, version bump or release requested for this feature.
+
+Native continuation: `/tmp/nitrogen-composition-ui` alone was trusted (canonical
+`/private/tmp/nitrogen-composition-ui`); no parent trust was added. The existing-destination fixture
+is prepared with `Shared.ngr`, an unrelated `Marker` rule, and the `QuoteCalc` alias to isolate
+the consuming client. VS Code was reloaded and the whole inline quote selected. On continuation,
+`cua.getApp` was unavailable and `cua.getState()` reported no native apps, only browser surfaces.
+Do not count the remaining existing-module Apply/live-refresh/undo checks as passed.
