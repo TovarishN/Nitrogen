@@ -50,6 +50,7 @@
   <!-- The runtime tests run against modules generated from these grammars. -->
   <ItemGroup>
     <ProjectReference Include="..\Nitrogen.Generator\Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="true" Aliases="generator" />
+    <AdditionalFiles Include="Grammars\PatternRefs.ngr" Namespace="Nitrogen.Tests.PatternRefs" />
     <AdditionalFiles Include="Grammars\QuoteHelpers.ngr" Namespace="Nitrogen.Tests.QuoteHelpers" />
     <AdditionalFiles Include="Grammars\QuoteLists.ngr" Namespace="Nitrogen.Tests.QuoteLists" />
     <AdditionalFiles Include="Grammars\Calc.ngr" Namespace="Nitrogen.Tests.Calc" />

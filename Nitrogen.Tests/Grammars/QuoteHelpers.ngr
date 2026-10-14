@@ -6,8 +6,29 @@ syntax module QuoteHelpers
     syntax function Need(Input: Expr*) : Expr = <[ required(..$Input) ]>;
     syntax function Pair(A: Expr, B: Expr) : Expr = <[ $A + $B ]>;
     syntax function Cycle(Value: Expr) : Expr = <[ $Value cycle ]>;
+    syntax function Swap(Value:Expr):Expr=match Value {
+        | (L:Expr, R:Expr) <[ $L + $R ]> => <[ $R + $L ]>;
+        | (L:Expr, R:Expr) <[ $L + $R ]> => <[ 0 ]>;
+        | <[ 1 ]> => <[ 9 ]>;
+        | _ => <[ $Value ]>;
+    };
+    syntax function SelectFirst(Value:Expr):Expr=match Value {
+        | (L:Expr, R:Expr) <[ $L + $R ]> => <[ $L ]>;
+        | _ => <[ $Value ]>;
+    };
+    syntax function SelectMiddle(Value:Expr):Expr=match Value {
+        | (Items:Expr*) <[ f(1, ..$Items, 2) ]> => <[ f(..$Items) ]>;
+        | _ => <[ $Value ]>;
+    };
+    syntax function MakeNested(Value:Expr):Expr=<[ swap($Value + 1) ]>;
+    syntax function MakeComposite(Value:Expr):Expr=<[ first($Value * 2 + 1) ]>;
     extensible syntax Expr
     {
+        | Swapped = "swap" "(" Value:Expr ")" rewrites Swap(Value)
+        | First = "first" "(" Value:Expr ")" rewrites SelectFirst(Value)
+        | Middle = "middle" "(" Value:Expr ")" rewrites SelectMiddle(Value)
+        | Nested = "nested" "(" Value:Expr ")" rewrites MakeNested(Value)
+        | Composite = "composite" "(" Value:Expr ")" rewrites MakeComposite(Value)
         | Paren = "(" Inner:Expr ")"
         | Num = Value:Number lowers literal Core.Scalar Value
         | Add = Left:Expr "+" Right:Expr precedence 10 left lowers Test.Add(Left, Right)

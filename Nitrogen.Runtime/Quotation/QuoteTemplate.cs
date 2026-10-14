@@ -19,6 +19,7 @@ public sealed partial class QuoteInstantiation : IDisposable
     public IReadOnlyList<QuoteDiagnostic> Diagnostics { get; }
     public IReadOnlyDictionary<int, SourceOrigin> Origins { get; }
     internal IReadOnlyDictionary<int, int> Proxies { get; }
+    internal IReadOnlyDictionary<int, QuoteNode> ProxyNodes { get; init; } = new Dictionary<int, QuoteNode>();
     public void Dispose() => Tree?.Dispose();
 }
 
@@ -50,6 +51,8 @@ public sealed class QuoteTemplate
         _parsed = parsed;
         _holes = holes;
     }
+
+    internal SyntaxTree Syntax => _parsed.Tree;
 
     internal void DisposeStorage()
     {

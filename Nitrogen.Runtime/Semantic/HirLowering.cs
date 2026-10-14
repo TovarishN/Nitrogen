@@ -4,7 +4,10 @@ namespace Nitrogen.Semantic;
 
 public sealed record LoweringRegistration(int SyntaxKind, string OperationId,
     Func<LoweringContext, int, HirNode?> Lower, bool HandlesUnresolvedReferences = false,
-    bool DynamicOperation = false);
+    bool DynamicOperation = false)
+{
+    internal bool StructuralResult { get; init; }
+}
 
 public enum SemanticCheckScope { WholeFile, SubtreeAndAncestors }
 
@@ -64,6 +67,21 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
 
     internal LoweringContext Rewriting(FileSemantics instance, IReadOnlyDictionary<int, HirNode> holes, SourceOrigin use, string rule) =>
         new(instance, this, holes, use, rule);
+
+    LoweringContext(FileSemantics source, LoweringContext caller)
+        : this(source, caller.SnapshotId, caller.CheckScope, caller.Admission)
+    {
+        _reported = caller._reported;
+        _activeTemplates = caller._activeTemplates;
+        _caller = caller;
+    }
+
+    internal LoweringContext ForSource(FileSemantics source)
+    {
+        for (LoweringContext? current = this; current is not null; current = current._caller)
+            if (ReferenceEquals(current.File, source)) return current;
+        return new(source, this);
+    }
 
     public FileSemantics File { get; } = file;
     public Guid SnapshotId { get; } = snapshotId;
@@ -218,10 +236,12 @@ public static class HirLowering
                     if (root is null) continue;
                     var dynamicOperation = root as HirOperation;
                     var operationId = registration.DynamicOperation ? dynamicOperation?.Signature.Id : registration.OperationId;
-                    if (root.Type.Equals(SemanticTypes.Error) || operationId is null ||
+                    bool syntaxValue = registration.StructuralResult && root is not HirOperation &&
+                        root.Type.Equals(file.DeclarativeTypes.TypeOf(node));
+                    if (root.Type.Equals(SemanticTypes.Error) || !syntaxValue && (operationId is null ||
                         !catalog.Operations.TryGetValue(operationId, out var signature) ||
                         !root.Type.Equals(signature.Result) ||
-                        root is HirOperation operation && !operation.Signature.Equals(signature))
+                        root is HirOperation operation && !operation.Signature.Equals(signature)))
                     {
                         diagnostics.Add(new LoweringDiagnostic("NH0003", root.Origins[0],
                             "The lowered value does not match its registered operation."));

@@ -19,6 +19,15 @@ public sealed class QuoteHelperRuntimeTests
     [InlineData("twice(3; 4)", "f(3, 4, 3, 4)")]
     [InlineData("(1 + 2) times", "(1 + 2) * 2")]
     [InlineData("3 duplicate", "3 + 3")]
+    [InlineData("swap(1 + 2)", "2 + 1")]
+    [InlineData("f(swap(1))", "f(9)")]
+    [InlineData("f(swap(2))", "f(2)")]
+    [InlineData("swap(swap(1 + 2))", "2 + 1")]
+    [InlineData("nested(2)", "1 + 2")]
+    [InlineData("composite(3)", "3 * 2")]
+    [InlineData("middle(f(1, 3, 4, 2))", "f(3, 4)")]
+    [InlineData("middle(f(1, 2))", "f()")]
+    [InlineData("middle(f(3, 4))", "f(3, 4)")]
     public void Helper_expansion_matches_explicit_structural_lowering(string text, string expanded)
     {
         var language = CreateLanguage();
@@ -66,5 +75,17 @@ public sealed class QuoteHelperRuntimeTests
         using var parsed = language.ParseTemplate(text, "QuoteHelpers.Expr", new Dictionary<string, string>());
         Assert.True(parsed.Success);
         Assert.Contains(TemplateListInstantiationTests.Lower(language, parsed.Tree).Diagnostics, d => d.Code == code);
+    }
+
+    [Theory]
+    [InlineData("swap(1)", "9:Core.Scalar")]
+    [InlineData("swap(2)", "2:Core.Scalar")]
+    public void Match_helpers_can_return_typed_non_operation_roots(string input, string expected)
+    {
+        var language = CreateLanguage();
+        using var parsed = language.ParseTemplate(input, "QuoteHelpers.Expr", new Dictionary<string, string>());
+        var lowered = TemplateListInstantiationTests.Lower(language, parsed.Tree);
+        Assert.Empty(lowered.Diagnostics);
+        Assert.Equal(expected, TemplateListInstantiationTests.Shape(Assert.Single(lowered.Roots)));
     }
 }
