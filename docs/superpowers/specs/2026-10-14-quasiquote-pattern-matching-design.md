@@ -1,6 +1,6 @@
 # Typed quasiquote pattern matching
 
-Status: approved by the user on 2026-10-14; product implementation has not started.
+Status: approved by the user on 2026-10-14; implementation is undergoing final review and distribution checks.
 
 ## Intent and agreed scope
 

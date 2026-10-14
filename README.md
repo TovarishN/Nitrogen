@@ -46,6 +46,41 @@ Quasiquotation defines derived syntax through existing operations:
 and date arithmetic. In the grammar quote, navigate from `$Count` to its field or from `weeks` to the
 `Weeks` rule.
 
+Typed patterns recognize syntax and reuse captured nodes in return quotes:
+
+```text
+syntax function SwapAddition(Value: Expr) : Expr = match Value
+{
+  | (Left: Expr, Right: Expr) <[ $Left + $Right ]> => <[ $Right + $Left ]>;
+  | _ => <[ $Value ]>;
+};
+| Swapped = Value:Expr "swapped" precedence 5 rewrites SwapAddition(Value)
+```
+
+The [DateCalc pattern example](examples/DateCalc/pattern-matching.datecalc) uses caller-bound numbers
+and durations. Arms match the original syntax in order; exactly one final fallback is required.
+Captures are local to their arm and cannot shadow parameters. Every pattern and result is validated,
+even in an unused helper. Parentheses and wrappers remain part of the syntax.
+
+The same matcher is available from C#; [PatternMatching.cs](examples/DateCalc/PatternMatching.cs) shows
+match → instantiate through `Language.CompilePattern`, `QuotePattern.Match`, and `CompileQuote`.
+A normal mismatch has no diagnostics or partial captures. Captures borrow their input tree and carry
+explicit source origins; keep that tree alive until captures have been consumed. Dispose the pattern
+compilation when finished. Instantiation produces independently owned syntax for the destination's
+ordinary bind/check/lower pipeline. Both APIs require the same `Language` snapshot.
+
+`f(1, ..$Args, 2)` captures the middle items, including an empty middle, when `Args` is declared
+`QuoteHole.List("Module.Expr")` or `Args: Expr*`. One variable-length capture is allowed per physical
+list; nested lists are independent. Repeated capture names require structural equality and return
+the first occurrence. Matching ignores trivia and compares exact token spelling and ordered children.
+Read-only patterns can recognize declarations; construction quotes still cannot author declarations.
+Matching alone changes no source text or semantic state. Guards, multiple captures in one list,
+semantic equivalence and matching a native host's semantic model are outside this interface.
+
+Pattern diagnostics: `NQP0001` invalid category/pattern; `NQP0002` invalid or unused capture contract;
+`NQP0003` unsupported list layout; `NQP0004` invalid/disposed syntax storage; `NQP0005` incompatible
+category or snapshot. Return quotes retain the existing `NQ` construction diagnostics.
+
 The rest is ordinary C#:
 
 - [DateCalcLanguage.cs](examples/DateCalc/DateCalcLanguage.cs) (81 lines) declares the `DateCalc.Date`
