@@ -12,6 +12,8 @@ public static partial class GrammarExtraction
             return SelectionError("Fix grammar syntax errors before extracting definitions.");
         foreach (var module in parsed.File.Modules)
         {
+            if (module.Helpers.Any(helper => selection.Start < helper.Span.End && helper.Span.Start < selection.End))
+                return SelectionError("Quote helper declarations cannot be moved with Extract Block; choose a destination when extracting the inline quote.");
             var rules = Match(module.Rules.Select(r => r.Span));
             if (rules.Length > 0)
                 return Success(module, ExtractionShape.Rules, null, rules);

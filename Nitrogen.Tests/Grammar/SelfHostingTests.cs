@@ -26,6 +26,7 @@ public class SelfHostingTests
             var e = expected.Modules[m];
             var a = actual.Modules[m];
             Assert.Equal(e.Usings, a.Usings);
+            Assert.Equal(e.Helpers, a.Helpers);
             for (int r = 0; r < e.Rules.Count; r++) Assert.Equal(e.Rules[r], a.Rules[r]);
             for (int x = 0; x < e.Extends.Count; x++) Assert.Equal(e.Extends[x], a.Extends[x]);
             Assert.Equal(e.Span, a.Span);

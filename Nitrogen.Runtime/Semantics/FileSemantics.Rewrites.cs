@@ -93,10 +93,14 @@ public sealed partial class FileSemantics
             {
                 string name = RewriteName(node);
                 var file = instance.File;
+                var helper = instance.Rule.Rewrite?.HelperSource;
+                IReadOnlyList<CompositionDiagnosticLocation> related = helper is null ? [] :
+                    new[] { new CompositionDiagnosticLocation(helper.Path, new(helper.Start, helper.Length)) };
                 foreach (var diagnostic in file._project.Project.Diagnostics(file.Path))
-                    found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}"));
+                    found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}") { Related = related });
                 foreach (var diagnostic in file.Diagnostics())
-                    found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}"));
+                    found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}")
+                    { Related = diagnostic.Related.Concat(related).Distinct().ToArray() });
             }
         return _expansions = found;
     }

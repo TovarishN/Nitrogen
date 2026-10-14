@@ -51,7 +51,13 @@ syntax module Nitrogen
                           lowers Grammar.LanguagePresentationSetting(text Kind, text Name, text Value);
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
                           lowers Grammar.Module(text Name, sequence Grammar.Member Members);
-  syntax Member         = Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax Member         = QuoteHelper / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax QuoteHelper = "syntax" "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:TemplateString ";"
+                       lowers Grammar.QuoteHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, text Body);
+  syntax QuoteParameter = Name:Identifier ":" Category:QualifiedName List:ListMarker?
+                       lowers Grammar.QuoteParameter(text Name, text Category, optional Core.Text List);
+  syntax ListMarker = Value:"*" lowers text Core.Text Value;
+  syntax HelperArgument = Name:Identifier lowers text Core.Text Name;
   syntax Symbols        = "symbols" "{" Kinds:Word+ "}"  lowers Grammar.Symbols(sequence Core.Text Kinds);
   syntax Word           = Value:Identifier  lowers text Core.Text Value;
   syntax Builtin        = "builtin" SymbolKind:Identifier Within:InKind? "{" Names:BuiltinName+ "}"
@@ -80,7 +86,9 @@ syntax module Nitrogen
   syntax Associativity  = "left" / "right"  lowers text Core.Text this;
 
   // Binding clauses (issue 237).
-  syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers / Rewrites;
+  syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers / Rewrites / HelperRewrite;
+  syntax HelperRewrite = "rewrites" Name:QualifiedName "(" Arguments:(HelperArgument; ",")* ")"
+                       lowers Grammar.HelperRewrite(text Name, sequence Core.Text Arguments);
   syntax Rewrites       = "rewrites" Text:TemplateString  lowers Grammar.Rewrites(text Text);
   syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Sequential:"sequential"? FileScope:("in" "file")? Export:"export"? Type:DeclaredType?
                           lowers Grammar.Declares(text SymbolKind, text Field, optional text Sequential, optional text FileScope,

@@ -122,7 +122,7 @@ public sealed class QuasiquoteNavigationTests : IDisposable
         using var service = new NitrogenLanguageService(LspCommand.Registry());
         service.ConfigureWorkspace(configured ? _root : Path.GetDirectoryName(_root)!);
         service.Open(Uri("DateCalc.ngr"), 1, text);
-        Assert.Equal(At(text, "Count:Expr"), Assert.Single(service.Definition(Uri("DateCalc.ngr"), At(text, "$Count", 2))).Range.Start);
+        Assert.Equal(At(text, "Count: Expr"), Assert.Single(service.Definition(Uri("DateCalc.ngr"), At(text, "$Count", 2))).Range.Start);
         Assert.Equal(At(text, "Weeks   ="), Assert.Single(service.Definition(Uri("DateCalc.ngr"), At(text, "weeks ]>"))).Range.Start);
     }
 

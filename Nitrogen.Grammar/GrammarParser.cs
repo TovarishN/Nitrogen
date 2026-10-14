@@ -154,6 +154,7 @@ public static class GrammarParser
             var symbols = new List<SymbolsDecl>();
             var builtins = new List<BuiltinDecl>();
             var symbolProperties = new List<SymbolPropertyDecl>();
+            var helpers = new List<QuoteHelperDecl>();
             while (!At(TokenKind.RBrace))
             {
                 if (AtKeyword("using"))
@@ -218,6 +219,11 @@ public static class GrammarParser
                 else if (AtKeyword("syntax"))
                 {
                     var keyword = Advance();
+                    if (AtKeyword("function") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.LParen)
+                    {
+                        helpers.Add(ParseQuoteHelper(keyword));
+                        continue;
+                    }
                     var (ruleName, body, clauses, semantics, end) = ParseRuleBody();
                     rules.Add(new SyntaxRule(ruleName, body, GrammarSpan.FromBounds(keyword.Start, end), clauses, semantics));
                 }
@@ -244,7 +250,7 @@ public static class GrammarParser
             }
             var close = Advance();
             return new ModuleDecl(name, usings.ToArray(), rules.ToArray(), extends.ToArray(),
-                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray());
+                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray());
         }
 
         (string Name, Expr Body, EquatableArray<BindingClause> Clauses, SemanticsBlock? Semantics, int End) ParseRuleBody()
@@ -474,18 +480,74 @@ public static class GrammarParser
         /// <c>rewrites &lt;[ text ]&gt;</c> (spec: quasiquote rewrites): the text runs verbatim to the first <c>]&gt;</c>,
         /// never tokenized. Lexing resumes after it.
         /// </summary>
+        QuoteHelperDecl ParseQuoteHelper(GrammarToken keyword)
+        {
+            ExpectKeyword("function");
+            var name = Name(Expect(TokenKind.Identifier, "a helper name"));
+            Expect(TokenKind.LParen, "'('");
+            var parameters = new List<QuoteParameter>();
+            if (!At(TokenKind.RParen))
+                do
+                {
+                    var parameter = Name(Expect(TokenKind.Identifier, "a parameter name"));
+                    Expect(TokenKind.Colon, "':'");
+                    var category = ReadCategory();
+                    bool list = At(TokenKind.Star);
+                    int end = list ? Advance().End : category.Span.End;
+                    parameters.Add(new(parameter, category, list, GrammarSpan.FromBounds(parameter.Span.Start, end)));
+                    if (!At(TokenKind.Comma)) break;
+                    Advance();
+                } while (true);
+            Expect(TokenKind.RParen, "')'");
+            Expect(TokenKind.Colon, "':'");
+            var result = ReadCategory();
+            var equals = Expect(TokenKind.Equals, "'='");
+            var body = ReadQuote(equals.End);
+            var semicolon = Expect(TokenKind.Semicolon, "';'");
+            return new(name, parameters.ToArray(), result, body, GrammarSpan.FromBounds(keyword.Start, semicolon.End));
+        }
+
+        NameDecl ReadCategory()
+        {
+            var token = Current;
+            return new(ExpectName("a syntax category"), token.Span);
+        }
+
         BindingClause Rewrite(GrammarToken keyword)
         {
             int open = GrammarLexer.SkipTrivia(_text, keyword.End);
+            if (string.CompareOrdinal(_text, open, "<[", 0, 2) == 0)
+            {
+                var quote = ReadQuote(keyword.End);
+                return new(BindingClauseKind.Rewrites, default, "", default, false, false,
+                    GrammarSpan.FromBounds(keyword.Start, quote.Span.End + 2), Target: new(quote.Text, quote.Span));
+            }
+            var helper = ReadCategory();
+            Expect(TokenKind.LParen, "'('");
+            var arguments = new List<NameDecl>();
+            if (!At(TokenKind.RParen))
+                do
+                {
+                    arguments.Add(Name(Expect(TokenKind.Identifier, "a labeled field argument")));
+                    if (!At(TokenKind.Comma)) break;
+                    Advance();
+                } while (true);
+            var close = Expect(TokenKind.RParen, "')'");
+            return new(BindingClauseKind.Rewrites, default, "", default, false, false,
+                GrammarSpan.FromBounds(keyword.Start, close.End),
+                HelperCall: new(helper, arguments.ToArray(), GrammarSpan.FromBounds(helper.Span.Start, close.End)));
+        }
+
+        QuoteText ReadQuote(int after)
+        {
+            int open = GrammarLexer.SkipTrivia(_text, after);
             if (string.CompareOrdinal(_text, open, "<[", 0, 2) != 0)
-                throw new GrammarSyntaxException("expected '<[' after 'rewrites'", new GrammarSpan(open, 0));
+                throw new GrammarSyntaxException("expected '<['", new GrammarSpan(open, 0));
             int start = open + 2, close = _text.IndexOf("]>", start, StringComparison.Ordinal);
             if (close < 0) throw new GrammarSyntaxException("expected ']>' to close the template", new GrammarSpan(open, 2));
             _tokens.RemoveRange(_position, _tokens.Count - _position);
             _lexed = close + 2;
-            return new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
-                GrammarSpan.FromBounds(keyword.Start, close + 2),
-                Target: new NameDecl(_text.Substring(start, close - start), GrammarSpan.FromBounds(start, close)));
+            return new(_text.Substring(start, close - start), GrammarSpan.FromBounds(start, close));
         }
 
         /// <summary>Binding clauses (issue 237) after a rule body or an alternative; none is fine.</summary>

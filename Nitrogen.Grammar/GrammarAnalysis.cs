@@ -57,7 +57,10 @@ internal sealed class GrammarAnalysis
         foreach (var module in _modules) Register(module, report);
         CollectPoints();
         ComputeNullable();
+        Helpers = new(this);
     }
+
+    public QuoteHelperAnalysis Helpers { get; }
 
     public IEnumerable<ModuleDecl> PrimaryModules => _modules.Where(m => ReferenceEquals(_byName[m.Name], m));
 

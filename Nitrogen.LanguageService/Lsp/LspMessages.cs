@@ -221,6 +221,8 @@ public sealed record InitializeResult(ServerCapabilities Capabilities, ServerInf
 [JsonSerializable(typeof(ExtractionRequest))]
 [JsonSerializable(typeof(LspExtractionParams))]
 [JsonSerializable(typeof(LspExtractionResult))]
+[JsonSerializable(typeof(QuoteHelperExtractionPreparation))]
+[JsonSerializable(typeof(QuoteHelperExtractionRequest))]
 [JsonSerializable(typeof(CodeActionParams))]
 [JsonSerializable(typeof(LspCodeAction[]))]
 [JsonSerializable(typeof(LspSignatureHelp))]

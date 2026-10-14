@@ -24,6 +24,7 @@ public sealed class GrammarWorkspace
     public const string Namespace = "Nitrogen.Workspace.Grammar";
 
     static readonly Lazy<CodeAnalysis.MetadataReference[]> s_references = new(LoadReferences);
+    internal static CodeAnalysis.MetadataReference[] QuoteReferences => s_references.Value;
 
     /// <summary>The .NET SDK's implicit usings, so helper sources compile here as in the project they come from.</summary>
     const string ImplicitUsings = """
@@ -109,6 +110,8 @@ public sealed class GrammarWorkspace
         var emitted = compilation.Emit(image);
         diagnostics.AddRange(emitted.Diagnostics.Where(d => d.Severity == CodeAnalysis.DiagnosticSeverity.Error).Select(FromCSharp));
         if (!emitted.Success) return new WorkspaceSnapshot(version, diagnostics);
+        diagnostics.AddRange(QuoteHelperValidation.Validate(inputs));
+        if (diagnostics.Any(diagnostic => diagnostic.IsError)) return new WorkspaceSnapshot(version, diagnostics);
 
         if (!load) return new WorkspaceSnapshot(version, diagnostics);
 

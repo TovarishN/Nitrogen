@@ -30,7 +30,8 @@ public sealed partial class NitrogenLanguageService
 
     QuoteContext? QuoteAt(string uri, DocumentPosition position)
     {
-        if (!uri.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase) || !TryDocument(uri, out var document)) return null;
+        if (!TryDocument(uri, out var document) || (!uri.EndsWith(".ngr", StringComparison.OrdinalIgnoreCase) &&
+            !DocumentSignatures.Read(document.Text).Signatures.Any(s => s.Mode == SignatureMode.Grammar))) return null;
         int offset = document.Lines.OffsetOf(position);
         var tree = document.Parsed.Tree;
         bool inTemplate = false;
@@ -74,7 +75,7 @@ public sealed partial class NitrogenLanguageService
         var modules = new List<ModuleDecl>();
         foreach (string file in paths.Append(path).Distinct(StringComparer.Ordinal))
         {
-            if (ReadNavigationText(file) is not { } text || GrammarParser.Parse(text).File is not { } model) continue;
+            if (ReadNavigationText(file) is not { } text || GrammarParser.Parse(DocumentSignatures.Read(text).MaskedText).File is not { } model) continue;
             modules.AddRange(model.Modules);
             string fileUri = new Uri(file).AbsoluteUri;
             foreach (var module in model.Modules)
@@ -93,6 +94,19 @@ public sealed partial class NitrogenLanguageService
                                 Add(alternative, module.Name + "." + extensible.Name);
                             break;
                     }
+                foreach (var helper in module.Helpers)
+                {
+                    var parameters = helper.Parameters.Select(parameter =>
+                    {
+                        Expr category = new ReferenceExpr(parameter.Category.Name, parameter.Category.Span);
+                        if (parameter.IsList) category = new RepeatExpr(RepeatKind.ZeroOrMore, category, parameter.Span);
+                        return (Expr)new LabeledExpr(parameter.Name.Name, category, parameter.Name.Span);
+                    }).ToArray();
+                    rules.Add(new(fileUri, text, module, helper.Name.Name, helper.ReturnCategory.Name,
+                        new SequenceExpr(parameters, helper.Body.Span), helper.Span,
+                        new[] { new BindingClause(BindingClauseKind.Rewrites, default, "", default, false, false,
+                            helper.Body.Span, Target: new(helper.Body.Text, helper.Body.Span)) }));
+                }
                 foreach (var extend in module.Extends)
                     foreach (var alternative in extend.Alternatives)
                         Add(alternative, extend.Target);
@@ -122,6 +136,8 @@ public sealed partial class NitrogenLanguageService
         string path = new Uri(uri).LocalPath;
         if (_grammarLanguages.FirstOrDefault(l => l.Workspace.Paths.Contains(path, StringComparer.Ordinal)) is { } configured)
             return configured.Snapshot?.Language;
+        if (_signatureDefinitions.Values.FirstOrDefault(d => d.Grammars.Any(g => SamePath(g.Path, path))) is { } definition)
+            return _documentAnalysis.SnapshotFor(definition.Id)?.Language;
         // A grammar opened by the general server may belong to a nested language configuration.
         return QuoteConfig(path) is { } config ? LocalQuoteLanguage(config, path) : null;
     }

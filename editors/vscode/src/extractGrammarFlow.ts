@@ -19,6 +19,7 @@ export interface ExtractionHost {
   review(result: ExtractionResolution): Promise<boolean>;
   apply(result: ExtractionResolution): Promise<boolean>;
   open(uri: string): Promise<void>;
+  complete?(result: ExtractionResolution, destinationUri: string): void;
   warn(message: string): void;
 }
 
@@ -33,21 +34,54 @@ export async function extractGrammar(host: ExtractionHost, selection: Extraction
     if (module === undefined) return;
     if (!module.trim()) { host.warn('Choose a nonempty module name.'); return; }
     const resolved = await host.resolve({ id: prepared.id, destinationUri, module: module.trim() });
+    await applyReviewedExtraction(host, resolved, () => host.resolve({ id: prepared.id!, destinationUri, module: module.trim() }), destinationUri);
+  } catch (error) {
+    host.warn('Extraction failed: ' + (error instanceof Error ? error.message : String(error)));
+  }
+}
+
+export interface QuoteHelperPreparation {
+  id?: string; suggestedHelperName?: string; sourceModule?: string; sourceUri?: string; unavailableReason?: string;
+  destinations?: readonly { uri: string; module: string }[];
+}
+export interface QuoteHelperRequest {
+  id: string; destinationUri: string; module: string; helperName: string; existingDestination: boolean;
+}
+export type QuoteHelperHost = Pick<ExtractionHost, 'review' | 'apply' | 'open' | 'complete' | 'warn'> & {
+  prepare(selection: ExtractionSelection): Promise<QuoteHelperPreparation>;
+  helperInputs(prepared: QuoteHelperPreparation): Promise<Omit<QuoteHelperRequest, 'id'> | undefined>;
+  resolve(request: QuoteHelperRequest): Promise<ExtractionResolution>;
+};
+export async function extractQuoteHelper(host: QuoteHelperHost, selection: ExtractionSelection): Promise<void> {
+  try {
+    const prepared = await host.prepare(selection);
+    if (!prepared.id) { host.warn(prepared.unavailableReason ?? 'Select a whole inline quote.'); return; }
+    const inputs = await host.helperInputs(prepared);
+    if (!inputs) return;
+    const request = { id: prepared.id, ...inputs };
+    const resolved = await host.resolve(request);
+    await applyReviewedExtraction(host, resolved, () => host.resolve(request), inputs.destinationUri);
+  } catch (error) {
+    host.warn('Extraction failed: ' + (error instanceof Error ? error.message : String(error)));
+  }
+}
+async function applyReviewedExtraction(host: Pick<ExtractionHost, 'review' | 'apply' | 'open' | 'complete' | 'warn'>,
+  resolved: ExtractionResolution, resolve: () => Promise<ExtractionResolution>, destinationUri: string): Promise<void> {
     if (resolved.unavailableReason || !resolved.action?.edit) {
       host.warn(resolved.unavailableReason ?? 'Extraction is unavailable.'); return;
     }
     if (!await host.review(resolved)) return;
-    const checked = await host.resolve({ id: prepared.id, destinationUri, module: module.trim() });
+    const checked = await resolve();
     if (checked.unavailableReason || !checked.action?.edit) {
       host.warn(checked.unavailableReason ?? 'Extraction is unavailable.'); return;
     }
     if (reviewedEdit(checked.action.edit) !== reviewedEdit(resolved.action.edit)) {
       host.warn('The extraction changed during review. Select the definitions again.'); return;
     }
-    if (await host.apply(checked)) await host.open(destinationUri);
-  } catch (error) {
-    host.warn('Extraction failed: ' + (error instanceof Error ? error.message : String(error)));
-  }
+    if (await host.apply(checked)) {
+      await host.open(destinationUri);
+      host.complete?.(checked, destinationUri);
+    }
 }
 
 /** Opening or closing an unchanged document during review may change its LSP version. */

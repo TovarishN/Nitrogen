@@ -332,6 +332,11 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                         actions.Add(_extractSupported
                             ? new("Extract Block…", "refactor.extract", Command: new("Extract Block…", "nitrogen.extractGrammar", [new(request.TextDocument, request.Range)]))
                             : new("Extract Block…", "refactor.extract", Disabled: new("The client must support reviewed, versioned edits and file creation.")));
+                    var quote = service.PrepareQuoteHelperExtraction(uri, new(Position(request.Range.Start), Position(request.Range.End)));
+                    if (quote.Id is not null)
+                        actions.Add(_extractSupported
+                            ? new("Extract Quote Helper…", "refactor.extract", Command: new("Extract Quote Helper…", "nitrogen.extractQuoteHelper", [new(request.TextDocument, request.Range)]))
+                            : new("Extract Quote Helper…", "refactor.extract", Disabled: new("The client must support reviewed, versioned edits and file creation.")));
                 }
                 await RespondAsync(id, actions.ToArray(), LspJson.Default.LspCodeActionArray, cancel);
                 break;
@@ -350,22 +355,24 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 var request = Params(parameters, LspJson.Default.ExtractionRequest);
                 var proposal = _extractSupported ? service.ResolveExtraction(request)
                     : new ExtractionProposal(request.DestinationUri, "", [], [], "The client does not support reviewed file creation.");
-                LspCodeAction? action = null;
-                if (proposal.UnavailableReason is null)
-                {
-                    var changes = new List<LspDocumentChange>
-                    {
-                        new LspCreateFile(proposal.DestinationUri, new(), "extract"),
-                        new LspTextDocumentEdit(new(proposal.DestinationUri, null),
-                            [new(new(new(0, 0), new(0, 0)), proposal.DestinationText, "extract")]),
-                    };
-                    changes.AddRange(proposal.Changes.Select(change => new LspTextDocumentEdit(new(change.Uri, change.Version),
-                        change.Edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText, "extract")).ToArray())));
-                    action = new("Extract Block…", "refactor.extract", Edit: new(DocumentChanges: changes.ToArray(),
-                        ChangeAnnotations: new() { ["extract"] = new("Extract grammar definitions", true, string.Join(" ", proposal.Notices)) }));
-                }
-                await RespondAsync(id, new LspExtractionResult(action, proposal.UnavailableReason, proposal.Notices,
-                    proposal.Changes.Select(c => new ExtractionExpectedDocument(c.Uri, c.Version, c.OriginalText)).ToArray()), LspJson.Default.LspExtractionResult, cancel);
+                await RespondAsync(id, ExtractionResult(proposal), LspJson.Default.LspExtractionResult, cancel);
+                break;
+            }
+            case "nitrogen/prepareQuoteHelperExtraction":
+            {
+                var request = Params(parameters, LspJson.Default.LspExtractionParams);
+                var prepared = _extractSupported
+                    ? service.PrepareQuoteHelperExtraction(request.TextDocument.Uri, new(Position(request.Range.Start), Position(request.Range.End)))
+                    : new QuoteHelperExtractionPreparation(null, null, null, null, "The client must support reviewed, versioned edits and file creation.");
+                await RespondAsync(id, prepared, LspJson.Default.QuoteHelperExtractionPreparation, cancel);
+                break;
+            }
+            case "nitrogen/resolveQuoteHelperExtraction":
+            {
+                var request = Params(parameters, LspJson.Default.QuoteHelperExtractionRequest);
+                var proposal = _extractSupported ? service.ResolveQuoteHelperExtraction(request)
+                    : new ExtractionProposal(request.DestinationUri, "", [], [], "The client does not support reviewed file creation.");
+                await RespondAsync(id, ExtractionResult(proposal, "Extract Quote Helper…"), LspJson.Default.LspExtractionResult, cancel);
                 break;
             }
             case "textDocument/signatureHelp":
@@ -688,4 +695,25 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             JsonSerializer.Serialize(w, parameters, type);
             w.WriteEndObject();
         }, cancel);
+    static LspExtractionResult ExtractionResult(ExtractionProposal proposal, string title = "Extract Block…")
+    {
+        LspCodeAction? action = null;
+        if (proposal.UnavailableReason is null)
+        {
+            var changes = new List<LspDocumentChange>();
+            if (proposal.CreateDestination)
+            {
+                changes.Add(new LspCreateFile(proposal.DestinationUri, new(), "extract"));
+                changes.Add(new LspTextDocumentEdit(new(proposal.DestinationUri, null),
+                    [new(new(new(0, 0), new(0, 0)), proposal.DestinationText, "extract")]));
+            }
+            changes.AddRange(proposal.Changes.Select(change => new LspTextDocumentEdit(new(change.Uri, change.Version),
+                change.Edits.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText, "extract")).ToArray())));
+            action = new(title, "refactor.extract", Edit: new(DocumentChanges: changes.ToArray(),
+                ChangeAnnotations: new() { ["extract"] = new(title, true, string.Join(" ", proposal.Notices)) }));
+        }
+        return new(action, proposal.UnavailableReason, proposal.Notices,
+            proposal.Changes.Select(c => new ExtractionExpectedDocument(c.Uri, c.Version, c.OriginalText)).ToArray());
+    }
+
 }

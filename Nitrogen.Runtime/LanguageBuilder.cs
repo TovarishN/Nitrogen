@@ -58,7 +58,20 @@ public sealed unsafe class LanguageBuilder
             catalog = SemanticCatalog.Compose(_semanticModules.Append(registrations), out diagnostics);
             if (catalog is null) return false;
         }
-        language = BuildSyntax(catalog, declarative!);
+        var composed = BuildSyntax(catalog, declarative!);
+        var quoteErrors = composed.ValidateQuoteHelpers();
+        if (quoteErrors.Count > 0)
+        {
+            diagnostics = quoteErrors.Select(error => new CompositionDiagnostic(error.Diagnostic.Code,
+                new[] { error.Helper.Name }, $"quote helper {error.Helper.Name}: {error.Diagnostic.Message}")
+            {
+                Location = new(error.Helper.Source.Path, error.Diagnostic.Span.Length > 0
+                    ? new(error.Helper.Source.Start + error.Diagnostic.Span.Start, error.Diagnostic.Span.Length)
+                    : new(error.Helper.Source.Start, error.Helper.Source.Length))
+            }).ToArray();
+            return false;
+        }
+        language = composed;
         return true;
     }
 

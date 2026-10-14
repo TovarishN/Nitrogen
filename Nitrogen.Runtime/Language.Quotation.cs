@@ -2,6 +2,17 @@ namespace Nitrogen;
 
 public sealed unsafe partial class Language
 {
+    public IReadOnlyList<QuoteHelperError> ValidateQuoteHelpers()
+    {
+        var errors = new List<QuoteHelperError>();
+        foreach (var helper in Modules.SelectMany(module => module.QuoteHelpers))
+        {
+            using var compilation = CompileQuote(helper.Category, helper.Text, helper.Parameters);
+            errors.AddRange(compilation.Diagnostics.Select(diagnostic => new QuoteHelperError(helper, diagnostic)));
+        }
+        return errors;
+    }
+
     internal bool AcceptsQuoteNode(string category, int kind) => Modules
         .FirstOrDefault(m => m.Id == SyntaxKinds.ModuleOf(kind))?.GetQuoteCategories(SyntaxKinds.LocalOf(kind))
         .Contains(category, StringComparer.Ordinal) == true;

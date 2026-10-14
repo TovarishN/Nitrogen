@@ -26,6 +26,9 @@ syntax module DateCalc
   { symbol.Type = Value.Type; symbol.Initializer = Value.Node; }
   syntax Show      = Value:Expr ";";
 
+  // Reusable typed syntax; callers supply expression nodes rather than substituted text.
+  syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;
+
   extensible syntax Expr
   {
     out hover Type : Nitrogen.Semantic.SemanticType? = null;
@@ -56,7 +59,7 @@ syntax module DateCalc
     | Days    = Amount:Expr "days"  precedence 30  lowers DateCalc.Days(Amount)  { Type = DateCalcLanguage.Duration; }
     | Weeks   = Amount:Expr "weeks" precedence 30  lowers DateCalc.Weeks(Amount) { Type = DateCalcLanguage.Duration; }
     // Quasiquotation reuses multiplication and weeks; no new operation or evaluator handler.
-    | Fortnights = Count:Expr "fortnights" precedence 30 rewrites <[ $Count * 2 weeks ]>
+    | Fortnights = Count:Expr "fortnights" precedence 30 rewrites FortnightDuration(Count)
     | InDays  = Span:Expr "in" "days"  precedence 5  lowers DateCalc.InDays(Span)  { Type = DateCalcLanguage.Number; }
     | Add     = Left:Expr "+" Right:Expr  precedence 10 left  lowers operation? Selected(Left, Right)
       {

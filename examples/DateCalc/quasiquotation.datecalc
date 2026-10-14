@@ -1,4 +1,4 @@
-// Fortnights is defined by rewrites <[ $Count * 2 weeks ]> in DateCalc.ngr.
+// Fortnights calls FortnightDuration(Count), whose quote is <[ $Count * 2 weeks ]>.
 // Count retains its expression structure and resolves names in the calling program.
 let count = 3;
 count fortnights;                         // 42 days

@@ -1,6 +1,6 @@
 import * as assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { extractGrammar, ExtractionHost, ExtractionSelection, extractionPreview, confirmedExtractionEdit } from './extractGrammarFlow';
+import { extractQuoteHelper, extractGrammar, ExtractionHost, ExtractionSelection, extractionPreview, confirmedExtractionEdit } from './extractGrammarFlow';
 
 const selection: ExtractionSelection = { textDocument: { uri: 'file:///a.ngr' }, range: { start: { line: 0, character: 18 }, end: { line: 0, character: 36 } } };
 function fixture() {
@@ -114,4 +114,37 @@ test('a changed edit during review is refused even when document versions also c
   });
   await extractGrammar(host, selection);
   assert.deepEqual(calls, ['review', 'warn:The extraction changed during review. Select the definitions again.']);
+});
+
+test('successful extraction reports completion for the applied proposal only', async () => {
+  const { host } = fixture();
+  let completed = false;
+  host.complete = (result, uri) => {
+    assert.ok(result.action?.edit);
+    assert.equal(uri, 'file:///new.ngr');
+    completed = true;
+  };
+  await extractGrammar(host, selection);
+  assert.equal(completed, true);
+  completed = false;
+  host.apply = async () => false;
+  await extractGrammar(host, selection);
+  assert.equal(completed, false);
+});
+
+test('quote helper collects typed request and revalidates before shared apply', async () => {
+  const { host, calls } = fixture();
+  const requests: unknown[] = [];
+  await extractQuoteHelper({ ...host,
+    prepare: async () => ({ id: 'quote', suggestedHelperName: 'WrapQuote', sourceModule: 'M', sourceUri: 'file:///a.ngr' }),
+    helperInputs: async () => ({ destinationUri: 'file:///a.ngr', module: 'M', helperName: 'WrapQuote', existingDestination: true }),
+    resolve: async request => { requests.push(request); return { action: { edit: {} }, expectedDocuments: [], notices: [] }; },
+  }, selection);
+  assert.deepEqual(requests, Array(2).fill({ id: 'quote', destinationUri: 'file:///a.ngr', module: 'M', helperName: 'WrapQuote', existingDestination: true }));
+  assert.deepEqual(calls, ['review', 'apply', 'open:file:///a.ngr']);
+});
+test('quote helper cancellation never resolves or applies', async () => {
+  const { host, calls } = fixture();
+  await extractQuoteHelper({ ...host, prepare: async () => ({ id: 'quote' }), helperInputs: async () => undefined }, selection);
+  assert.deepEqual(calls, []);
 });

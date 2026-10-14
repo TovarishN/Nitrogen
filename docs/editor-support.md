@@ -217,6 +217,30 @@ definition, because Rider itself injects the language named by a `language=` com
 server for semantic tokens in every file it serves (the platform asks only in plain-text and TextMate
 files by default, so Rider showed no Nitrogen coloring before).
 
+## Extract typed quote helpers (VS Code)
+
+Place the caret in an inline `rewrites <[ ... ]>` body, or select its complete quote, and choose
+**Refactor → Extract Quote Helper…** / **Nitrogen: Extract Quote Helper…**. Partial quotes are refused.
+The helper parameters come from actual parsed scalar/list splices, once each in first-use order;
+comments and token text containing dollar signs do not become parameters.
+
+Choose the current module, a registered existing module (listed with its file), or a new grammar file
+and module. The proposal preserves the quoted text, adds the typed helper and call, and updates imports
+and configured grammar membership when required. Existing destination files receive an insertion;
+they are never replaced. Source categories are qualified in the helper declaration.
+
+The review uses the same persistent Apply/Cancel controls as Extract Block. The server checks original
+and proposed grammar/C# compilation and composed quote bodies without executing configured C# helpers.
+It rejects changed source/helper/configuration inputs, collisions, symbolic links, outside-workspace
+edits and destinations belonging to unrelated languages. Opening an unchanged document during review
+is allowed; application uses its current version. Apply does not save, and the complete edit has one
+undo step. Retry returns to the source's current selection.
+
+Helper names, parameters, categories, caller-field arguments and quoted syntax support navigation,
+usages and completion. Helper/parameter rename is checked across composed grammar inputs; unsupported
+external or string-based consumers can require an explicit update. Helper bodies retain the same
+binding, ownership, list-shape and rewrite-cycle behavior as inline quotes.
+
 ## Extract grammar definitions (VS Code)
 
 Select one or more complete sibling rules or alternatives in a grammar, then choose
@@ -263,7 +287,7 @@ explicit attention. Consumers outside the workspace are not verified.
 
 This first version moves selected definitions only. Moving into an existing file,
 automatically moving dependencies, extracting arbitrary expression fragments, quote
-functions and quasiquote-pattern matching are separate extensions. The interactive
+quasiquote-pattern matching is a separate extension. The interactive
 command is provided by the general Nitrogen VS Code extension; other clients need to
 implement the extraction prompt flow and support annotated resource edits.
 

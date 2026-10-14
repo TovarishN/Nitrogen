@@ -2,7 +2,11 @@ using System.Collections.ObjectModel;
 
 namespace Nitrogen.Semantic;
 
-public sealed record CompositionDiagnostic(string Code, IReadOnlyList<string> Modules, string Message);
+public sealed record CompositionDiagnosticLocation(string Path, TextSpan Span);
+public sealed record CompositionDiagnostic(string Code, IReadOnlyList<string> Modules, string Message)
+{
+    public CompositionDiagnosticLocation? Location { get; init; }
+}
 
 public sealed class SemanticCompositionException(IReadOnlyList<CompositionDiagnostic> diagnostics)
     : Exception(string.Join(Environment.NewLine, diagnostics.Select(diagnostic => diagnostic.Message)))
