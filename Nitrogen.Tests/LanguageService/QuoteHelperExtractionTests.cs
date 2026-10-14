@@ -123,6 +123,9 @@ public sealed class QuoteHelperExtractionTests : IDisposable
         foreach (string file in Directory.GetFiles(directory)) File.Copy(file, Path.Combine(_root, Path.GetFileName(file)), true);
         string sourcePath = Path.Combine(_root, "DateCalc.ngr");
         string grammar = File.ReadAllText(sourcePath);
+        grammar = grammar.Replace("  syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;", "")
+            .Replace("rewrites FortnightDuration(Count)", "rewrites <[ $Count * 2 weeks ]>");
+        File.WriteAllText(sourcePath, grammar);
         using var service = new NitrogenLanguageService(LspCommand.Registry());
         service.ConfigureWorkspace(_root);
         var lines = new LineMap(grammar);

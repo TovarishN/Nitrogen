@@ -112,6 +112,49 @@ Limits of this version:
   it; otherwise it parses as the rule itself, so it can only be a hole or a use of the same rule. List
   such a rule in one alias.
 
+## Typed quote helpers
+
+Declare reusable syntax with a typed helper, then call it from `rewrites`:
+
+```text
+syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;
+
+| Fortnights = Count:Expr "fortnights" precedence 30
+    rewrites FortnightDuration(Count)
+```
+
+Helpers produce syntax trees through the same structural rewrite pipeline. Parameters receive the
+caller's syntax nodes, so precedence, source origins and caller-bound names are preserved. Helpers
+are separate from parsing rules and introduce no new parser kinds or evaluator handlers.
+
+A list parameter uses `*` and its body uses `..$`:
+
+```text
+syntax function Twice(Args: Expr*) : Expr = <[ f(..$Args, ..$Args) ]>;
+| Forward = "twice" "(" Args:(Expr; ";")* ")" rewrites Twice(Args)
+```
+
+The destination list supplies separators and enforces its minimum item count. Empty and repeated
+splices retain existing quotation ownership and snapshot checks.
+
+Helpers can live in another composed grammar module. Add `using Shared;` to use its exports without
+qualification, or call `Shared.FortnightDuration(Count)` explicitly. Local helpers take precedence;
+ambiguous imported names require qualification. Declared parameter and return categories must match
+exactly after resolving names; category types may be qualified, such as `DateCalc.Expr`.
+
+Every helper body is checked against the composed parser, including unused helpers. Invalid helpers
+prevent composition rather than failing only when called. Diagnostics from expansions identify the
+call site and retain the helper body as related source.
+
+This first version accepts positional caller fields, scalar syntax returns, and scalar/list syntax
+parameters. Nested helper-call arguments, arbitrary C# arguments, overloads, defaults, list returns,
+template-authored declarations and quasiquote pattern matching are not supported. The C# quotation
+API below remains available; named `.ngr` helpers are currently called from grammar rewrites.
+
+VS Code offers **Extract Quote Helper…** for a caret inside an inline quote or a whole-quote selection.
+It infers parameters from actual parsed splices in first-use order and preserves the original body.
+Choose the current module, an existing module, or a new module; review and apply all changes together.
+
 ## List splices and C# syntax quotation
 
 A list-valued field is inserted with `..$Args`. For example, in a language whose `Expr` category has

@@ -33,3 +33,14 @@ Use `// #!nitrogen augment "./Rules.syntax"` in C#, or `<!-- #!nitrogen augment 
 Bare names such as `#!nitrogen language DateCalc` and `// #!nitrogen augment SourceRules` resolve across open workspace folders. Names are case-sensitive and must be unique; ambiguity diagnostics list candidate paths. Definition add/rename/delete and workspace-folder changes recheck without restart. Explicit paths remain deterministic. Build and manifest-based CLI checks use registered project inputs rather than the editor workspace.
 
 Extract Block opens a review of every proposed file change. **Apply all changes** and **Cancel extraction** remain available in the editor toolbar and status bar while the review is pending. Application shows progress, opens the extracted module, and lists the changed files; use **Save All** to persist the edits. If an input changes during review, the message identifies that file. **Retry** returns to the original source and uses its current selection to prepare a new proposal for review.
+
+Typed `.ngr` helpers use `syntax function Name(Value: Expr) : Expr = <[ $Value ]>;` and
+`rewrites Name(Field)`. Definition/declaration, usages, rename and completion understand helper
+names, typed parameters and quote contents. Imported helper exports may be used unqualified when
+unambiguous. List parameters use `Expr*` with `..$Args`.
+
+**Nitrogen: Extract Quote Helper…** (also under Refactor) accepts a caret inside an inline quote or
+an exact whole-quote selection. Choose a helper name and the current module, an existing module, or
+a new module. Review the helper, call/import and configuration edits together; use the persistent
+**Apply all changes** or **Cancel extraction** controls. Apply opens the destination without saving;
+one undo restores the extraction. Changed inputs are refused by name; Retry starts a fresh proposal.

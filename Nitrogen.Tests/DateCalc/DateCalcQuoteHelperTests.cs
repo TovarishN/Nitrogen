@@ -6,6 +6,14 @@ namespace Nitrogen.Tests;
 
 public sealed class DateCalcQuoteHelperTests
 {
+    [Fact]
+    public void The_shipped_DateCalc_example_uses_a_typed_quote_helper()
+    {
+        string grammar = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage", "DateCalc.ngr"));
+        Assert.Contains("syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;", grammar);
+        Assert.Contains("rewrites FortnightDuration(Count)", grammar);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -14,6 +22,8 @@ public sealed class DateCalcQuoteHelperTests
         var workspace = new GrammarWorkspace { GeneratedNamespace = "DateCalc.Syntax", CompositionName = "DateCalc", StartRule = "DateCalc.Program" };
         string directory = Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage");
         string grammar = File.ReadAllText(Path.Combine(directory, "DateCalc.ngr"));
+        grammar = grammar.Replace("  syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;", "")
+            .Replace("rewrites FortnightDuration(Count)", "rewrites <[ $Count * 2 weeks ]>");
         const string helper = "syntax function FortnightDuration(Value: DateCalc.Expr) : DateCalc.Expr = <[ $Value * 2 weeks ]>;";
         grammar = grammar.Replace("rewrites <[ $Count * 2 weeks ]>", "rewrites FortnightDuration(Count)");
         if (shared)
@@ -45,7 +55,8 @@ public sealed class DateCalcQuoteHelperTests
             string directory = Path.Combine(AppContext.BaseDirectory, "DateCalcLanguage");
             foreach (string file in Directory.GetFiles(directory)) File.Copy(file, Path.Combine(root, Path.GetFileName(file)));
             string path = Path.Combine(root, "DateCalc.ngr");
-            string grammar = File.ReadAllText(path).Replace("  extensible syntax Expr",
+            string grammar = File.ReadAllText(path).Replace("  syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;", "")
+                .Replace("rewrites FortnightDuration(Count)", "rewrites <[ $Count * 2 weeks ]>").Replace("  extensible syntax Expr",
                 "  syntax function Duration(Value:Expr):Expr=<[ $Value * 2 weeks ]>;\n  extensible syntax Expr")
                 .Replace("rewrites <[ $Count * 2 weeks ]>", "rewrites Duration(Count)");
             File.WriteAllText(path, grammar);
