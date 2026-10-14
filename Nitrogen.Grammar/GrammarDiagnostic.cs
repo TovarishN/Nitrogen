@@ -56,6 +56,13 @@ public static class GrammarCodes
     public const string TemplateDeclares = "NGR0138";
     public const string HoleShapeMismatch = "NGR0139";
     public const string UnsupportedHoleShape = "NGR0140";
+    public const string DuplicateQuoteHelper = "NGR0141";
+    public const string DuplicateQuoteParameter = "NGR0142";
+    public const string UnknownQuoteHelper = "NGR0143";
+    public const string AmbiguousQuoteHelper = "NGR0144";
+    public const string QuoteHelperArgumentCount = "NGR0145";
+    public const string QuoteHelperShape = "NGR0146";
+    public const string QuoteHelperCategory = "NGR0147";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

@@ -54,6 +54,8 @@ public abstract class SyntaxModule
     /// <summary>Declarative typing and lowering clauses (issue 251); empty when the grammar has none.</summary>
     public virtual IReadOnlyList<Nitrogen.Semantic.DeclarativeRule> DeclarativeRules => [];
 
+    public virtual IReadOnlyList<QuoteHelper> QuoteHelpers => [];
+
     /// <summary>Syntax categories supported by this generated module.</summary>
     public virtual IReadOnlyList<string> QuoteCategoryNames => [];
 

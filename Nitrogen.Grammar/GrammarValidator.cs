@@ -32,6 +32,7 @@ public static class GrammarValidator
                     Report(GrammarCodes.UnknownModule, $"unknown module '{u.Module}'", u.Span, module);
 
             CheckSymbols(module);
+            _analysis.Helpers.CheckDeclarations(module, Report);
 
             foreach (var rule in _analysis.PrimaryRules(module))
             {
@@ -395,7 +396,10 @@ public static class GrammarValidator
                     !clauses.Any(candidate => candidate.Kind == BindingClauseKind.References && candidate.Field == clause.Field))
                     Report(GrammarCodes.InvalidTemplateClause,
                         $"an expansion needs a references clause on its field '{clause.Field}'", clause.FieldSpan, module);
-                if (clause.Kind == BindingClauseKind.Rewrites)
+                if (clause.HelperCall is { } helperCall)
+                    _analysis.Helpers.Bind(helperCall, module, body,
+                        QuotationWriter.Category(_analysis, module, owner, implicitModule).Key, implicitModule, Report);
+                if (clause.Kind == BindingClauseKind.Rewrites && clause.HelperCall is null)
                     foreach (var hole in QuotationWriter.Holes(clause.Target!.Name, _analysis, QuotationWriter.Category(_analysis, module, owner, implicitModule)))
                     {
                         string name = hole.Name;

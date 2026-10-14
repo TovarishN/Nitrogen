@@ -19,6 +19,12 @@ public sealed record GrammarCompileResult(EquatableArray<CompiledDiagnostic> Dia
 public static class GrammarCompiler
 {
     public static GrammarCompileResult Compile(IEnumerable<GrammarInput> inputs)
+        => CompileCore(inputs, quotationSyntaxOnly: false);
+
+    public static GrammarCompileResult CompileQuotationSyntax(IEnumerable<GrammarInput> inputs)
+        => CompileCore(inputs, quotationSyntaxOnly: true);
+
+    static GrammarCompileResult CompileCore(IEnumerable<GrammarInput> inputs, bool quotationSyntaxOnly)
     {
         var diagnostics = new List<CompiledDiagnostic>();
         var modules = new List<ModuleDecl>();
@@ -54,7 +60,7 @@ public static class GrammarCompiler
         if (HasErrors(diagnostics)) return new GrammarCompileResult(diagnostics.ToArray(), default);
 
         var sources = model.Modules
-            .Select(info => new GeneratedSource(info.Module.Name + ".g.cs", ModuleWriter.Write(model, info)))
+            .Select(info => new GeneratedSource(info.Module.Name + ".g.cs", ModuleWriter.Write(model, info, quotationSyntaxOnly)))
             .ToArray();
         return new GrammarCompileResult(diagnostics.ToArray(), sources);
     }
