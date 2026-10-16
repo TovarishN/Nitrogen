@@ -133,7 +133,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     public IReadOnlyList<OutlineSymbol> DocumentSymbols(string uri) =>
         _documents.TryGetValue(uri, out var document) ? OutlineBuilder.Build(document, _projects[document.Language]) : [];
 
-    /// <summary>Where the name at <paramref name="position"/> is declared; built-ins have no location.</summary>
+    /// <summary>Where the name is declared, including grammar-authored built-ins when their source is available.</summary>
     public IReadOnlyList<DocumentLocation> Definition(string uri, DocumentPosition position)
     {
         if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is not null)
@@ -145,7 +145,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (GrammarRuleAt(uri, position) is { } grammar) return grammar.Definitions;
         if (AssistedNavigation(uri, position) is { } assisted) return assisted.Definitions;
         if (_hosts.ContainsKey(uri)) return Into(uri, position) is { } inner ? Definition(inner.Uri, inner.Position) : [];
-        return NameAt(uri, position) is { } name ? name.Symbols.Where(s => !s.IsBuiltin).Select(LocationOf).Select(OutOf).ToList() : [];
+        if (NameAt(uri, position) is { Symbols.Count: > 0 } name)
+            return name.Symbols.SelectMany(s => s.IsBuiltin ? BuiltinDefinitions(name.Document, name.Project, s) : [OutOf(LocationOf(s))]).Distinct().ToList();
+        return GrammarKeywordDefinitions(uri, position);
     }
 
     /// <summary>Every reference to what the name at <paramref name="position"/> names, across the project; declarations first when asked.</summary>
