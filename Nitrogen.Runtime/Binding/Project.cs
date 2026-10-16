@@ -11,6 +11,7 @@ public sealed class Project
     readonly Language _language;
     readonly SortedDictionary<string, FileBinding> _documents = new(StringComparer.Ordinal);
     readonly Dictionary<(string Kind, string Name), List<(Symbol Symbol, int ScopeKind)>> _builtins = new();
+    readonly Dictionary<Symbol, (SyntaxModule Module, BuiltinSymbols Declaration)> _builtinDeclarations = new();
     readonly Dictionary<Reference, IReadOnlyList<Symbol>> _resolved = new();
     readonly Dictionary<string, Dictionary<string, IReadOnlyList<DerivedDeclaration>>> _derived = new(StringComparer.Ordinal);
     Dictionary<(string Kind, string Name), List<Symbol>>? _exports;
@@ -26,10 +27,18 @@ public sealed class Project
                 {
                     if (!_builtins.TryGetValue((builtin.Kind, name), out var entries)) _builtins[(builtin.Kind, name)] = entries = new();
                     if (!entries.Exists(e => e.ScopeKind == scopeKind))
-                        entries.Add((new Symbol(builtin.Kind, name, null, default, -1, -1, false), scopeKind));
+                    {
+                        var symbol = new Symbol(builtin.Kind, name, null, default, -1, -1, false);
+                        entries.Add((symbol, scopeKind));
+                        _builtinDeclarations.Add(symbol, (module, builtin));
+                    }
                 }
             }
     }
+
+    /// <summary>The module and declaration that supplied a resolved built-in; null for other symbols.</summary>
+    public (SyntaxModule Module, BuiltinSymbols Declaration)? BuiltinDeclaration(Symbol symbol) =>
+        _builtinDeclarations.TryGetValue(symbol, out var declaration) ? declaration : null;
 
     /// <summary>Counts changes; a query's answer holds until it moves.</summary>
     public int Version { get; private set; }
