@@ -11,6 +11,8 @@ syntax module Nitrogen
   token Escape     = "\\" (['n' 'r' 't' '0' '\\' '"' '\''] / "u" Hex Hex Hex Hex);
   token String     = "\"" (Escape / [^ '"' '\\' '\n'])* "\"";
   token Char       = "'" (Escape / [^ '\'' '\\' '\n']) "'";
+  // A grammar function call (spec: grammar functions): the name touches its '(' so `Name (X)` stays a reference and a group.
+  token CallHead   = (DottedName / Identifier) "(";
 
   // Semantics (issue 239): C# is text up to a top-level stop character, as CSharpCapture scans it:
   // brackets nest and must match; strings, chars and comments are skipped.
@@ -51,10 +53,10 @@ syntax module Nitrogen
                           lowers Grammar.LanguagePresentationSetting(text Kind, text Name, text Value);
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
                           lowers Grammar.Module(text Name, sequence Grammar.Member Members);
-  syntax Member         = QuoteMatchHelper / QuoteHelper / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
-  syntax QuoteHelper = "syntax" "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:TemplateString ";"
+  syntax Member         = QuoteMatchHelper / QuoteHelper / GrammarFunction / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax QuoteHelper = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:TemplateString ";"
                        lowers Grammar.QuoteHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, text Body);
-  syntax QuoteMatchHelper = "syntax" "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:QuoteMatchBody ";"
+  syntax QuoteMatchHelper = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:QuoteMatchBody ";"
                        lowers Grammar.QuoteMatchHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, Body);
   syntax QuoteMatchBody = "match" Selector:Identifier "{" Arms:QuoteMatchArm* "|" "_" "=>" Fallback:TemplateString ";" "}"
                        lowers Grammar.QuoteMatchBody(text Selector, sequence Grammar.QuoteMatchArm Arms, text Fallback);
@@ -66,6 +68,11 @@ syntax module Nitrogen
                        lowers Grammar.QuoteParameter(text Name, text Category, optional Core.Text List);
   syntax ListMarker = Value:"*" lowers text Core.Text Value;
   syntax HelperArgument = Name:Identifier lowers text Core.Text Name;
+  // Grammar functions (spec: grammar functions): evaluated when the grammar is compiled.
+  syntax GrammarFunction = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" ReturnType:QualifiedName "="
+                         Lets:LetBinding* Body:Expression ";"
+                       lowers Grammar.GrammarFunction(text Name, sequence Grammar.QuoteParameter Parameters, text ReturnType, sequence Grammar.Let Lets, Body);
+  syntax LetBinding = "let" Name:Identifier "=" Value:Value ";"  lowers Grammar.LetBinding(text Name, Value);
   syntax Symbols        = "symbols" "{" Kinds:Word+ "}"  lowers Grammar.Symbols(sequence Core.Text Kinds);
   syntax Word           = Value:Identifier  lowers text Core.Text Value;
   syntax Builtin        = "builtin" SymbolKind:Identifier Within:InKind? "{" Names:BuiltinName+ "}"
@@ -159,16 +166,58 @@ syntax module Nitrogen
   syntax PredicateOp    = "!" / "&"  lowers text Core.Text this;
   syntax Postfix        = Body:Primary Operators:RepeatOp*  lowers Grammar.Postfix(Body, sequence Core.Text Operators);
   syntax RepeatOp       = "?" / "*" / "+"  lowers text Core.Text this;
-  syntax Primary        = StringLiteral / CharClass / Any / Parenthesized / Reference;
+  syntax Primary        = Conditional / Comprehension / Call / EmptyGroup / StringLiteral / CharClass / Any / Parenthesized / Reference;
+  syntax Conditional    = "if" Condition:Value "then" Then:Expression "else" Else:Expression  lowers Grammar.If(Condition, Then, Else);
+  syntax Comprehension  = Kind:("choice" / "seq") Variable:Identifier "in" From:Value To:RangeTo? Block:Block
+                          lowers Grammar.Comprehension(text Kind, text Variable, From, optional Grammar.Value To, Block);
+  syntax RangeTo        = ".." Bound:Value  lowers Grammar.RangeTo(Bound);
+  syntax Block          = "{" Lets:LetBinding* Where:WhereClause? Body:Expression "}"  lowers Grammar.Block(sequence Grammar.Let Lets, optional Grammar.Value Where, Body);
+  syntax WhereClause    = "where" Condition:Value ":"  lowers Grammar.Where(Condition);
+  syntax Call           = Head:CallHead Arguments:(Value; ",")* ")"  lowers Grammar.Call(text Head, sequence Grammar.Value Arguments);
+  syntax EmptyGroup     = "(" ")"  lowers Grammar.Empty();
   syntax StringLiteral  = Value:String  lowers Grammar.Literal(text Value);
   syntax Any            = "."  lowers Grammar.Any();
   syntax Parenthesized  = "(" Inner:Expression Tail:(SeparatorTail / GroupClose)  lowers Grammar.Parenthesized(Inner, Tail);
   syntax SeparatorTail  = ";" Separator:Expression ")" Op:("*" / "+")  lowers Grammar.SeparatorTail(Separator, text Op);
   syntax GroupClose     = ")"  lowers Grammar.GroupClose();
-  syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" !"rewrites" Name:QualifiedName  references? rule Name
+  syntax Reference      = !"precedence" !"except" !"then" !"else" !"declares" !"references" !"scope" !"dynamic" !"lowers" !"rewrites" Name:QualifiedName  references? rule Name
                           lowers Grammar.Reference(text Name);
   syntax QualifiedName  = DottedName / Identifier;
   syntax CharClass      = "[" Negated:"^"? Items:ClassItem+ "]"  lowers Grammar.CharClass(optional text Negated, sequence Grammar.ClassItem Items);
-  syntax ClassItem      = First:Char Last:RangeEnd?  lowers Grammar.ClassItem(text First, optional Core.Text Last);
-  syntax RangeEnd       = ".." Last:Char  lowers text Core.Text Last;
+  syntax ClassItem      = First:ClassBound Last:RangeEnd?  lowers Grammar.ClassItem(First, optional Grammar.Value Last);
+  syntax RangeEnd       = ".." Last:ClassBound  lowers Grammar.RangeTo(Last);
+  syntax ClassBound     = CharValue / ValueCall / NameValue / ValueGroup;
+
+  // Value expressions of grammar functions, loosest first.
+  syntax Value          = IfValue / OrValue;
+  syntax IfValue        = "if" Condition:Value "then" Then:Value "else" Else:Value  lowers Grammar.IfValue(Condition, Then, Else);
+  syntax OrValue        = First:AndValue Rest:OrTail*  lowers Grammar.Chain(First, sequence Grammar.ChainTail Rest);
+  syntax OrTail         = Op:"or" Operand:AndValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax AndValue       = First:NotValue Rest:AndTail*  lowers Grammar.Chain(First, sequence Grammar.ChainTail Rest);
+  syntax AndTail        = Op:"and" Operand:NotValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax NotValue       = NotPrefix / CompareValue;
+  syntax NotPrefix      = Op:"not" Operand:NotValue  lowers Grammar.UnaryValue(text Op, Operand);
+  syntax CompareValue   = First:UnionValue Rest:CompareTail?  lowers Grammar.Single(First, optional Grammar.ChainTail Rest);
+  syntax CompareTail    = Op:("==" / "!=" / "<=" / ">=" / "<" / ">") Operand:UnionValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax UnionValue     = First:InterValue Rest:UnionTail*  lowers Grammar.Chain(First, sequence Grammar.ChainTail Rest);
+  syntax UnionTail      = Op:"|" Operand:InterValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax InterValue     = First:SumValue Rest:InterTail*  lowers Grammar.Chain(First, sequence Grammar.ChainTail Rest);
+  syntax InterTail      = Op:"&" Operand:SumValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax SumValue       = First:ProductValue Rest:SumTail*  lowers Grammar.Chain(First, sequence Grammar.ChainTail Rest);
+  syntax SumTail        = Op:("+" / "-") Operand:ProductValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax ProductValue   = First:PowerValue Rest:ProductTail*  lowers Grammar.Chain(First, sequence Grammar.ChainTail Rest);
+  syntax ProductTail    = Op:("*" / "/" / "%") Operand:PowerValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax PowerValue     = First:UnaryValue Rest:PowerTail?  lowers Grammar.Single(First, optional Grammar.ChainTail Rest);
+  syntax PowerTail      = Op:"^" Operand:PowerValue  lowers Grammar.ChainTail(text Op, Operand);
+  syntax UnaryValue     = UnaryPrefix / AtomValue;
+  syntax UnaryPrefix    = Op:("-" / "~") Operand:UnaryValue  lowers Grammar.UnaryValue(text Op, Operand);
+  syntax AtomValue      = IntValue / CharValue / TextValue / ClassValue / BlockValue / ValueCall / NameValue / ValueGroup;
+  syntax IntValue       = Value:Integer  lowers Grammar.IntValue(text Value);
+  syntax CharValue      = Value:Char  lowers Grammar.CharValue(text Value);
+  syntax TextValue      = Value:String  lowers Grammar.TextValue(text Value);
+  syntax ClassValue     = "[" Negated:"^"? Items:ClassItem* "]"  lowers Grammar.ClassValue(optional text Negated, sequence Grammar.ClassItem Items);
+  syntax BlockValue     = Block:Block  lowers Grammar.BlockValue(Block);
+  syntax ValueCall      = Head:CallHead Arguments:(Value; ",")* ")"  lowers Grammar.ValueCall(text Head, sequence Grammar.Value Arguments);
+  syntax NameValue      = !"or" !"and" !"not" !"if" !"then" !"else" Name:QualifiedName  lowers Grammar.Name(text Name);
+  syntax ValueGroup     = "(" Inner:Value ")"  lowers Grammar.ValueGroup(Inner);
 }

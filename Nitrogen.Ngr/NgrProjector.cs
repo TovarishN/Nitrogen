@@ -72,12 +72,21 @@ internal static class NgrProjector
         var builtins = new List<BuiltinDecl>();
         var symbolProperties = new List<SymbolPropertyDecl>();
         var helpers = new List<QuoteHelperDecl>();
+        var functions = new List<GrammarFunctionDecl>();
         foreach (var item in Items(module.Arguments[1]))
         {
             var member = (HirOperation)item;
             var a = member.Arguments;
+            if (Kind(member) is "QuoteHelper" or "QuoteMatchHelper" && Text(a[2]) == GrammarFunctions.RuleType)
+                throw new NgrMappingException("a quote helper cannot return Grammar.Rule; give it a grammar body", Span(a[2]));
             switch (Kind(member))
             {
+                case "GrammarFunction":
+                    if (Text(a[2]) != GrammarFunctions.RuleType)
+                        throw new NgrMappingException("a function with a grammar body must return Grammar.Rule", Span(a[2]));
+                    functions.Add(new(Name(a[0]), Items(a[1]).Select(QuoteParameter).ToArray(), Name(a[2]),
+                        Items(a[3]).Select(Let).ToArray(), Expression(a[4]), Span(member)));
+                    break;
                 case "QuoteHelper":
                     helpers.Add(new(Name(a[0]), Items(a[1]).Select(QuoteParameter).ToArray(), Name(a[2]), Quote(a[3]), Span(member)));
                     break;
@@ -140,7 +149,7 @@ internal static class NgrProjector
             }
         }
         return new ModuleDecl(Text(module.Arguments[0]), usings.ToArray(), rules.ToArray(), extends.ToArray(), Span(module),
-            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray());
+            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray());
     }
 
     static EquatableArray<Alternative> Alternatives(HirNode list)
@@ -490,7 +499,32 @@ internal static class NgrProjector
             case "Any":
                 return new AnyCharExpr(Span(primary));
             case "CharClass":
-                return CharClass(primary);
+            {
+                var items = ClassItems(primary.Arguments[1]);
+                bool negated = Value(primary.Arguments[0]) is not null;
+                if (items.All(i => i.First is CharValueExpr && i.Last is null or CharValueExpr))
+                    return new CharClassExpr(items.Select(i => new CharRange(((CharValueExpr)i.First).Value,
+                        ((CharValueExpr?)i.Last ?? (CharValueExpr)i.First).Value)).ToArray(), negated, Span(primary));
+                return new ValueClassExpr(items, negated, Span(primary));
+            }
+            case "If":
+            {
+                var otherwise = Expression(primary.Arguments[2]);
+                return new IfExpr(ValueOf(primary.Arguments[0]), Expression(primary.Arguments[1]), otherwise,
+                    GrammarSpan.FromBounds(Span(primary).Start, otherwise.Span.End));
+            }
+            case "Comprehension":
+            {
+                var a = primary.Arguments;
+                var block = Block(a[4]);
+                return new ComprehensionExpr(Text(a[0]) == "choice", Name(a[1]), ValueOf(a[2]),
+                    Value(a[3]) is { } to ? ValueOf(Expect(to, "RangeTo").Arguments[0]) : null, block,
+                    GrammarSpan.FromBounds(Span(primary).Start, block.Span.End));
+            }
+            case "Call":
+                return new GrammarCallExpr(CallName(primary.Arguments[0]), Items(primary.Arguments[1]).Select(ValueOf).ToArray(), Span(primary));
+            case "Empty":
+                return new SequenceExpr(Array.Empty<Expr>(), Span(primary));
             case "Parenthesized":
             {
                 var inner = Expression(primary.Arguments[0]);
@@ -505,26 +539,89 @@ internal static class NgrProjector
         }
     }
 
-    static Expr CharClass(HirOperation node)
+    // ---- grammar functions (spec: grammar functions); spans follow the bootstrap parser ----
+
+    static LetBinding Let(HirNode node)
     {
-        var ranges = new List<CharRange>();
-        foreach (var entry in Items(node.Arguments[1]))
+        var let = Expect(node, "LetBinding");
+        return new LetBinding(Name(let.Arguments[0]), ValueOf(let.Arguments[1]), Span(let));
+    }
+
+    static FunctionBlock Block(HirNode node)
+    {
+        var block = Expect(node, "Block");
+        var where = Value(block.Arguments[1]) is { } clause ? ValueOf(Expect(clause, "Where").Arguments[0]) : null;
+        return new FunctionBlock(Items(block.Arguments[0]).Select(Let).ToArray(), where, Expression(block.Arguments[2]), Span(block));
+    }
+
+    /// <summary>A <c>CallHead</c> token is the name and its <c>(</c>.</summary>
+    static NameDecl CallName(HirNode head)
+    {
+        string name = Text(head)[..^1];
+        return new NameDecl(name, new GrammarSpan(Span(head).Start, name.Length));
+    }
+
+    static ValueClassItem[] ClassItems(HirNode items) => Items(items).Select(entry =>
+    {
+        var item = Expect(entry, "ClassItem");
+        var first = ValueOf(item.Arguments[0]);
+        var last = Value(item.Arguments[1]) is { } end ? ValueOf(Expect(end, "RangeTo").Arguments[0]) : null;
+        if (first is CharValueExpr low && last is CharValueExpr high && high.Value < low.Value)
+            throw new NgrMappingException("empty character range", GrammarSpan.FromBounds(first.Span.Start, last.Span.End));
+        return new ValueClassItem(first, last, GrammarSpan.FromBounds(first.Span.Start, (last ?? first).Span.End));
+    }).ToArray();
+
+    static ValueExpr ValueOf(HirNode node)
+    {
+        var value = (HirOperation)node;
+        var a = value.Arguments;
+        switch (Kind(value))
         {
-            var item = Expect(entry, "ClassItem");
-            var firstText = item.Arguments[0];
-            char first = Unquote(Text(firstText))[0];
-            char last = first;
-            if (Value(item.Arguments[1]) is { } end)
+            case "IfValue":
             {
-                var lastToken = AtEnd(end);
-                last = Unquote(lastToken.Name)[0];
-                if (last < first)
-                    throw new NgrMappingException("empty character range",
-                        GrammarSpan.FromBounds(firstText.Origins[0].Span.Start, lastToken.Span.End));
+                var otherwise = ValueOf(a[2]);
+                return new IfValueExpr(ValueOf(a[0]), ValueOf(a[1]), otherwise, GrammarSpan.FromBounds(Span(value).Start, otherwise.Span.End));
             }
-            ranges.Add(new CharRange(first, last));
+            case "Chain":
+                return Items(a[1]).Aggregate(ValueOf(a[0]), Binary);
+            case "Single":
+                return Value(a[1]) is { } tail ? Binary(ValueOf(a[0]), tail) : ValueOf(a[0]);
+            case "UnaryValue":
+            {
+                var operand = ValueOf(a[1]);
+                return new UnaryValueExpr(Text(a[0]), operand, GrammarSpan.FromBounds(Span(value).Start, operand.Span.End));
+            }
+            case "IntValue":
+                return long.TryParse(Text(a[0]), NumberStyles.None, CultureInfo.InvariantCulture, out long number)
+                    ? new IntValueExpr(number, Span(value))
+                    : throw new NgrMappingException("the integer is too large", Span(value));
+            case "CharValue":
+                return new CharValueExpr(Unquote(Text(a[0]))[0], Span(value));
+            case "TextValue":
+                return new TextValueExpr(Unquote(Text(a[0])), Span(value));
+            case "ClassValue":
+                return new ClassValueExpr(ClassItems(a[1]), Value(a[0]) is not null, Span(value));
+            case "BlockValue":
+            {
+                var block = Block(a[0]);
+                return new RuleValueExpr(block, block.Span);
+            }
+            case "ValueCall":
+                return new CallValueExpr(CallName(a[0]), Items(a[1]).Select(ValueOf).ToArray(), Span(value));
+            case "Name":
+                return new NameValueExpr(Text(a[0]), Span(a[0]));
+            case "ValueGroup":
+                return ValueOf(a[0]);
+            default:
+                throw Unexpected(value);
         }
-        return new CharClassExpr(ranges.ToArray(), Value(node.Arguments[0]) is not null, Span(node));
+    }
+
+    static ValueExpr Binary(ValueExpr left, HirNode tail)
+    {
+        var parts = Expect(tail, "ChainTail").Arguments;
+        var right = ValueOf(parts[1]);
+        return new BinaryValueExpr(Text(parts[0]), left, right, GrammarSpan.FromBounds(left.Span.Start, right.Span.End));
     }
 
     /// <summary>Decodes a quoted literal the String or Char token has already validated.</summary>

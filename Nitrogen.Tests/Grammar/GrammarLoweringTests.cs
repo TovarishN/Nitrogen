@@ -60,8 +60,10 @@ public sealed class GrammarLoweringTests
             var charClass = Op(postfix.Arguments[0], "CharClass");
             Assert.Null(Opt(charClass.Arguments[0]));
             var items = Seq(charClass.Arguments[1]).Select(item => Op(item, "ClassItem")).ToList();
-            Assert.Equal(("'a'", "'z'"), (Text(items[0].Arguments[0]), Text(Opt(items[0].Arguments[1])!)));
-            Assert.Equal("'_'", Text(items[1].Arguments[0]));
+            // A bound is a value (spec: grammar functions); a range end is RangeTo(bound).
+            string Bound(HirNode bound) => Text(Op(bound, "CharValue").Arguments[0]);
+            Assert.Equal(("'a'", "'z'"), (Bound(items[0].Arguments[0]), Bound(Op(Opt(items[0].Arguments[1])!, "RangeTo").Arguments[0])));
+            Assert.Equal("'_'", Bound(items[1].Arguments[0]));
             Assert.Null(Opt(items[1].Arguments[1]));
 
             var rule = Op(members[1], "SyntaxRule");

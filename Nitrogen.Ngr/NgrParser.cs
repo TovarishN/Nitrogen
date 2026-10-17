@@ -29,7 +29,7 @@ public static class NgrParser
         }
         try
         {
-            return new GrammarParseResult(NgrProjector.File(LowerFile(result.Tree)), default);
+            return GrammarFunctionSyntax.Check(NgrProjector.File(LowerFile(result.Tree)));
         }
         catch (LanguageDeclarationException error)
         {

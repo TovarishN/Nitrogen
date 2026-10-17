@@ -172,6 +172,8 @@ public static partial class GrammarExtraction
         RepeatExpr repeat => new[] { repeat.Inner },
         SeparatedListExpr list => new[] { list.Item, list.Separator },
         PredicateExpr predicate => new[] { predicate.Inner },
+        IfExpr conditional => new[] { conditional.Then, conditional.Else },
+        ComprehensionExpr comprehension => new[] { comprehension.Block.Body },
         _ => Array.Empty<Expr>(),
     };
 }

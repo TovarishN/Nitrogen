@@ -109,6 +109,12 @@ public class SelfHostingTests
     [InlineData("syntax module M { symbols { v s } builtin v in s { a b.c } }")]
     [InlineData("syntax module M { syntax R = N:A { check N != null : \"m\" at N; } }")]
     [InlineData("syntax module M { syntax R = \"r\" { check AB0001 1 > 0 : $\"x\"; } }")]
+    [InlineData("syntax module M { token hex = \"h\"; syntax R = hex (A) hex; }")]
+    [InlineData("syntax module M { function F(n: Grammar.Int, c: Grammar.Class) : Grammar.Rule = let a = n * 2 + 1; let b = -n ^ 2 ^ 3 % 4; if a < 3 and not b == 2 or n != 0 then [char(a) .. (b - 1) c] else (); }")]
+    [InlineData("syntax module M { syntax function G(t: Grammar.Text, r: Grammar.Rule) : Grammar.Rule = choice d in 0 .. 15 { let low = d * 16; where low >= 2 and [] != c | [^ \'a\'..\'b\'] & ~c : X:r? F(d, low - 1)+ } seq ch in t { [upper(ch) lower(ch)] }; }")]
+    [InlineData("syntax module M { function H() : Grammar.Rule = if if true then 1 else 2 > 1 then \"a\" / B.C else M.F({ \"x\" }, \'c\', \"t\", (1 + 2) * 3, -(4)); }")]
+    [InlineData("syntax module M { token T = \"\\\\u\" Lib.HexIn(4, Id) F() / G(T, [\'a\' \'b\'..\'c\']); syntax R = A F(B) A (B); }")]
+    [InlineData("syntax module M { function then() : Expr = <[ x ]>; syntax function F(A: Expr*) : Expr = <[ f(..$A) ]>; }")]
     public void Every_declaration_form_maps_to_the_bootstrap_model(string text) => AssertSameModel(text);
 
     [Theory]
@@ -134,6 +140,16 @@ public class SelfHostingTests
     [InlineData("syntax module M { syntax R = \"r\" { X = f(1; } }")]
     [InlineData("syntax module M { syntax R = \"r\" { check MT0001 : \"m\"; } }")]
     [InlineData("syntax module M { extend syntax E { out T : int = 0; | A = \"a\" } }")]
+    [InlineData("syntax module M { syntax R = if A then B else C; }")]
+    [InlineData("syntax module M { token T = choice d in 0 .. 3 { A }; }")]
+    [InlineData("syntax module M { syntax R = (); }")]
+    [InlineData("syntax module M { token T = [\'a\' .. X]; }")]
+    [InlineData("syntax module M { function F() : Expr = A; }")]
+    [InlineData("syntax module M { function F() : Grammar.Rule = <[ x ]>; }")]
+    [InlineData("syntax module M { function F() : Grammar.Rule = if 1 < 2 < 3 then A else B; }")]
+    [InlineData("syntax module M { function F() : Grammar.Rule = G(99999999999999999999); }")]
+    [InlineData("syntax module M { function F() : Grammar.Rule = G(or) H(1; }")]
+    [InlineData("syntax module M { function F() : Grammar.Rule = [\'b\' .. \'a\' x]; }")]
     public void Invalid_input_fails_in_both_parsers(string text)
     {
         Assert.False(GrammarParser.Parse(text).Success);

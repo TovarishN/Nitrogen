@@ -65,6 +65,14 @@ public static class GrammarCodes
     public const string QuoteHelperCategory = "NGR0147";
     public const string QuoteMatchSelector = "NGR0148";
     public const string QuoteMatchCapture = "NGR0149";
+    public const string FunctionType = "NGR0150";
+    public const string UnknownFunction = "NGR0151";
+    public const string FunctionArgumentCount = "NGR0152";
+    public const string FunctionArgumentType = "NGR0153";
+    public const string EvaluationLimit = "NGR0154";
+    public const string EvaluationError = "NGR0155";
+    public const string DuplicateFunction = "NGR0158";
+    public const string CharacterLevelCall = "NGR0159";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

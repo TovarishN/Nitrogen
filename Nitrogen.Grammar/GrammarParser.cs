@@ -20,7 +20,7 @@ public static class GrammarParser
         try
         {
             var parser = new Parser(text);
-            return new GrammarParseResult(parser.ParseFile(declarationOnly), default);
+            return new GrammarParseResult(GrammarFunctionSyntax.CheckOrThrow(parser.ParseFile(declarationOnly)), default);
         }
         catch (LanguageDeclarationException error)
         {
@@ -35,7 +35,10 @@ public static class GrammarParser
     }
 
     internal static bool CanUseUnqualifiedReference(string name) =>
-        name is not ("precedence" or "except") && !IsClauseWord(name);
+        name is not ("precedence" or "except" or "then" or "else") && !IsClauseWord(name);
+
+    /// <summary>Words a value expression never reads as a name (spec: grammar functions).</summary>
+    internal static bool IsValueKeyword(string name) => name is "or" or "and" or "not" or "if" or "then" or "else";
 
     static bool IsClauseWord(string word) => word is "declares" or "references" or "scope" or "dynamic" or "lowers" or "rewrites";
 
@@ -155,8 +158,14 @@ public static class GrammarParser
             var builtins = new List<BuiltinDecl>();
             var symbolProperties = new List<SymbolPropertyDecl>();
             var helpers = new List<QuoteHelperDecl>();
+            var functions = new List<GrammarFunctionDecl>();
             while (!At(TokenKind.RBrace))
             {
+                if (AtKeyword("function") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.LParen)
+                {
+                    ParseFunction(Current, helpers, functions);
+                    continue;
+                }
                 if (AtKeyword("using"))
                 {
                     var keyword = Advance();
@@ -221,7 +230,7 @@ public static class GrammarParser
                     var keyword = Advance();
                     if (AtKeyword("function") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.LParen)
                     {
-                        helpers.Add(ParseQuoteHelper(keyword));
+                        ParseFunction(keyword, helpers, functions);
                         continue;
                     }
                     var (ruleName, body, clauses, semantics, end) = ParseRuleBody();
@@ -250,7 +259,7 @@ public static class GrammarParser
             }
             var close = Advance();
             return new ModuleDecl(name, usings.ToArray(), rules.ToArray(), extends.ToArray(),
-                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray());
+                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray());
         }
 
         (string Name, Expr Body, EquatableArray<BindingClause> Clauses, SemanticsBlock? Semantics, int End) ParseRuleBody()
@@ -411,6 +420,12 @@ public static class GrammarParser
                     if (token.Value.Length == 0) throw new GrammarSyntaxException("a literal must not be empty", token.Span);
                     return new LiteralExpr(token.Value, token.Span);
                 }
+                case TokenKind.Identifier or TokenKind.QualifiedName when AtCall() && Attempt(ParseCall) is { } call:
+                    return call;
+                case TokenKind.Identifier when Current.Value == "if" && Attempt(ParseIf) is { } conditional:
+                    return conditional;
+                case TokenKind.Identifier when Current.Value is "choice" or "seq" && Attempt(ParseComprehension) is { } comprehension:
+                    return comprehension;
                 case TokenKind.Identifier:
                 case TokenKind.QualifiedName:
                 {
@@ -430,6 +445,17 @@ public static class GrammarParser
 
         Expr ParseCharClass()
         {
+            var (items, negated, span) = ParseClassItems();
+            if (items.Count == 0) throw new GrammarSyntaxException("a character class needs at least one character", span);
+            if (items.All(i => i.First is CharValueExpr && i.Last is null or CharValueExpr))
+                return new CharClassExpr(items.Select(i => new CharRange(((CharValueExpr)i.First).Value,
+                    ((CharValueExpr?)i.Last ?? (CharValueExpr)i.First).Value)).ToArray(), negated, span);
+            return new ValueClassExpr(items.ToArray(), negated, span);
+        }
+
+        /// <summary><c>[^? items]</c>; a bound is a character, a name, a call or <c>(value)</c> (spec: grammar functions).</summary>
+        (List<ValueClassItem> Items, bool Negated, GrammarSpan Span) ParseClassItems()
+        {
             var open = Advance();
             bool negated = false;
             if (At(TokenKind.Caret))
@@ -437,29 +463,272 @@ public static class GrammarParser
                 Advance();
                 negated = true;
             }
-            var ranges = new List<CharRange>();
-            while (At(TokenKind.Char))
+            var items = new List<ValueClassItem>();
+            while (Current.Kind is TokenKind.Char or TokenKind.Identifier or TokenKind.QualifiedName or TokenKind.LParen)
             {
-                var first = Advance();
-                char low = first.Value[0], high = low;
+                var first = ParseBound();
+                ValueExpr? last = null;
                 if (At(TokenKind.DotDot))
                 {
                     Advance();
-                    var last = Expect(TokenKind.Char, "a character literal");
-                    high = last.Value[0];
-                    if (high < low) throw new GrammarSyntaxException("empty character range", GrammarSpan.FromBounds(first.Start, last.End));
+                    if (Current.Kind is not (TokenKind.Char or TokenKind.Identifier or TokenKind.QualifiedName or TokenKind.LParen))
+                        throw Error("expected a character literal");
+                    last = ParseBound();
+                    if (first is CharValueExpr low && last is CharValueExpr high && high.Value < low.Value)
+                        throw new GrammarSyntaxException("empty character range", GrammarSpan.FromBounds(first.Span.Start, last.Span.End));
                 }
-                ranges.Add(new CharRange(low, high));
+                items.Add(new ValueClassItem(first, last, GrammarSpan.FromBounds(first.Span.Start, (last ?? first).Span.End)));
             }
             var close = Expect(TokenKind.RBracket, "a character literal or ']'");
-            if (ranges.Count == 0)
-                throw new GrammarSyntaxException("a character class needs at least one character", GrammarSpan.FromBounds(open.Start, close.End));
-            return new CharClassExpr(ranges.ToArray(), negated, GrammarSpan.FromBounds(open.Start, close.End));
+            return (items, negated, GrammarSpan.FromBounds(open.Start, close.End));
+        }
+
+        ValueExpr ParseBound()
+        {
+            if (At(TokenKind.Char))
+            {
+                var token = Advance();
+                return new CharValueExpr(token.Value[0], token.Span);
+            }
+            if (At(TokenKind.LParen)) return ParseValueGroup();
+            return ParseNameOrCall();
+        }
+
+        bool AtCall() => Current.Kind is TokenKind.Identifier or TokenKind.QualifiedName &&
+            Next.Kind == TokenKind.LParen && Next.Start == Current.End;
+
+        (NameDecl Name, ValueExpr[] Arguments, int End) ParseCallParts()
+        {
+            var name = Name(Advance());
+            Advance();
+            var arguments = new List<ValueExpr>();
+            if (!At(TokenKind.RParen))
+                do
+                {
+                    arguments.Add(ParseValue());
+                    if (!At(TokenKind.Comma)) break;
+                    Advance();
+                } while (true);
+            var close = Expect(TokenKind.RParen, "',' or ')'");
+            return (name, arguments.ToArray(), close.End);
+        }
+
+        Expr ParseCall()
+        {
+            var (name, arguments, end) = ParseCallParts();
+            return new GrammarCallExpr(name, arguments, GrammarSpan.FromBounds(name.Span.Start, end));
+        }
+
+        /// <summary>Tries a keyword-led form or a call; on failure rewinds so the word reads as a rule reference, as the self-hosted PEG does.</summary>
+        Expr? Attempt(Func<Expr> parse)
+        {
+            int saved = _position;
+            try
+            {
+                return parse();
+            }
+            catch (GrammarSyntaxException)
+            {
+                _position = saved;
+                return null;
+            }
+        }
+
+        Expr ParseIf()
+        {
+            int start = Advance().Start;
+            var condition = ParseValue();
+            ExpectKeyword("then");
+            var then = ParseExpr();
+            ExpectKeyword("else");
+            var otherwise = ParseExpr();
+            return new IfExpr(condition, then, otherwise, GrammarSpan.FromBounds(start, otherwise.Span.End));
+        }
+
+        Expr ParseComprehension()
+        {
+            var kind = Advance();
+            var variable = Name(Expect(TokenKind.Identifier, "a variable name"));
+            ExpectKeyword("in");
+            var from = ParseValue();
+            ValueExpr? to = null;
+            if (At(TokenKind.DotDot))
+            {
+                Advance();
+                to = ParseValue();
+            }
+            var block = ParseBlock();
+            return new ComprehensionExpr(kind.Value == "choice", variable, from, to, block, GrammarSpan.FromBounds(kind.Start, block.Span.End));
+        }
+
+        FunctionBlock ParseBlock()
+        {
+            var open = Expect(TokenKind.LBrace, "'{'");
+            var lets = ParseLets();
+            ValueExpr? where = null;
+            if (AtKeyword("where"))
+            {
+                Advance();
+                where = ParseValue();
+                Expect(TokenKind.Colon, "':'");
+            }
+            var body = ParseExpr();
+            var close = Expect(TokenKind.RBrace, "'}'");
+            return new FunctionBlock(lets, where, body, GrammarSpan.FromBounds(open.Start, close.End));
+        }
+
+        LetBinding[] ParseLets()
+        {
+            var lets = new List<LetBinding>();
+            while (AtKeyword("let") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.Equals)
+            {
+                int start = Advance().Start;
+                var name = Name(Advance());
+                Advance();
+                var value = ParseValue();
+                var semicolon = Expect(TokenKind.Semicolon, "';'");
+                lets.Add(new LetBinding(name, value, GrammarSpan.FromBounds(start, semicolon.End)));
+            }
+            return lets.ToArray();
+        }
+
+        // ---- value expressions (spec: grammar functions) ----
+
+        ValueExpr ParseValue()
+        {
+            if (!AtKeyword("if")) return ParseBinary(0);
+            int start = Advance().Start;
+            var condition = ParseValue();
+            ExpectKeyword("then");
+            var then = ParseValue();
+            ExpectKeyword("else");
+            var otherwise = ParseValue();
+            return new IfValueExpr(condition, then, otherwise, GrammarSpan.FromBounds(start, otherwise.Span.End));
+        }
+
+        /// <summary>Binary levels from loosest: or, and, (not), comparison, |, &amp;, + -, * / %, ^ (right).</summary>
+        ValueExpr ParseBinary(int level)
+        {
+            switch (level)
+            {
+                case 2 when AtKeyword("not"):
+                {
+                    var op = Advance();
+                    var operand = ParseBinary(2);
+                    return new UnaryValueExpr("not", operand, GrammarSpan.FromBounds(op.Start, operand.Span.End));
+                }
+                case 2:
+                    return ParseBinary(3);
+                case 3:
+                {
+                    var left = ParseBinary(4);
+                    if (Current.Kind is not (TokenKind.EqualEqual or TokenKind.NotEqual or TokenKind.Less or TokenKind.LessEqual
+                        or TokenKind.Greater or TokenKind.GreaterEqual)) return left;
+                    string op = Advance().Value;
+                    var right = ParseBinary(4);
+                    return new BinaryValueExpr(op, left, right, GrammarSpan.FromBounds(left.Span.Start, right.Span.End));
+                }
+                case 8:
+                {
+                    var left = ParseUnaryValue();
+                    if (!At(TokenKind.Caret)) return left;
+                    Advance();
+                    var right = ParseBinary(8);
+                    return new BinaryValueExpr("^", left, right, GrammarSpan.FromBounds(left.Span.Start, right.Span.End));
+                }
+            }
+            var result = ParseBinary(level + 1);
+            while (OperatorAt(level) is { } op)
+            {
+                Advance();
+                var right = ParseBinary(level + 1);
+                result = new BinaryValueExpr(op, result, right, GrammarSpan.FromBounds(result.Span.Start, right.Span.End));
+            }
+            return result;
+        }
+
+        string? OperatorAt(int level) => level switch
+        {
+            0 when AtKeyword("or") => "or",
+            1 when AtKeyword("and") => "and",
+            4 when At(TokenKind.Bar) => "|",
+            5 when At(TokenKind.Amp) => "&",
+            6 when Current.Kind is TokenKind.Plus or TokenKind.Minus => Current.Value,
+            7 when Current.Kind is TokenKind.Star or TokenKind.Slash or TokenKind.Percent => Current.Value,
+            _ => null,
+        };
+
+        ValueExpr ParseUnaryValue()
+        {
+            if (Current.Kind is TokenKind.Minus or TokenKind.Tilde)
+            {
+                var op = Advance();
+                var operand = ParseUnaryValue();
+                return new UnaryValueExpr(op.Value, operand, GrammarSpan.FromBounds(op.Start, operand.Span.End));
+            }
+            switch (Current.Kind)
+            {
+                case TokenKind.Integer:
+                {
+                    var token = Advance();
+                    if (!long.TryParse(token.Value, NumberStyles.None, CultureInfo.InvariantCulture, out long value))
+                        throw new GrammarSyntaxException("the integer is too large", token.Span);
+                    return new IntValueExpr(value, token.Span);
+                }
+                case TokenKind.Char:
+                {
+                    var token = Advance();
+                    return new CharValueExpr(token.Value[0], token.Span);
+                }
+                case TokenKind.String:
+                {
+                    var token = Advance();
+                    return new TextValueExpr(token.Value, token.Span);
+                }
+                case TokenKind.LBracket:
+                {
+                    var (items, negated, span) = ParseClassItems();
+                    return new ClassValueExpr(items.ToArray(), negated, span);
+                }
+                case TokenKind.LBrace:
+                {
+                    var block = ParseBlock();
+                    return new RuleValueExpr(block, block.Span);
+                }
+                case TokenKind.LParen:
+                    return ParseValueGroup();
+                case TokenKind.Identifier or TokenKind.QualifiedName:
+                    return ParseNameOrCall();
+                default:
+                    throw Error("expected a value");
+            }
+        }
+
+        ValueExpr ParseValueGroup()
+        {
+            Advance();
+            var inner = ParseValue();
+            Expect(TokenKind.RParen, "')'");
+            return inner;
+        }
+
+        ValueExpr ParseNameOrCall()
+        {
+            if (AtCall())
+            {
+                var (name, arguments, end) = ParseCallParts();
+                return new CallValueExpr(name, arguments, GrammarSpan.FromBounds(name.Span.Start, end));
+            }
+            if (Current.Kind is not (TokenKind.Identifier or TokenKind.QualifiedName) || IsValueKeyword(Current.Value))
+                throw Error("expected a value");
+            var token = Advance();
+            return new NameValueExpr(token.Value, token.Span);
         }
 
         Expr ParseGroup()
         {
             var open = Advance();
+            if (At(TokenKind.RParen)) return new SequenceExpr(default, GrammarSpan.FromBounds(open.Start, Advance().End));
             var inner = ParseExpr();
             if (At(TokenKind.Semicolon))
             {
@@ -480,7 +749,11 @@ public static class GrammarParser
         /// <c>rewrites &lt;[ text ]&gt;</c> (spec: quasiquote rewrites): the text runs verbatim to the first <c>]&gt;</c>,
         /// never tokenized. Lexing resumes after it.
         /// </summary>
-        QuoteHelperDecl ParseQuoteHelper(GrammarToken keyword)
+        /// <summary>
+        /// <c>[syntax] function Name(...) : Type = Body;</c>. A <c>&lt;[</c> or <c>match</c> body is a quote helper; any other
+        /// body is a grammar function, which returns <c>Grammar.Rule</c> (spec: grammar functions).
+        /// </summary>
+        void ParseFunction(GrammarToken keyword, List<QuoteHelperDecl> helpers, List<GrammarFunctionDecl> functions)
         {
             ExpectKeyword("function");
             var name = Name(Expect(TokenKind.Identifier, "a helper name"));
@@ -489,6 +762,26 @@ public static class GrammarParser
             var result = ReadCategory();
             var equals = Expect(TokenKind.Equals, "'='");
             int next = GrammarLexer.SkipTrivia(_text, equals.End);
+            bool quote = string.CompareOrdinal(_text, next, "<[", 0, 2) == 0 ||
+                AtKeyword("match") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.LBrace;
+            if (quote)
+            {
+                if (result.Name == GrammarFunctions.RuleType)
+                    throw new GrammarSyntaxException("a quote helper cannot return Grammar.Rule; give it a grammar body", result.Span);
+                helpers.Add(ParseQuoteHelperBody(keyword, name, parameters, result, equals, next));
+                return;
+            }
+            if (result.Name != GrammarFunctions.RuleType)
+                throw new GrammarSyntaxException("a function with a grammar body must return Grammar.Rule", result.Span);
+            var lets = ParseLets();
+            var body = ParseExpr();
+            var semicolon = Expect(TokenKind.Semicolon, "';'");
+            functions.Add(new GrammarFunctionDecl(name, parameters, result, lets, body, GrammarSpan.FromBounds(keyword.Start, semicolon.End)));
+        }
+
+        QuoteHelperDecl ParseQuoteHelperBody(GrammarToken keyword, NameDecl name, QuoteParameter[] parameters, NameDecl result,
+            GrammarToken equals, int next)
+        {
             QuoteHelperMatch? match = null;
             QuoteText body;
             if (string.CompareOrdinal(_text, next, "match", 0, 5) == 0)

@@ -50,6 +50,10 @@ public static class GrammarCompiler
         string PathOf(GrammarDiagnostic diagnostic) =>
             diagnostic.Module is not null && paths.TryGetValue(diagnostic.Module, out string? path) ? path : "";
 
+        var expanded = GrammarFunctions.Expand(modules);
+        foreach (var diagnostic in expanded.Diagnostics) diagnostics.Add(new CompiledDiagnostic(PathOf(diagnostic), diagnostic));
+        modules = expanded.Modules.ToList();
+
         foreach (var diagnostic in GrammarValidator.Validate(modules))
             diagnostics.Add(new CompiledDiagnostic(PathOf(diagnostic), diagnostic));
         if (HasErrors(diagnostics)) return new GrammarCompileResult(diagnostics.ToArray(), default);

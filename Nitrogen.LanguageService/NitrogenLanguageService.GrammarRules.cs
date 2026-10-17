@@ -15,6 +15,8 @@ public sealed partial class NitrogenLanguageService
             throw new RenameRefusedException("Renaming a grammar rule with imported or qualified references is not yet supported. Update its resolved uses together.");
     }
 
+    static string FunctionKey(string module, string name) => "function " + module + "." + name;
+
     sealed record GrammarRuleOccurrence(string Identity, string Path, GrammarSpan Span, bool IsDefinition);
 
     (IReadOnlyList<DocumentLocation> Definitions, IReadOnlyList<DocumentLocation> References)? GrammarRuleAt(string uri, DocumentPosition position)
@@ -26,10 +28,29 @@ public sealed partial class NitrogenLanguageService
             .Where(f => f.Text is not null).Select(f => (f.Path, Text: f.Text!, File: GrammarParser.Parse(DocumentSignatures.Read(f.Text!).MaskedText).File))
             .Where(f => f.File is not null).ToArray();
         var analysis = new GrammarAnalysis(files.SelectMany(f => f.File!.Modules));
+        var functions = files.SelectMany(f => f.File!.Modules).GroupBy(m => m.Name)
+            .ToDictionary(g => g.Key, g => new HashSet<string>(g.First().Functions.Select(f => f.Name.Name)), StringComparer.Ordinal);
         var occurrences = new List<GrammarRuleOccurrence>();
         foreach (var file in files)
             foreach (var module in file.File!.Modules)
             {
+                // A function's parameters, lets and loop variables: name → identity, declared where they are bound.
+                var variables = new Dictionary<string, string>(StringComparer.Ordinal);
+                string scopeKey = "";
+                foreach (var function in module.Functions)
+                {
+                    scopeKey = FunctionKey(module.Name, function.Name.Name);
+                    occurrences.Add(new(scopeKey, file.Path, function.Name.Span, true));
+                    variables.Clear();
+                    foreach (var parameter in function.Parameters) Bind(parameter.Name);
+                    foreach (var let in function.Lets)
+                    {
+                        VisitValue(let.Value, null);
+                        Bind(let.Name);
+                    }
+                    Visit(function.Body, null);
+                }
+                variables.Clear();
                 foreach (var rule in module.Rules)
                 {
                     int headerEnd = rule switch
@@ -63,9 +84,102 @@ public sealed partial class NitrogenLanguageService
 
                 void Visit(Expr expression, string? implicitModule)
                 {
-                    if (expression is ReferenceExpr reference && analysis.Resolve(reference.Name, reference.Span, module, implicitModule) is { } target)
-                        occurrences.Add(new(target.Key, file.Path, reference.Span, false));
+                    if (expression is ReferenceExpr reference && variables.TryGetValue(reference.Name, out string? bound))
+                        occurrences.Add(new(bound, file.Path, reference.Span, false));
+                    else if (expression is ReferenceExpr rule && analysis.Resolve(rule.Name, rule.Span, module, implicitModule) is { } target)
+                        occurrences.Add(new(target.Key, file.Path, rule.Span, false));
+                    // Grammar functions (spec: grammar functions): calls, and rule names among their values.
+                    switch (expression)
+                    {
+                        case GrammarCallExpr call:
+                            Called(call.Name);
+                            foreach (var argument in call.Arguments) VisitValue(argument, implicitModule);
+                            break;
+                        case IfExpr conditional:
+                            VisitValue(conditional.Condition, implicitModule);
+                            break;
+                        case ComprehensionExpr comprehension:
+                            VisitValue(comprehension.From, implicitModule);
+                            if (comprehension.To is { } to) VisitValue(to, implicitModule);
+                            Bind(comprehension.Variable);
+                            VisitBlock(comprehension.Block, implicitModule, visitBody: false);
+                            break;
+                        case ValueClassExpr valueClass:
+                            foreach (var item in valueClass.Items) VisitItem(item, implicitModule);
+                            break;
+                    }
                     foreach (var child in GrammarExtraction.Children(expression)) Visit(child, implicitModule);
+                }
+
+                void VisitBlock(FunctionBlock block, string? implicitModule, bool visitBody)
+                {
+                    foreach (var let in block.Lets)
+                    {
+                        VisitValue(let.Value, implicitModule);
+                        Bind(let.Name);
+                    }
+                    if (block.Where is { } where) VisitValue(where, implicitModule);
+                    if (visitBody) Visit(block.Body, implicitModule);
+                }
+
+                void VisitItem(ValueClassItem item, string? implicitModule)
+                {
+                    VisitValue(item.First, implicitModule);
+                    if (item.Last is { } last) VisitValue(last, implicitModule);
+                }
+
+                void VisitValue(ValueExpr value, string? implicitModule)
+                {
+                    switch (value)
+                    {
+                        case NameValueExpr name when variables.TryGetValue(name.Name, out string? bound):
+                            occurrences.Add(new(bound, file.Path, name.Span, false));
+                            break;
+                        case NameValueExpr name when analysis.Resolve(name.Name, name.Span, module, implicitModule) is { } target:
+                            occurrences.Add(new(target.Key, file.Path, name.Span, false));
+                            break;
+                        case CallValueExpr call:
+                            Called(call.Name);
+                            foreach (var argument in call.Arguments) VisitValue(argument, implicitModule);
+                            break;
+                        case UnaryValueExpr unary:
+                            VisitValue(unary.Operand, implicitModule);
+                            break;
+                        case BinaryValueExpr binary:
+                            VisitValue(binary.Left, implicitModule);
+                            VisitValue(binary.Right, implicitModule);
+                            break;
+                        case IfValueExpr conditional:
+                            VisitValue(conditional.Condition, implicitModule);
+                            VisitValue(conditional.Then, implicitModule);
+                            VisitValue(conditional.Else, implicitModule);
+                            break;
+                        case ClassValueExpr classValue:
+                            foreach (var item in classValue.Items) VisitItem(item, implicitModule);
+                            break;
+                        case RuleValueExpr rule:
+                            VisitBlock(rule.Block, implicitModule, visitBody: true);
+                            break;
+                    }
+                }
+
+                void Bind(NameDecl name)
+                {
+                    string key = scopeKey + " " + name.Name + "@" + name.Span.Start;
+                    variables[name.Name] = key;
+                    occurrences.Add(new(key, file.Path, name.Span, true));
+                }
+
+                void Called(NameDecl name)
+                {
+                    int dot = name.Name.LastIndexOf('.');
+                    string? owner = dot >= 0
+                        ? name.Name.Substring(0, dot)
+                        : new[] { module.Name }.Concat(module.Usings.Select(u => u.Module))
+                            .FirstOrDefault(m => functions.TryGetValue(m, out var declared) && declared.Contains(name.Name));
+                    string local = dot >= 0 ? name.Name.Substring(dot + 1) : name.Name;
+                    if (owner is not null && functions.TryGetValue(owner, out var names) && names.Contains(local))
+                        occurrences.Add(new(FunctionKey(owner, local), file.Path, name.Span, false));
                 }
             }
         int offset = new LineMap(current).OffsetOf(position);

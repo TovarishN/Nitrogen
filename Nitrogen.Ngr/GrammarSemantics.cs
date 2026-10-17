@@ -35,11 +35,15 @@ public static class GrammarSemantics
         public static readonly SemanticType Expression = Named("Expression");
         public static readonly SemanticType Tail = Named("Tail");
         public static readonly SemanticType ClassItem = Named("ClassItem");
+        public static readonly SemanticType Value = Named("Value");
+        public static readonly SemanticType ChainTail = Named("ChainTail");
+        public static readonly SemanticType Let = Named("Let");
+        public static readonly SemanticType Block = Named("Block");
 
         internal static readonly SemanticType[] All =
         [
             File, LanguageDeclaration, LanguageSetting, Module, QuoteParameter, QuoteMatchBody, QuoteMatchArm, QuoteCaptures, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
-            OperationSpec, LoweringArgument, Semantics, SemanticItem, Expression, Tail, ClassItem,
+            OperationSpec, LoweringArgument, Semantics, SemanticItem, Expression, Tail, ClassItem, Value, ChainTail, Let, Block,
         ];
 
         static SemanticType Named(string name) => SemanticType.Named("Grammar", name);
@@ -121,11 +125,33 @@ public static class GrammarSemantics
         Op("Literal", Types.Expression, Text),
         Op("Any", Types.Expression),
         Op("CharClass", Types.Expression, Opt(Text), Seq(Types.ClassItem)),
-        Op("ClassItem", Types.ClassItem, Text, Opt(Text)),
+        Op("ClassItem", Types.ClassItem, Types.Value, Opt(Types.Value)),
         Op("Parenthesized", Types.Expression, Types.Expression, Types.Tail),
         Op("SeparatorTail", Types.Tail, Types.Expression, Text),
         Op("GroupClose", Types.Tail),
         Op("Reference", Types.Expression, Text),
+        Op("GrammarFunction", Types.Member, Text, Seq(Types.QuoteParameter), Text, Seq(Types.Let), Types.Expression),
+        Op("LetBinding", Types.Let, Text, Types.Value),
+        Op("If", Types.Expression, Types.Value, Types.Expression, Types.Expression),
+        Op("Comprehension", Types.Expression, Text, Text, Types.Value, Opt(Types.Value), Types.Block),
+        Op("RangeTo", Types.Value, Types.Value),
+        Op("Block", Types.Block, Seq(Types.Let), Opt(Types.Value), Types.Expression),
+        Op("Where", Types.Value, Types.Value),
+        Op("Call", Types.Expression, Text, Seq(Types.Value)),
+        Op("Empty", Types.Expression),
+        Op("IfValue", Types.Value, Types.Value, Types.Value, Types.Value),
+        Op("Chain", Types.Value, Types.Value, Seq(Types.ChainTail)),
+        Op("Single", Types.Value, Types.Value, Opt(Types.ChainTail)),
+        Op("ChainTail", Types.ChainTail, Text, Types.Value),
+        Op("UnaryValue", Types.Value, Text, Types.Value),
+        Op("IntValue", Types.Value, Text),
+        Op("CharValue", Types.Value, Text),
+        Op("TextValue", Types.Value, Text),
+        Op("ClassValue", Types.Value, Opt(Text), Seq(Types.ClassItem)),
+        Op("BlockValue", Types.Value, Types.Block),
+        Op("ValueCall", Types.Value, Text, Seq(Types.Value)),
+        Op("Name", Types.Value, Text),
+        Op("ValueGroup", Types.Value, Types.Value),
     ];
 
     /// <summary>The <c>Grammar</c> semantic module: imports Core, exports the types and operations above.</summary>
