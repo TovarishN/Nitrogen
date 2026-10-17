@@ -126,7 +126,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         : _documents.TryGetValue(uri, out var document)
             ? SemanticTokenBuilder.Build(document, _projects[document.Language],
                 document.Language.Presentation.ColorFromLowering ? LoweredRoots(document) : [],
-                AssistOf(document) is { } assisted ? document.Language.Assist!.Tokens(assisted) : null)
+                (AssistOf(document) is { } assisted ? document.Language.Assist!.Tokens(assisted) : []).Concat(GrammarFunctionTokens(document)))
             : [];
 
     /// <summary>The document's outline; empty when it is not open.</summary>
@@ -220,6 +220,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
             return Into(uri, position) is { } inner && Hover(inner.Uri, inner.Position) is { } found
                 ? found with { Range = OutOf(inner.Uri, found.Range) }
                 : null;
+        if (GrammarFunctionHover(uri, position) is { } function) return function;
         if (_documents.TryGetValue(uri, out var document) && AssistOf(document) is { } assisted &&
             document.Language.Assist!.Hover(assisted, document.Lines.OffsetOf(position)) is { } help)
             return new HoverInfo(help.Markdown, document.Lines.RangeOf(help.Span));
@@ -337,6 +338,12 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         var semantics = SemanticFile(document);
         int offset = document.Lines.OffsetOf(position);
         var items = CompletionBuilder.Build(document, _projects[document.Language], semantics, info, offset);
+        if (GrammarFunctionCompletion(document, offset) is { Count: > 0 } functions)
+        {
+            var names = functions.Select(f => f.Label).ToHashSet(StringComparer.Ordinal);
+            items = functions.Concat(items.Where(i => !names.Contains(i.Label)))
+                .Select((item, i) => item with { SortText = i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) }).ToList();
+        }
         if (AssistOf(document) is not { } assisted) return items;
         var assistedItems = document.Language.Assist!.Completion(assisted, offset)
             .Select(i => new CompletionItem(i.Label, i.Kind, i.Detail, document.Lines.RangeOf(i.Replace)))
@@ -354,6 +361,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner ? OutOf(inner.Uri, PrepareRename(inner.Uri, inner.Position))
                 : throw new RenameRefusedException("Nothing to rename here.");
+        if (GrammarFunctionRenameTarget(uri, position) is { } function) return PrepareGrammarFunctionRename(function.Scope, function.Target);
         CheckGrammarRename(uri, position);
         var (document, _, span, _) = RenameTarget(uri, position);
         return document.Lines.RangeOf(span);
@@ -366,6 +374,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// </summary>
     public IReadOnlyDictionary<string, IReadOnlyList<DocumentEdit>> Rename(string uri, DocumentPosition position, string newName)
     {
+        if (GrammarFunctionRenameTarget(uri, position) is { } function) return RenameGrammarFunction(function.Scope, function.Target, newName);
         if (Uri.TryCreate(uri, UriKind.Absolute, out var helperUri) && helperUri.IsFile && RenameQuoteHelper(uri, position, newName) is { } helperEdits)
             return helperEdits;
         if (_hosts.ContainsKey(uri))

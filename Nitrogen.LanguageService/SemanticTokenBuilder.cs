@@ -37,7 +37,12 @@ internal static class SemanticTokenBuilder
             names[declaration.NameSpan.Start] = (declaration.NameSpan.End, presentation.StyleOf(declaration.Kind).Token, TokenModifiers.Declaration);
 
         var hir = Lowered(document, lowered ?? []);
-        foreach (var token in assisted ?? []) hir[token.Span.Start] = (token.Span.End, token.Type); // the language knows best
+        var assistedStarts = new HashSet<int>();
+        foreach (var token in assisted ?? [])
+        {
+            hir[token.Span.Start] = (token.Span.End, token.Type); // the language knows best
+            assistedStarts.Add(token.Span.Start);
+        }
 
         var tokens = new List<SemanticToken>();
         int covered = 0; // text before this offset is already coloured
@@ -54,10 +59,11 @@ internal static class SemanticTokenBuilder
                 covered = name.End;
                 continue;
             }
-            if (hir.TryGetValue(span.Start, out var meaning) && meaning.End == span.End)
+            // An assisted token may colour the start of a leaf, such as the name of a call head `Name(`.
+            if (hir.TryGetValue(span.Start, out var meaning) && (meaning.End == span.End || assistedStarts.Contains(span.Start) && meaning.End < span.End))
             {
-                Add(tokens, document.Lines, span.Start, span.End, meaning.Type, TokenModifiers.None);
-                covered = span.End;
+                Add(tokens, document.Lines, span.Start, meaning.End, meaning.Type, TokenModifiers.None);
+                covered = meaning.End;
                 continue;
             }
             if (Classify(tree, kind, text, span) is { } type)

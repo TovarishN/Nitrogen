@@ -22,7 +22,8 @@ public static partial class GrammarFunctions
 
     static readonly HashSet<string> s_builtins = new(StringComparer.Ordinal) { "char", "code", "upper", "lower", "length" };
 
-    public static GrammarFunctionsResult Expand(IEnumerable<ModuleDecl> modules)
+    /// <param name="onExpanded">Called with each call written in a rule body and what it expanded to (null when evaluation failed); editors use it.</param>
+    public static GrammarFunctionsResult Expand(IEnumerable<ModuleDecl> modules, Action<GrammarCallExpr, Expr?>? onExpanded = null)
     {
         var user = modules.ToList();
         var diagnostics = new List<GrammarDiagnostic>();
@@ -57,6 +58,7 @@ public static partial class GrammarFunctions
         {
             if (expr is not GrammarCallExpr call) return null;
             var expansion = evaluator.ExpandCall(call, module, inToken, diagnostics);
+            onExpanded?.Invoke(call, expansion);
             if (expansion is null) return new AnyCharExpr(call.Span);
             if (!inToken && IsCharacterLevel(expansion))
                 diagnostics.Add(new GrammarDiagnostic(GrammarCodes.CharacterLevelCall, GrammarSeverity.Warning,

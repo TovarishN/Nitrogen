@@ -313,6 +313,27 @@ command is provided by the general Nitrogen VS Code extension; other clients nee
 implement the extraction prompt flow and support annotated resource edits.
 
 
+## Grammar functions in `.ngr` files
+
+Grammar functions (`function Name(p: Grammar.Int, ...) : Grammar.Rule = ...;`) get the following editor features:
+
+- **Hover** on a call shows the function's signature and where it is declared. A call in a rule body is also evaluated over the composed grammar modules,
+  and the hover gives the size of its expansion: nodes, character classes and depth. A shared subtree
+  counts once for each place it is used. A short expansion is also shown as `.ngr` text. Hovering a
+  parameter shows its type. Hovering a `let` or loop variable names the function it belongs to.
+- **Refactor → Inline expansion of …** (`refactor.inline`) replaces a call in a rule body with its
+  expansion as readable `.ngr` text. The expansion is parenthesized where precedence needs it. Use the
+  editor's refactoring preview to look at an expansion without applying it. An expansion over 10,000 nodes is
+  not inlined. A call that fails to evaluate is reported, not inlined.
+- **Coloring**: function names in declarations and calls are functions, parameters are
+  parameters, and `let` and loop variables are variables. `choice`, `seq`, `in`, `let`, `where`, `if`,
+  `then` and `else` are keywords.
+- **Completion** offers grammar functions wherever a call may start, in rule bodies and function bodies.
+  It offers the module's own functions and those of the modules it names in `using`.
+- **Go to definition, usages and rename** work for functions and their parameters, `let` and loop
+  variables. Renaming a function updates qualified and imported calls in the other grammars of the scope.
+  Rename refuses names that are already used and grammar keywords.
+
 ## Generated language composition factories
 
 A configured language named `DateCalc` generates `DateCalcComposition` in its configured
