@@ -1,0 +1,27 @@
+// Grammar functions (spec: grammar functions) declared where they are used: an escape matches only when its digits name a character of the class.
+syntax module HexValues
+{
+  function HexDigit(d: Grammar.Int) : Grammar.Rule =
+    if d < 10 then [char(48 + d)] else [char(55 + d) char(87 + d)];
+
+  function HexIn(width: Grammar.Int, values: Grammar.Class) : Grammar.Rule =
+    if width == 0 then ()
+    else choice d in 0 .. 15 {
+      let size = 16 ^ (width - 1);
+      let low = d * size;
+      let part = values & [low .. (low + size - 1)];
+      where part != [] : HexDigit(d) HexIn(width - 1, part - low)
+    };
+
+  function Keyword(word: Grammar.Text) : Grammar.Rule = seq c in word { [upper(c) lower(c)] };
+
+  function Repeat(item: Grammar.Rule, min: Grammar.Int, max: Grammar.Int) : Grammar.Rule =
+    seq i in 1 .. max { if i <= min then item else item? };
+
+  token Letter        = ['A'..'Z' 'a'..'z' 'À'..'Ö' 'Ø'..'ö'];
+  token EscapedLetter = "\\u" HexIn(4, Letter) / "\\U0000" HexIn(4, Letter);
+  token Select        = Keyword("select");
+  token Octet         = Repeat(['0'..'9'], 1, 3);
+
+  syntax Document = EscapedLetter;
+}

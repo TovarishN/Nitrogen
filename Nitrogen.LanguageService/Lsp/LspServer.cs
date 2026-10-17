@@ -221,7 +221,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, DeclarationProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
-                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix", "refactor.extract"]),
+                        CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix", "refactor.extract", "refactor.inline"]),
                         SignatureHelpProvider: new SignatureHelpOptions(["(", ","]),
                         FoldingRangeProvider: true, SelectionRangeProvider: true, WorkspaceSymbolProvider: true,
                         DocumentFormattingProvider: true, DocumentRangeFormattingProvider: true,
@@ -338,6 +338,12 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                             ? new("Extract Quote Helper…", "refactor.extract", Command: new("Extract Quote Helper…", "nitrogen.extractQuoteHelper", [new(request.TextDocument, request.Range)]))
                             : new("Extract Quote Helper…", "refactor.extract", Disabled: new("The client must support reviewed, versioned edits and file creation.")));
                 }
+                if (Wants("refactor.inline") &&
+                    service.InlineGrammarCall(uri, new(Position(request.Range.Start), Position(request.Range.End))) is { } inline)
+                    actions.Add(inline.DisabledReason is { } reason
+                        ? new(inline.Title, "refactor.inline", Disabled: new(reason))
+                        : new(inline.Title, "refactor.inline", Edit: new WorkspaceEdit(inline.Edits.ToDictionary(e => e.Key,
+                            e => e.Value.Select(edit => new LspTextEdit(Range(edit.Range), edit.NewText)).ToArray()))));
                 await RespondAsync(id, actions.ToArray(), LspJson.Default.LspCodeActionArray, cancel);
                 break;
             }

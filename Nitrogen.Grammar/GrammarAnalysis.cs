@@ -102,6 +102,8 @@ internal sealed class GrammarAnalysis
         if (found.Count > 1)
             report?.Invoke(GrammarCodes.AmbiguousReference,
                 $"'{name}' is defined in both '{found[0].Module.Name}' and '{found[1].Module.Name}'", span, from);
+        else if (_modules.Any(m => m.Functions.Any(f => f.Name.Name == name)))
+            report?.Invoke(GrammarCodes.UndefinedRule, $"'{name}' is a grammar function; call it as {name}(...) with no space before '('", span, from);
         else
             report?.Invoke(GrammarCodes.UndefinedRule, $"undefined rule '{name}'", span, from);
         return null;

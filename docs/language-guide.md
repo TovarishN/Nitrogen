@@ -246,6 +246,70 @@ ambiguous workspace language categories receive no guessed interpretation.
 The executable examples are covered by `QuoteApiTests`, `QuoteOwnershipTests`, `QuoteOriginTests`,
 `TemplateListInstantiationTests`, and the grammar/C# quotation navigation tests.
 
+## Grammar functions
+
+A grammar function computes part of a rule when the grammar is compiled. A call is replaced by
+ordinary classes, literals, references, sequences and choices, so the generated parser has nothing
+new to run. Nitrogen ships no function library; a grammar declares the functions it needs.
+
+Declare one with `function`, the same form as quote helpers. Its return type is `Grammar.Rule`, and
+its body is a grammar expression rather than a `<[ ]>` template. This lexical module limits
+`\uXXXX` escapes to identifier characters:
+
+```ngr
+syntax module CSharp.Lexical
+{
+  // The hex digit d, in either case.
+  function HexDigit(d: Grammar.Int) : Grammar.Rule =
+    if d < 10 then [char(48 + d)] else [char(55 + d) char(87 + d)];
+
+  // Exactly `width` hex digits, in either case, whose value is a member of `values`.
+  function HexIn(width: Grammar.Int, values: Grammar.Class) : Grammar.Rule =
+    if width == 0 then ()
+    else choice d in 0 .. 15 {
+      let size = 16 ^ (width - 1);
+      let low = d * size;
+      let part = values & [low .. (low + size - 1)];
+      where part != [] : HexDigit(d) HexIn(width - 1, part - low)
+    };
+
+  token IdStart      = ['A'..'Z' 'a'..'z' '_' '\u00c0'..'\u00d6'];
+  token UnicodeStart = "\\u" HexIn(4, IdStart) / "\\U0000" HexIn(4, IdStart);
+}
+```
+
+Here `\u0041` matches and `\u0030` does not. A call is a name immediately followed by `(`;
+`Name (X)` is still a reference followed by a group. Calls resolve like rule references: the
+function's own module, a qualified name, or exactly one `using`.
+
+- **Parameter types:** `Grammar.Int`, `Grammar.Char`, `Grammar.Text`, `Grammar.Class` and `Grammar.Rule`.
+  A rule name can be passed as a `Grammar.Rule`. A token rule that is a class, or a choice of class
+  rules, can also be passed as a `Grammar.Class`.
+- **Forms allowed only in a function body:** `if c then a else b`, `choice x in a .. b { ... }`,
+  `seq x in a .. b { ... }` (or `in text` for each character), the empty sequence `()`, and class
+  bounds computed from values. A block may start with `let x = value;` lines and a
+  `where condition :` filter. The body itself may start with `let` lines.
+- **Value expressions** appear after `let`, `if` and `where`, in ranges, in call arguments, and as
+  parenthesized class bounds such as `[(low + 1) .. high]`. From loosest to tightest:
+  - `or`, `and`, `not`
+  - `== != < <= > >=`
+  - `|` (union), `&` (intersection)
+  - `+ -`: integers, a character plus an integer, a class shifted by an integer, or a class difference
+  - `* / %`
+  - `^` (right-associative)
+  - unary `-` and `~` (class complement)
+
+  `[]` is the empty class, and `{ ... }` is a grammar fragment used as a value. The built-ins are
+  `char`, `code`, `upper`, `lower` and `length`.
+
+Evaluation is pure and memoized, with limits on nesting depth and size. In a token rule, choices
+in the expansion are factored: `[a] X / [b] X` becomes `[ab] X` when that cannot change which
+alternative matches. Diagnostics are `NGR0150`–`NGR0159`. They cover type errors, unknown
+functions, wrong argument counts and types, evaluation errors and limits, duplicate names, and a
+warning for character-level calls in syntax rules. Errors found while evaluating are reported at
+the call, with the chain of functions involved. Go to definition and usages work for functions,
+their parameters, and rules named in arguments.
+
 ## Editor support for lowered languages
 
 The language server uses what a document lowers to as well as its syntax:

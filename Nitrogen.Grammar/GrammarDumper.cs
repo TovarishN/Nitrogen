@@ -36,6 +36,10 @@ public static class GrammarDumper
             else builder.Append(" ").Append(CSharpText.Literal(helper.Body.Text));
             builder.Append(')');
         }
+        foreach (var function in module.Functions)
+            builder.Append(" (grammar-function ").Append(function.Name.Name).Append(" (")
+                .Append(string.Join(" ", function.Parameters.Select(p => p.Name.Name + ":" + p.Category.Name + (p.IsList ? "*" : ""))))
+                .Append(") : ").Append(function.ReturnType.Name).Append(Lets(function.Lets)).Append(' ').Append(Dump(function.Body)).Append(')');
         foreach (var rule in module.Rules) builder.Append(' ').Append(Dump(rule));
         foreach (var extend in module.Extends)
         {
@@ -128,10 +132,37 @@ public static class GrammarDumper
         LiteralExpr l => "(lit " + Quote(l.Value, '"') + ")",
         CharClassExpr c => "(class " + (c.Negated ? "^ " : "") + string.Join(" ", c.Ranges.Select(Range)) + ")",
         AnyCharExpr => "any",
+        GrammarCallExpr call => "(call " + call.Name.Name + string.Concat(call.Arguments.Select(a => " " + Dump(a))) + ")",
+        IfExpr i => $"(if {Dump(i.Condition)} {Dump(i.Then)} {Dump(i.Else)})",
+        ComprehensionExpr c => $"({(c.IsChoice ? "choice" : "seq")} {c.Variable.Name} {Dump(c.From)}" + (c.To is { } to ? " " + Dump(to) : "") + " " + Dump(c.Block) + ")",
+        ValueClassExpr c => "(value-class " + (c.Negated ? "^ " : "") + string.Join(" ", c.Items.Select(Dump)) + ")",
         ReferenceExpr r => $"(ref {r.Name})",
         PredicateExpr p => $"({(p.Kind == PredicateKind.Not ? "not" : "and")} {Dump(p.Inner)})",
         _ => throw new ArgumentOutOfRangeException(nameof(expr)),
     };
+
+    /// <summary>A grammar function's value expression (spec: grammar functions).</summary>
+    public static string Dump(ValueExpr value) => value switch
+    {
+        IntValueExpr i => i.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        CharValueExpr c => Quote(c.Value.ToString(), '\''),
+        TextValueExpr t => Quote(t.Value, '"'),
+        NameValueExpr n => n.Name,
+        CallValueExpr c => "(" + c.Name.Name + string.Concat(c.Arguments.Select(a => " " + Dump(a))) + ")",
+        UnaryValueExpr u => $"({u.Operator} {Dump(u.Operand)})",
+        BinaryValueExpr b => $"({b.Operator} {Dump(b.Left)} {Dump(b.Right)})",
+        IfValueExpr i => $"(if {Dump(i.Condition)} {Dump(i.Then)} {Dump(i.Else)})",
+        ClassValueExpr c => "[" + (c.Negated ? "^ " : "") + string.Join(" ", c.Items.Select(Dump)) + "]",
+        RuleValueExpr r => Dump(r.Block),
+        _ => throw new ArgumentOutOfRangeException(nameof(value)),
+    };
+
+    static string Dump(ValueClassItem item) => item.Last is { } last ? Dump(item.First) + ".." + Dump(last) : Dump(item.First);
+
+    static string Dump(FunctionBlock block) =>
+        "{" + Lets(block.Lets) + (block.Where is { } where ? " (where " + Dump(where) + ")" : "") + " " + Dump(block.Body) + "}";
+
+    static string Lets(EquatableArray<LetBinding> lets) => string.Concat(lets.Select(l => $" (let {l.Name.Name} {Dump(l.Value)})"));
 
     static string Range(CharRange range) =>
         range.First == range.Last

@@ -32,6 +32,15 @@ internal enum TokenKind
     DotDot,
     Caret,
     Comma,
+    Minus,
+    Percent,
+    Tilde,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    EqualEqual,
+    NotEqual,
 }
 
 /// <param name="Value">Source text for names, numbers and punctuation; the decoded value for strings and chars.</param>
@@ -111,10 +120,18 @@ internal static class GrammarLexer
             return new GrammarToken(TokenKind.DotDot, start, 2, "..");
         }
 
-        if (c == '=' && i + 1 < text.Length && text[i + 1] == '>')
+        if (i + 1 < text.Length && (c, text[i + 1]) switch
+            {
+                ('=', '>') => TokenKind.Arrow,
+                ('=', '=') => TokenKind.EqualEqual,
+                ('!', '=') => TokenKind.NotEqual,
+                ('<', '=') => TokenKind.LessEqual,
+                ('>', '=') => TokenKind.GreaterEqual,
+                _ => TokenKind.End,
+            } is var pair and not TokenKind.End)
         {
             i += 2;
-            return new GrammarToken(TokenKind.Arrow, start, 2, "=>");
+            return new GrammarToken(pair, start, 2, text.Substring(start, 2));
         }
         var punctuation = c switch
         {
@@ -137,6 +154,11 @@ internal static class GrammarLexer
             '.' => TokenKind.Dot,
             '^' => TokenKind.Caret,
             ',' => TokenKind.Comma,
+            '-' => TokenKind.Minus,
+            '%' => TokenKind.Percent,
+            '~' => TokenKind.Tilde,
+            '<' => TokenKind.Less,
+            '>' => TokenKind.Greater,
             _ => TokenKind.End,
         };
         if (punctuation == TokenKind.End)

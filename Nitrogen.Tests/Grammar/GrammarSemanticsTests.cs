@@ -15,7 +15,7 @@ public sealed class GrammarSemanticsTests
         Assert.NotNull(catalog);
         Assert.Equal("Grammar", GrammarSemantics.Module.Name);
         Assert.Equal(["Core"], GrammarSemantics.Module.Imports);
-        Assert.Equal(24, GrammarSemantics.Module.Types.Count);
+        Assert.Equal(28, GrammarSemantics.Module.Types.Count);
         Assert.Contains(GrammarSemantics.Types.QuoteParameter, GrammarSemantics.Module.Types);
         Assert.Contains(GrammarSemantics.Types.QuoteMatchBody, GrammarSemantics.Module.Types);
         Assert.Contains(GrammarSemantics.Types.QuoteMatchArm, GrammarSemantics.Module.Types);

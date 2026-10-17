@@ -27,8 +27,13 @@ public static class CompositionWriter
                 origins[module.Name] = input;
             }
         }
+        string PathOf(GrammarDiagnostic diagnostic) =>
+            diagnostic.Module is not null && origins.TryGetValue(diagnostic.Module, out var origin) ? origin.Path : path;
+        var expanded = GrammarFunctions.Expand(modules);
+        diagnostics.AddRange(expanded.Diagnostics.Select(d => new CompiledDiagnostic(PathOf(d), d)));
+        modules = expanded.Modules.ToList();
         foreach (var diagnostic in GrammarValidator.Validate(modules))
-            diagnostics.Add(new(diagnostic.Module is not null && origins.TryGetValue(diagnostic.Module, out var origin) ? origin.Path : path, diagnostic));
+            diagnostics.Add(new(PathOf(diagnostic), diagnostic));
         if (diagnostics.Any(d => d.Diagnostic.Severity == GrammarSeverity.Error))
             return new(diagnostics.ToArray(), default);
         var model = new EmitModel(new GrammarAnalysis(modules), namespaces, origins);

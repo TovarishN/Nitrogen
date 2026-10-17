@@ -11,7 +11,8 @@ public sealed record ModuleDecl(
     EquatableArray<SymbolsDecl> Symbols = default,
     EquatableArray<BuiltinDecl> Builtins = default,
     EquatableArray<SymbolPropertyDecl> SymbolProperties = default,
-    EquatableArray<QuoteHelperDecl> Helpers = default);
+    EquatableArray<QuoteHelperDecl> Helpers = default,
+    EquatableArray<GrammarFunctionDecl> Functions = default);
 
 public sealed record QuoteText(string Text, GrammarSpan Span);
 public sealed record QuoteParameter(NameDecl Name, NameDecl Category, bool IsList, GrammarSpan Span);
@@ -23,6 +24,51 @@ public sealed record QuoteHelperDecl(NameDecl Name, EquatableArray<QuoteParamete
 public sealed record QuoteHelperMatch(NameDecl Selector, EquatableArray<QuoteMatchArm> Arms, GrammarSpan Span);
 public sealed record QuoteMatchArm(EquatableArray<QuoteParameter> Captures, QuoteText Pattern, QuoteText Result, GrammarSpan Span);
 public sealed record QuoteHelperCall(NameDecl Helper, EquatableArray<NameDecl> Arguments, GrammarSpan Span);
+
+/// <summary>
+/// <c>function Name(p: Grammar.Int, ...) : Grammar.Rule = let x = V; ... Body;</c> (spec: grammar functions): a pure
+/// function evaluated when the grammar is compiled. <see cref="Parameters"/> reuse the quote-helper shape; their
+/// categories are <c>Grammar.*</c> types.
+/// </summary>
+public sealed record GrammarFunctionDecl(NameDecl Name, EquatableArray<QuoteParameter> Parameters, NameDecl ReturnType,
+    EquatableArray<LetBinding> Lets, Expr Body, GrammarSpan Span);
+
+/// <summary><c>let Name = Value;</c> in a function body or block.</summary>
+public sealed record LetBinding(NameDecl Name, ValueExpr Value, GrammarSpan Span);
+
+/// <summary><c>{ let ...; where Condition : Body }</c>: a comprehension's body, or a grammar fragment used as a value.</summary>
+public sealed record FunctionBlock(EquatableArray<LetBinding> Lets, ValueExpr? Where, Expr Body, GrammarSpan Span);
+
+/// <summary>A compile-time value expression of a grammar function (spec: grammar functions).</summary>
+public abstract record ValueExpr(GrammarSpan Span);
+
+public sealed record IntValueExpr(long Value, GrammarSpan Span) : ValueExpr(Span);
+
+public sealed record CharValueExpr(char Value, GrammarSpan Span) : ValueExpr(Span);
+
+public sealed record TextValueExpr(string Value, GrammarSpan Span) : ValueExpr(Span);
+
+/// <summary>A parameter, a <c>let</c> or loop variable, or a rule name, possibly qualified.</summary>
+public sealed record NameValueExpr(string Name, GrammarSpan Span) : ValueExpr(Span);
+
+/// <summary>A call of a built-in (<c>char</c>, <c>code</c>, <c>upper</c>, <c>lower</c>, <c>length</c>) or a grammar function.</summary>
+public sealed record CallValueExpr(NameDecl Name, EquatableArray<ValueExpr> Arguments, GrammarSpan Span) : ValueExpr(Span);
+
+/// <summary><c>-</c>, <c>~</c> or <c>not</c>.</summary>
+public sealed record UnaryValueExpr(string Operator, ValueExpr Operand, GrammarSpan Span) : ValueExpr(Span);
+
+public sealed record BinaryValueExpr(string Operator, ValueExpr Left, ValueExpr Right, GrammarSpan Span) : ValueExpr(Span);
+
+public sealed record IfValueExpr(ValueExpr Condition, ValueExpr Then, ValueExpr Else, GrammarSpan Span) : ValueExpr(Span);
+
+/// <summary>A class literal with value bounds; <c>[]</c> is the empty class.</summary>
+public sealed record ClassValueExpr(EquatableArray<ValueClassItem> Items, bool Negated, GrammarSpan Span) : ValueExpr(Span);
+
+/// <summary><c>{ Block }</c>: a grammar fragment used as a <c>Grammar.Rule</c> value.</summary>
+public sealed record RuleValueExpr(FunctionBlock Block, GrammarSpan Span) : ValueExpr(Span);
+
+/// <summary>A class item whose bounds are values: a character, a name, a call, or a parenthesized value.</summary>
+public sealed record ValueClassItem(ValueExpr First, ValueExpr? Last, GrammarSpan Span);
 
 public sealed record UsingDecl(string Module, GrammarSpan Span);
 
@@ -98,6 +144,21 @@ public readonly record struct CharRange(char First, char Last);
 public sealed record CharClassExpr(EquatableArray<CharRange> Ranges, bool Negated, GrammarSpan Span) : Expr(Span);
 
 public sealed record AnyCharExpr(GrammarSpan Span) : Expr(Span);
+
+/// <summary>
+/// <c>Name(arguments)</c>: a grammar function call (spec: grammar functions). <see cref="Expansion"/> is the expression the
+/// call evaluates to; the expansion stage sets it, and every later stage uses it. Null when evaluation failed.
+/// </summary>
+public sealed record GrammarCallExpr(NameDecl Name, EquatableArray<ValueExpr> Arguments, GrammarSpan Span, Expr? Expansion = null) : Expr(Span);
+
+/// <summary><c>if Condition then Then else Else</c>; function bodies only.</summary>
+public sealed record IfExpr(ValueExpr Condition, Expr Then, Expr Else, GrammarSpan Span) : Expr(Span);
+
+/// <summary><c>choice x in From .. To { Block }</c> or <c>seq ...</c>; without <see cref="To"/>, <see cref="From"/> is text. Function bodies only.</summary>
+public sealed record ComprehensionExpr(bool IsChoice, NameDecl Variable, ValueExpr From, ValueExpr? To, FunctionBlock Block, GrammarSpan Span) : Expr(Span);
+
+/// <summary>A character class with a computed bound; function bodies only.</summary>
+public sealed record ValueClassExpr(EquatableArray<ValueClassItem> Items, bool Negated, GrammarSpan Span) : Expr(Span);
 
 /// <summary>A rule reference, possibly qualified (<c>Module.Rule</c>).</summary>
 public sealed record ReferenceExpr(string Name, GrammarSpan Span) : Expr(Span);
