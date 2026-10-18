@@ -83,6 +83,12 @@ public sealed unsafe class LoweredModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        5 => slot is 0,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lowered.File", "Lowered.Item", "Lowered.Input", "Lowered.Fixed", "Lowered.Plain", "Lowered.Statement", "Lowered.Value", "Lowered.Add", "Lowered.Turn", "Lowered.Wrap", "Lowered.Num", "Lowered.Ref" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -821,7 +827,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
                 break;
             }
         }
-        s.CloseTemplateList("Lowered.Item", 0, null);
+        s.CloseTemplateList("Lowered.Item", 0, null, true);
         return true;
     }
 

@@ -681,17 +681,23 @@ public sealed class DeclarativeTypes
 
     IEnumerable<int> SequenceItems(int node, DeclarativeRule rule)
     {
-        var tree = _file.Tree;
-        int list = FieldNode(node, rule);
-        return SequenceItems(list, rule.SequenceStride);
+        if (rule.Arguments[0] < 0) return Children(node, rule.SequenceStride); // "this": the node's own children
+        return SequenceItems(_file.Tree.Child(node, rule.Arguments[0]), rule.SequenceStride);
     }
 
+    /// <summary>The items of a list slot: none for a null slot, the slot itself for a one-item list.</summary>
     IEnumerable<int> SequenceItems(int list, int stride)
     {
         var tree = _file.Tree;
-        if (list == SyntaxTree.NoNode) yield break; // an empty list
-        for (int i = 0; i < tree.ChildCount(list); i += stride)
-            yield return tree.Child(list, i);
+        for (int i = 0; i < ListSlot.Count(tree, list); i += stride)
+            yield return ListSlot.Child(tree, list, i);
+    }
+
+    IEnumerable<int> Children(int node, int stride)
+    {
+        var tree = _file.Tree;
+        for (int i = 0; i < tree.ChildCount(node); i += stride)
+            yield return tree.Child(node, i);
     }
 
     /// <summary>The node's tokens without trivia; null when empty (a null slot too) or any part is Missing.</summary>

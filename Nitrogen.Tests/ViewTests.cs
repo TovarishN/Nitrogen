@@ -9,7 +9,8 @@ public class ViewTests
     static readonly Language Calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
     static readonly Language Mini = new LanguageBuilder().Add(MiniModule.Instance).Build();
 
-    static int CallNode(SyntaxTree tree) => tree.Child(tree.Child(tree.Child(0, 0), 0), 0);
+    // Program's one statement is its Statements slot (a one-item list is its item).
+    static int CallNode(SyntaxTree tree) => tree.Child(tree.Child(0, 0), 0);
 
     [Fact]
     public void Typed_views_navigate_labeled_children()
@@ -57,6 +58,24 @@ public class ViewTests
         Assert.Equal(SyntaxKinds.List, first.Parent.Kind);
         Assert.Equal(callNode, first.Parent.Parent.Index);
         Assert.True(new SyntaxNode(tree, 0).Parent.IsNull);
+    }
+
+    [Fact]
+    public void A_one_item_list_view_reads_the_item_in_the_slot()
+    {
+        using var result = Calc.Parse("f(1);", CalcModule.Program);
+        var tree = result.Tree;
+        int callNode = CallNode(tree);
+        var call = SyntaxView.Cast<CallExpr>(tree, callNode);
+        Assert.Equal(1, call.Args.Count);
+        Assert.Equal(0, call.Args.SeparatorCount);
+        Assert.Equal(tree.Child(callNode, 2), call.Args[0].Index);
+        Assert.True(SyntaxView.TryCast<NumExpr>(tree, call.Args[0].Index, out var one));
+        Assert.Equal("1", one.Number.ToString());
+        var seen = new List<string>();
+        foreach (var arg in call.Args) seen.Add(arg.As<SyntaxNode>().ToString());
+        Assert.Equal(["1"], seen);
+        Assert.Equal(callNode, new SyntaxNode(tree, call.Args[0].Index).Parent.Index);
     }
 
     [Fact]

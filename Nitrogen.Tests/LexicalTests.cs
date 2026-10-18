@@ -52,21 +52,21 @@ public class LexicalTests
     public void Repeated_groups()
     {
         Assert.Equal(
-            "(Document (List (Block \"{\" (List (Group Word:\"a\" \"=\" Digits:\"1\") (Group Word:\"b\" \"=\" Digits:\"2\")) \"}\")) \";\")",
+            "(Document (Block \"{\" (List (Group Word:\"a\" \"=\" Digits:\"1\") (Group Word:\"b\" \"=\" Digits:\"2\")) \"}\") \";\")",
             Dump("{ a = 1 b = 2 };"));
     }
 
     [Fact]
     public void Choice_with_a_group_branch_and_an_optional_character_class()
     {
-        Assert.Equal("(Document (List (Pick \"pick\" (Group \"b\" \"c\") \"!\")) \";\")", Dump("pick b c!;"));
-        Assert.Equal("(Document (List (Pick \"pick\" \"a\" _)) \";\")", Dump("pick a;"));
+        Assert.Equal("(Document (Pick \"pick\" (Group \"b\" \"c\") \"!\") \";\")", Dump("pick b c!;"));
+        Assert.Equal("(Document (Pick \"pick\" \"a\" _) \";\")", Dump("pick a;"));
     }
 
     [Fact]
     public void Not_predicate_in_a_syntax_rule()
     {
-        Assert.Equal("(Document (List (Tagged \"tag\" Word:\"y\")) \";\")", Dump("tag y;"));
+        Assert.Equal("(Document (Tagged \"tag\" Word:\"y\") \";\")", Dump("tag y;"));
         using var result = Lexical.Parse("tag x;", LexicalModule.Document);
         Assert.False(result.Success);
     }

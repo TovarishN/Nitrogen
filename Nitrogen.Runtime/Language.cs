@@ -33,6 +33,10 @@ public sealed unsafe partial class Language
     /// <summary>The module with process-wide id <paramref name="id"/>, when it is part of this language.</summary>
     internal SyntaxModule? ModuleById(int id) => (uint)id < (uint)_modulesById.Length ? _modulesById[id] : null;
 
+    /// <summary>Whether child <paramref name="slot"/> of a <paramref name="kind"/> node holds a list (<see cref="SyntaxModule.IsListSlot"/>).</summary>
+    public bool IsListSlot(int kind, int slot) =>
+        ModuleById(SyntaxKinds.ModuleOf(kind))?.IsListSlot(SyntaxKinds.LocalOf(kind), slot) ?? false;
+
     public ExtensionPoint GetExtensionPoint(ExtensionPointDecl decl) =>
         (uint)decl.GlobalId < (uint)_points.Length && _points[decl.GlobalId] is { } point
             ? point

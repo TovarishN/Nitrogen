@@ -70,6 +70,13 @@ public sealed unsafe class CalcModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        3 => slot is 0,
+        8 => slot is 2,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Program", "Calc.Statement", "Calc.Assign", "Calc.ExprStatement", "Calc.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -448,7 +455,7 @@ public sealed unsafe class CalcModule : SyntaxModule
                 break;
             }
         }
-        s.CloseTemplateList("Calc.Statement", 0, null);
+        s.CloseTemplateList("Calc.Statement", 0, null, true);
         return true;
     }
 
@@ -490,7 +497,7 @@ public sealed unsafe class CalcModule : SyntaxModule
                 }
             }
         }
-        s.CloseTemplateList("Calc.Expr", 0, ",");
+        s.CloseTemplateList("Calc.Expr", 0, ",", true);
         return true;
     }
 

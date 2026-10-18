@@ -77,6 +77,27 @@ public class FormattingTests
     }
 
     [Fact]
+    public void A_continuation_of_the_only_item_keeps_its_offset()
+    {
+        // The module's one rule is its Members slot, not an item of a List node.
+        Assert.Equal("""
+            syntax module M
+            {
+              syntax B = "b"
+                         "c";
+            }
+
+            """, Formatted("""
+            syntax module M
+            {
+            syntax B = "b"
+                       "c";
+            }
+
+            """));
+    }
+
+    [Fact]
     public void A_continuation_keeps_its_offset_from_its_item()
     {
         // The semantics block one level in (DateCalc.ngr's style), and a hand-aligned continuation.

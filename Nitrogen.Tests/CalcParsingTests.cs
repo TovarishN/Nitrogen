@@ -7,13 +7,13 @@ public class CalcParsingTests
 {
     static readonly Language Calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
 
-    /// <summary>Parses <c>expr;</c> and dumps the expression under Program/List/ExprStatement.</summary>
+    /// <summary>Parses <c>expr;</c> and dumps the expression under Program/ExprStatement (a one-item list is its item).</summary>
     internal static string DumpExpr(Language language, string expr)
     {
         using var result = language.Parse(expr + ";", CalcModule.Program);
         Assert.True(result.Success, result.Success ? "" : result.FormatMessage(result.Diagnostics[0]));
         var tree = result.Tree;
-        int statement = tree.Child(tree.Child(0, 0), 0);
+        int statement = tree.Child(0, 0);
         return SyntaxDumper.Dump(tree, tree.Child(statement, 0));
     }
 
@@ -56,7 +56,7 @@ public class CalcParsingTests
         // Misses: Expr@0, Expr(min 10)@2, and Expr@4 twice.
         using var result = Calc.Parse("a+b;", CalcModule.Program);
         Assert.Equal(
-            "(Program (List (ExprStatement (Add (Ref Identifier:\"a\") \"+\" (Ref Identifier:\"b\")) \";\")))",
+            "(Program (ExprStatement (Add (Ref Identifier:\"a\") \"+\" (Ref Identifier:\"b\")) \";\"))",
             SyntaxDumper.Dump(result.Tree));
         Assert.Equal(1, result.Stats.MemoHits);
         Assert.Equal(4, result.Stats.MemoMisses);

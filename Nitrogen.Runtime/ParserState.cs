@@ -137,6 +137,30 @@ public unsafe ref partial struct ParserState
         return node;
     }
 
+    /// <summary>
+    /// Closes a <see cref="SyntaxKinds.List"/> frame. With <paramref name="collapseSingle"/> and exactly
+    /// one item, it pops the frame and leaves the item as the result: a one-item list is its item. The
+    /// generator passes false when an item could itself be a list or a null slot, so a slot never
+    /// confuses a list with its item. A lone recovery Skipped marker keeps its List, which the freeze
+    /// flags and empties.
+    /// </summary>
+    public readonly int CloseList(bool collapseSingle)
+    {
+        var a = Arena;
+        int frame = a.FrameCount - 1;
+        int childBase = a.FrameChildBase[frame];
+        if (collapseSingle && a.ChildStackCount - childBase == 1)
+        {
+            int item = a.ChildStack[childBase];
+            if (item != SyntaxTree.NoNode && a.Kind[item] != SyntaxKinds.Skipped)
+            {
+                a.FrameCount = frame;
+                return item;
+            }
+        }
+        return Close();
+    }
+
     static bool IsNullOrEmpty(BuildArena a, int node) => node == SyntaxTree.NoNode || a.Length[node] == 0;
 
     /// <summary>Pushes a leaf <c>[Position, end)</c> and moves to <paramref name="end"/>.</summary>

@@ -78,19 +78,20 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             return arguments.TryGetValue(name, out var value) && value is QuoteArgument.Scalar scalar
                 ? Insert(scalar.Value, name) : throw new Failure(new("NQ0002", span, "A scalar input is required.", name));
         }
-        if (holes && kind == SyntaxKinds.ListHole)
+        // A list hole standing alone is its own collapsed one-item list; any other must be an item of one.
+        if (holes && kind == SyntaxKinds.ListHole && !source.TemplateLists.ContainsKey(node))
             throw new Failure(new("NQ0001", span, "A list marker must occupy a supported list item site."));
         var children = new List<Built?>();
-        bool expand = holes && kind == SyntaxKinds.List && Enumerable.Range(0, source.ChildCount(node))
-            .Any(i => source.Child(node, i) is var child && child != SyntaxTree.NoNode && source.Kind(child) == SyntaxKinds.ListHole);
+        bool expand = holes && (kind == SyntaxKinds.ListHole || kind == SyntaxKinds.List && Enumerable.Range(0, source.ChildCount(node))
+            .Any(i => source.Child(node, i) is var child && child != SyntaxTree.NoNode && source.Kind(child) == SyntaxKinds.ListHole));
         if (expand)
         {
             if (!source.TemplateLists.TryGetValue(node, out var shape))
                 throw new Failure(new("NQ0001", span, "Unsupported destination list shape."));
             int stride = shape.Separator is null ? 1 : 2;
-            for (int i = 0; i < source.ChildCount(node); i += stride)
+            for (int i = 0; i < ListSlot.Count(source, node); i += stride)
             {
-                int child = source.Child(node, i);
+                int child = ListSlot.Child(source, node, i);
                 if (source.Kind(child) == SyntaxKinds.ListHole)
                 {
                     string name = source.GetText(child)[3..].ToString();
@@ -111,7 +112,10 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             int itemCount = stride == 1 ? children.Count : (children.Count + 1) / 2;
             if (itemCount < shape.MinimumCount)
                 throw new Failure(new("NQ0005", span, "The instantiated list requires at least one item."));
-            if (children.Count == 0) return null; // an empty list is a null slot, as a parse makes it
+            // As a parse makes them: an empty list is a null slot, and a one-item list is its item.
+            if (children.Count == 0) return null;
+            if (children.Count == 1) return children[0];
+            kind = SyntaxKinds.List;
 
             void Separator()
             {

@@ -51,7 +51,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
             var source = Resolve(pair.Input);
             bool absent = source.Node == SyntaxTree.NoNode;
             int kind = pattern.Kind(pair.Pattern);
-            if (kind == SyntaxKinds.ListHole)
+            if (kind == SyntaxKinds.ListHole && pair.Items is not null)
             {
                 string name = pattern.GetText(pair.Pattern)[3..].ToString();
                 var items = pair.Items!;
@@ -77,12 +77,13 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 else _captures[name] = QuoteArgument.Node(source);
                 continue;
             }
-            if (!absent && kind != source.Tree.Kind(source.Node)) return Mismatch();
             if (lists.TryGetValue(pair.Pattern, out var list))
             {
-                // An absent input list is an empty one: the capture takes no items.
+                // An absent input list is an empty one: the capture takes no items. Either side may be
+                // a one-item list collapsed to its item: the pattern a lone list hole, the input any
+                // node that is not a List (an item is never one where a list hole can stand).
                 int stride = list.Shape.Separator is null ? 1 : 2;
-                int childCount = absent ? 0 : source.Tree.ChildCount(source.Node);
+                int childCount = ListSlot.Count(source.Tree, source.Node);
                 if (stride == 2 && childCount != 0 && childCount % 2 == 0) return Mismatch();
                 int itemCount = (childCount + stride - 1) / stride;
                 int prefix = list.HoleIndex, suffix = list.Items.Length - prefix - 1;
@@ -90,18 +91,20 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 if (stride == 2)
                     for (int i = 1; i < childCount; i += 2)
                     {
-                        int separator = source.Tree.Child(source.Node, i);
+                        int separator = ListSlot.Child(source.Tree, source.Node, i);
                         if (source.Tree.Kind(separator) != SyntaxKinds.Literal ||
                             !source.Tree.GetText(separator).SequenceEqual(list.Shape.Separator.AsSpan())) return Mismatch();
                     }
                 var items = Enumerable.Range(0, itemCount).Select(index =>
-                    Resolve(new(source.Tree, source.Tree.Child(source.Node, index * stride), source.Origin))).ToArray();
+                    Resolve(new(source.Tree, ListSlot.Child(source.Tree, source.Node, index * stride), source.Origin))).ToArray();
                 for (int i = suffix - 1; i >= 0; i--)
                     work.Push(new(list.Items[prefix + 1 + i], items[itemCount - suffix + i]));
                 work.Push(new(list.Items[prefix], source, items[prefix..(itemCount - suffix)]));
                 for (int i = prefix - 1; i >= 0; i--) work.Push(new(list.Items[i], items[i]));
                 continue;
             }
+            if (kind == SyntaxKinds.ListHole) return Mismatch(); // unreachable: every list hole's list is in lists
+            if (!absent && kind != source.Tree.Kind(source.Node)) return Mismatch();
             if (absent || pattern.ChildCount(pair.Pattern) != source.Tree.ChildCount(source.Node)) return Mismatch();
             int count = pattern.ChildCount(pair.Pattern);
             if (count == 0 && !pattern.GetText(pair.Pattern).SequenceEqual(source.Tree.GetText(source.Node))) return Mismatch();

@@ -98,6 +98,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        5 => slot is 0,
+        6 => slot is 3,
+        13 => slot is 2,
+        18 => slot is 2,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Scopes.File", "Scopes.Unit", "Scopes.Item", "Scopes.Sequential", "Scopes.SequentialExport", "Scopes.Global", "Scopes.GlobalGen", "Scopes.Let", "Scopes.Use", "Scopes.Block", "Scopes.Gen", "Scopes.GenName", "Scopes.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -1040,7 +1049,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
                 break;
             }
         }
-        s.CloseTemplateList("Scopes.Unit", 0, null);
+        s.CloseTemplateList("Scopes.Unit", 0, null, true);
         return true;
     }
 
@@ -1086,7 +1095,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
                 break;
             }
         }
-        s.CloseTemplateList("Scopes.Item", 0, null);
+        s.CloseTemplateList("Scopes.Item", 0, null, true);
         return true;
     }
 
@@ -1269,7 +1278,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
                 break;
             }
         }
-        s.CloseTemplateList("Scopes.Item", 0, null);
+        s.CloseTemplateList("Scopes.Item", 0, null, true);
         return true;
     }
 
@@ -1334,7 +1343,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
                 }
             }
         }
-        s.CloseTemplateList("Scopes.Expr", 0, ",");
+        s.CloseTemplateList("Scopes.Expr", 0, ",", true);
         return true;
     }
 

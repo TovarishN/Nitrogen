@@ -47,7 +47,7 @@ public class TemplateParsingTests
     [Fact]
     public void A_hole_for_an_alias_rule_stands_where_the_alias_does()
     {
-        Assert.Equal("Program(List(Hole $S))", Template("$S", "Calc.Program"));
+        Assert.Equal("Program(Hole $S)", Template("$S", "Calc.Program"));
     }
 
     [Fact]

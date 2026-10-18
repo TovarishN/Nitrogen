@@ -169,9 +169,39 @@ internal sealed class SyntaxCodeWriter
     }
 
     string ListClose(Expr item, ModuleDecl module, string? implicitModule, int minimum, Expr? separator)
-        => ListCategory(item, module, implicitModule) is { } category && (separator is null or LiteralExpr)
-            ? $"s.CloseTemplateList({CSharpText.Literal(category)}, {minimum}, {(separator is LiteralExpr literal ? CSharpText.Literal(literal.Value) : "null")});"
-            : "s.Close();";
+    {
+        string collapse = MayBeListOrNull(item, module, implicitModule, new()) ? "false" : "true";
+        return ListCategory(item, module, implicitModule) is { } category && (separator is null or LiteralExpr)
+            ? $"s.CloseTemplateList({CSharpText.Literal(category)}, {minimum}, {(separator is LiteralExpr literal ? CSharpText.Literal(literal.Value) : "null")}, {collapse});"
+            : $"s.CloseList({collapse});";
+    }
+
+    /// <summary>
+    /// Whether an item could push a List node or a null slot (or nothing). A one-item list of such an
+    /// item keeps its List node: the slot must never confuse a list with its item.
+    /// </summary>
+    bool MayBeListOrNull(Expr item, ModuleDecl module, string? implicitModule, HashSet<string> aliases)
+    {
+        switch (item)
+        {
+            case LabeledExpr labeled:
+                return MayBeListOrNull(labeled.Inner, module, implicitModule, aliases);
+            case RepeatExpr or SeparatedListExpr or PredicateExpr:
+                return true;
+            case ChoiceExpr choice:
+                return choice.Alternatives.Any(a => MayBeListOrNull(a, module, implicitModule, aliases));
+            case ReferenceExpr reference:
+            {
+                var symbol = _model.Resolve(reference.Name, module, implicitModule);
+                // An alias pushes what one of its alternatives pushes, in the alias's own module.
+                return symbol.Rule is SyntaxRule syntax && EmitModel.IsAlias(syntax) && aliases.Add(symbol.Key) &&
+                    (syntax.Body is ChoiceExpr body ? body.Alternatives.ToList() : new List<Expr> { syntax.Body })
+                        .Any(a => MayBeListOrNull(a, symbol.Module, null, aliases));
+            }
+            default:
+                return false;
+        }
+    }
 
     string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null)
     {

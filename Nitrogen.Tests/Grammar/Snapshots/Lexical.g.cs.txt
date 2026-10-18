@@ -59,6 +59,13 @@ public sealed unsafe class LexicalModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        8 => slot is 0,
+        9 => slot is 1,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lexical.Document", "Lexical.Item", "Lexical.Block", "Lexical.Pick", "Lexical.Tagged" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -463,7 +470,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
             break;
         }
     done:
-        s.CloseTemplateList("Lexical.Item", 1, ",");
+        s.CloseTemplateList("Lexical.Item", 1, ",", true);
         return true;
     }
 
@@ -549,7 +556,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
                 break;
             }
         }
-        s.Close();
+        s.CloseList(true);
         return true;
     }
 

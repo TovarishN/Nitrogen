@@ -35,6 +35,12 @@ public sealed unsafe class ClashModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        1 => slot is 2,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -129,7 +135,7 @@ public sealed unsafe class ClashModule : SyntaxModule
                 }
             }
         }
-        s.CloseTemplateList("Calc.Expr", 0, ",");
+        s.CloseTemplateList("Calc.Expr", 0, ",", true);
         return true;
     }
 

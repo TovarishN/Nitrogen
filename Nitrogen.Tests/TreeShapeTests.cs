@@ -3,7 +3,10 @@ using Xunit;
 
 namespace Nitrogen.Tests;
 
-/// <summary>Compact tree shapes: absent optionals and empty lists are null child slots.</summary>
+/// <summary>
+/// Compact tree shapes: absent optionals and empty lists are null child slots, and a one-item list
+/// is its item.
+/// </summary>
 public class TreeShapeTests
 {
     static readonly Language Shapes = new LanguageBuilder().Add(ShapesModule.Instance).Build();
@@ -11,7 +14,8 @@ public class TreeShapeTests
     // Decl = Mods:Mod* "decl" Name:Name Type:(":" TypeName)? "{" Items:(Name; ",")* "}"
     const int ModsSlot = 0, TypeSlot = 3, ItemsSlot = 5;
 
-    static int DeclNode(SyntaxTree tree) => tree.Child(tree.Child(tree.Root, 0), 0);
+    // The file's one declaration is its Decls slot.
+    static int DeclNode(SyntaxTree tree) => tree.Child(tree.Root, 0);
 
     [Fact]
     public void Absent_optional_and_empty_list_are_null_slots()
@@ -25,8 +29,9 @@ public class TreeShapeTests
         Assert.Equal(SyntaxTree.NoNode, tree.Child(decl, ModsSlot));
         Assert.Equal(SyntaxTree.NoNode, tree.Child(decl, TypeSlot));
         Assert.Equal(SyntaxTree.NoNode, tree.Child(decl, ItemsSlot));
-        // File, Decls list, Decl, "decl", Name, "{", "}": the Empty leaf and two empty lists are gone.
-        Assert.Equal(10 - 3, tree.NodeCount);
+        // File, Decl, "decl", Name, "{", "}": the Empty leaf and two empty lists are gone, and the
+        // one-item Decls list is its Decl.
+        Assert.Equal(10 - 4, tree.NodeCount);
 
         var view = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(tree, decl);
         Assert.False(view.Type.HasValue);
@@ -34,7 +39,7 @@ public class TreeShapeTests
         Assert.Equal(0, view.Items.Count);
         Assert.Equal(0, view.Items.SeparatorCount);
         Assert.Equal("a", view.Name.ToString());
-        Assert.Equal("(File (List (Decl _ \"decl\" Name:\"a\" _ \"{\" _ \"}\")))", SyntaxDumper.Dump(tree));
+        Assert.Equal("(File (Decl _ \"decl\" Name:\"a\" _ \"{\" _ \"}\"))", SyntaxDumper.Dump(tree));
     }
 
     [Fact]
@@ -43,13 +48,63 @@ public class TreeShapeTests
         using var result = Shapes.Parse("public decl a : int { b, c }", ShapesModule.File);
         var tree = result.Tree;
         int decl = DeclNode(tree);
-        Assert.Equal(SyntaxKinds.List, tree.Kind(tree.Child(decl, ModsSlot)));
+        Assert.Equal(ShapesKinds.Mod, tree.Kind(tree.Child(decl, ModsSlot))); // one modifier: the slot is its item
         Assert.Equal(SyntaxKinds.Group, tree.Kind(tree.Child(decl, TypeSlot)));
         Assert.Equal(SyntaxKinds.List, tree.Kind(tree.Child(decl, ItemsSlot)));
         var view = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(tree, decl);
         Assert.True(view.Type.HasValue);
         Assert.Equal(1, view.Mods.Count);
         Assert.Equal(2, view.Items.Count);
+    }
+
+    [Fact]
+    public void One_item_list_is_its_item()
+    {
+        using var result = Shapes.Parse("public decl a { b }", ShapesModule.File);
+        Assert.True(result.Success);
+        var tree = result.Tree;
+        int decl = DeclNode(tree);
+        Assert.Equal(ShapesKinds.Decl, tree.Kind(decl));
+        int mods = tree.Child(decl, ModsSlot);
+        Assert.Equal(ShapesKinds.Mod, tree.Kind(mods));
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(tree.Child(mods, 0)));
+        Assert.Equal("public", tree.GetText(tree.Child(mods, 0)).ToString());
+        Assert.Equal(ShapesKinds.Name, tree.Kind(tree.Child(decl, ItemsSlot)));
+        // Generic walkers learn the list slots from the language.
+        Assert.True(Shapes.IsListSlot(ShapesKinds.Decl, ModsSlot));
+        Assert.True(Shapes.IsListSlot(ShapesKinds.Decl, ItemsSlot));
+        Assert.False(Shapes.IsListSlot(ShapesKinds.Decl, TypeSlot));
+        Assert.False(Shapes.IsListSlot(ShapesKinds.Mod, 0));
+
+        var view = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(tree, decl);
+        Assert.Equal(1, view.Mods.Count);
+        Assert.Equal(1, view.Items.Count);
+        Assert.Equal(0, view.Items.SeparatorCount);
+        Assert.Equal("b", view.Items[0].ToString());
+        var seen = new List<string>();
+        foreach (var item in view.Items) seen.Add(item.ToString());
+        foreach (var mod in view.Mods) seen.Add(new SyntaxNode(tree, mod.Index).ToString());
+        Assert.Equal(["b", "public"], seen);
+
+        using var two = Shapes.Parse("decl a { b, c }", ShapesModule.File);
+        int items = two.Tree.Child(DeclNode(two.Tree), ItemsSlot);
+        Assert.Equal(SyntaxKinds.List, two.Tree.Kind(items));
+        Assert.Equal(3, two.Tree.ChildCount(items));
+    }
+
+    [Theory]
+    [InlineData("nest a b .", "(Nest \"nest\" (List (List Name:\"a\" Name:\"b\")) \".\")")]
+    [InlineData("nest a .", "(Nest \"nest\" (List Name:\"a\") \".\")")]
+    [InlineData("nest a ; b c .", "(Nest \"nest\" (List Name:\"a\" \";\" (List Name:\"b\" Name:\"c\")) \".\")")]
+    public void A_one_item_list_of_lists_keeps_its_list_node(string text, string dump)
+    {
+        // An item that is itself a list (collapsed or not) would be ambiguous in the slot.
+        using var result = Shapes.Parse(text, ShapesModule.Nest);
+        Assert.True(result.Success);
+        Assert.Equal(dump, SyntaxDumper.Dump(result.Tree));
+        var lines = SyntaxView.Cast<NestNode>(result.Tree, result.Tree.Root).Lines;
+        Assert.Equal(SyntaxKinds.List, result.Tree.Kind(result.Tree.Child(result.Tree.Root, 1)));
+        Assert.Equal(text.Count(c => c == ';') + 1, lines.Count);
     }
 
     [Fact]

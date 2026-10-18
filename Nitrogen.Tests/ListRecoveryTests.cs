@@ -15,7 +15,7 @@ public class ListRecoveryTests
         return SyntaxDumper.Dump(result.Tree);
     }
 
-    static string Set(string values) => $"(File (List (Set \"set\" Name:\"a\" \"(\" {values} \")\" \";\")))";
+    static string Set(string values) => $"(File (Set \"set\" Name:\"a\" \"(\" {values} \")\" \";\"))";
 
     [Fact]
     public void A_bad_item_after_a_separator_is_skipped_and_the_list_goes_on() =>

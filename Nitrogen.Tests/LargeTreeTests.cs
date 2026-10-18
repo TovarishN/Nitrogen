@@ -18,13 +18,13 @@ public class LargeTreeTests
 
     static string Repeat(string item, int count) => string.Concat(Enumerable.Repeat(item, count));
 
-    /// <summary>The dump of the single item in a one-item file: <c>(File (List item))</c> minus the wrapper.</summary>
+    /// <summary>The dump of the single item in a one-item file: <c>(File item)</c> minus the wrapper (a one-item list is its item).</summary>
     static string ItemDump(string item)
     {
         using var result = Recovery.Parse(item, RecoveryModule.File);
         Assert.True(result.Tree.IsPooled);
         var dump = SyntaxDumper.Dump(result.Tree);
-        return dump["(File (List ".Length..^2];
+        return dump["(File ".Length..^1];
     }
 
     [Fact]

@@ -32,7 +32,7 @@ public class VisitorTests
         using var result = language.Parse(expr + ";", CalcModule.Program);
         Assert.True(result.Success);
         var tree = result.Tree;
-        int statement = tree.Child(tree.Child(0, 0), 0);
+        int statement = tree.Child(0, 0); // the one statement is the Statements slot
         return new Evaluator().Visit(tree, tree.Child(statement, 0));
     }
 

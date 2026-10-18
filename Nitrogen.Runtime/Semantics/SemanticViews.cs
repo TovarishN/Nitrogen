@@ -38,18 +38,18 @@ public readonly struct SemanticNode(FileSemantics semantics, int node) : ISemant
 /// <summary>
 /// The items of a list child: <c>X*</c> and <c>X+</c> (step 1) or <c>(X; S)*</c> (step 2, separators
 /// skipped). A non-negative <paramref name="inner"/> picks the item inside a group item. An empty
-/// list is a null slot (<see cref="SyntaxTree.NoNode"/>).
+/// list is a null slot and a one-item list is its item (<see cref="ListSlot"/>).
 /// </summary>
 public readonly struct SemanticList<T>(FileSemantics semantics, int list, int step, int inner) : IReadOnlyList<T>
     where T : struct, ISemanticView<T>
 {
-    public int Count => list == SyntaxTree.NoNode ? 0 : (semantics.Tree.ChildCount(list) + step - 1) / step;
+    public int Count => (ListSlot.Count(semantics.Tree, list) + step - 1) / step;
 
     public T this[int index]
     {
         get
         {
-            int item = semantics.Tree.Child(list, index * step);
+            int item = ListSlot.Child(semantics.Tree, list, index * step);
             return T.Create(semantics, inner < 0 ? item : semantics.Tree.Child(item, inner));
         }
     }

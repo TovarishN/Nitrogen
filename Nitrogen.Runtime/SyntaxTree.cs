@@ -46,6 +46,12 @@ public sealed class SyntaxTree : IDisposable
 
     internal IReadOnlyDictionary<int, TemplateListShape> TemplateLists { get; init; } = new Dictionary<int, TemplateListShape>();
 
+    /// <summary>
+    /// The template list a list hole is an item of: the hole itself when it stands alone in a list
+    /// collapsed to one item, otherwise its parent.
+    /// </summary>
+    internal int TemplateList(int listHole) => TemplateLists.ContainsKey(listHole) ? listHole : Parent(listHole);
+
     internal Guid? QuotationIdentity { get; set; }
 
     public string Text { get; }

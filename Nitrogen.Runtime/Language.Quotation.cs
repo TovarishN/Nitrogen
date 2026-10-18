@@ -49,7 +49,7 @@ public sealed unsafe partial class Language
             if (diagnostics.Count == 0) diagnostics.Add(new("NQ0001", default, "The quotation did not parse."));
         }
         else if (Enumerable.Range(0, parsed.Tree.NodeCount).Any(n => parsed.Tree.Kind(n) == SyntaxKinds.ListHole &&
-            !parsed.Tree.TemplateLists.ContainsKey(parsed.Tree.Parent(n))))
+            !parsed.Tree.TemplateLists.ContainsKey(parsed.Tree.TemplateList(n))))
             diagnostics.Add(new("NQ0001", parsed.Tree.Span(parsed.Tree.Root), "A list splice requires a direct syntax element and a literal separator."));
         else if (Nitrogen.Binding.FileBinding.Bind("nitrogen:quote", parsed.Tree).Declarations.Count > 0)
             diagnostics.Add(new("NQ0006", parsed.Tree.Span(parsed.Tree.Root), "A quotation template cannot declare names."));

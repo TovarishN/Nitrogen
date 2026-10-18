@@ -15,11 +15,12 @@ public sealed class QuotePattern
         _category = category;
         _captures = captures;
         var lists = new Dictionary<int, QuotePatternList>();
+        // A template list is a List node, or a list hole standing alone as its collapsed one-item list.
         foreach (var (node, shape) in parsed.Tree.TemplateLists)
         {
             int stride = shape.Separator is null ? 1 : 2;
-            int[] items = Enumerable.Range(0, (parsed.Tree.ChildCount(node) + stride - 1) / stride)
-                .Select(index => parsed.Tree.Child(node, index * stride)).ToArray();
+            int[] items = Enumerable.Range(0, (ListSlot.Count(parsed.Tree, node) + stride - 1) / stride)
+                .Select(index => ListSlot.Child(parsed.Tree, node, index * stride)).ToArray();
             int hole = Array.FindIndex(items, item => parsed.Tree.Kind(item) == SyntaxKinds.ListHole);
             if (hole >= 0) lists[node] = new(items, hole, shape);
         }

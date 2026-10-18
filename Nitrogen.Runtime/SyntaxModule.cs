@@ -62,6 +62,12 @@ public abstract class SyntaxModule
     /// <summary>Categories that admit a node of this local kind, including aliases.</summary>
     public virtual IReadOnlyList<string> GetQuoteCategories(int localKind) => [];
 
+    /// <summary>
+    /// Whether child <paramref name="slot"/> of this local kind holds a list. A node there that is not a
+    /// <see cref="SyntaxKinds.List"/> is a one-item list (see <see cref="ListSlot"/>).
+    /// </summary>
+    public virtual bool IsListSlot(int localKind, int slot) => false;
+
     public override string ToString() => Name;
 }
 
