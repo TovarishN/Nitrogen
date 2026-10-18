@@ -51,8 +51,8 @@ internal static class TreeFreezer
         var start = Allocate<int>(nodes, pooled);
         var length = Allocate<int>(nodes, pooled);
         var flags = Allocate<NodeFlags>(nodes, pooled);
-        var childStart = Allocate<int>(nodes, pooled);
-        var childCount = Allocate<int>(nodes, pooled);
+        // childStart has a sentinel: node n's children are slots childStart[n]..childStart[n + 1).
+        var childStart = Allocate<int>(nodes + 1, pooled);
         var children = Allocate<int>(slots, pooled);
 
         // Preorder copy. Each node reserves one contiguous child slice; its children fill their
@@ -88,7 +88,6 @@ internal static class TreeFreezer
                 }
             }
             childStart[n] = cursor;
-            childCount[n] = kept;
             int slice = cursor;
             cursor += kept;
             for (int k = count - 1, position = kept - 1; k >= 0; k--)
@@ -103,8 +102,9 @@ internal static class TreeFreezer
 
         // Trivia: gaps between consecutive non-empty leaves (preorder is text order). Skipped text
         // is a gap too. A pooled tree rents the bound; an exact-size one counts the gaps first.
-        var trivia = Allocate<TextSpan>(pooled ? next + 1 : CollectTrivia(null, text, next, start, length, childCount), pooled);
-        int triviaCount = CollectTrivia(trivia, text, next, start, length, childCount);
+        childStart[next] = cursor;
+        var trivia = Allocate<TextSpan>(pooled ? next + 1 : CollectTrivia(null, text, next, start, length, childStart), pooled);
+        int triviaCount = CollectTrivia(trivia, text, next, start, length, childStart);
 
         SortRepairs(a);
         var skipped = Array.Empty<TextSpan>();
@@ -124,7 +124,7 @@ internal static class TreeFreezer
         }
 
         return new SyntaxTree(text, language, next, kind, start, length, flags,
-            childStart, childCount, children, trivia, triviaCount, skipped, skippedCount, pooled) { TemplateLists = listShapes };
+            childStart, children, trivia, triviaCount, skipped, skippedCount, pooled) { TemplateLists = listShapes };
     }
 
     public static SyntaxTree ErrorTree(string text, Language? language)
@@ -133,25 +133,23 @@ internal static class TreeFreezer
         var start = Rent<int>(1);
         var length = Rent<int>(1);
         var flags = Rent<NodeFlags>(1);
-        var childStart = Rent<int>(1);
-        var childCount = Rent<int>(1);
+        var childStart = Rent<int>(2);
         kind[0] = SyntaxKinds.Error;
         start[0] = 0;
         length[0] = text.Length;
         flags[0] = NodeFlags.Error;
-        childStart[0] = 0;
-        childCount[0] = 0;
+        childStart[0] = childStart[1] = 0;
         return new SyntaxTree(text, language, 1, kind, start, length, flags,
-            childStart, childCount, Rent<int>(1), Rent<TextSpan>(1), 0, Array.Empty<TextSpan>(), 0, pooled: true);
+            childStart, Rent<int>(1), Rent<TextSpan>(1), 0, Array.Empty<TextSpan>(), 0, pooled: true);
     }
 
     /// <summary>Writes the trivia gaps into <paramref name="trivia"/> (when given) and returns their count.</summary>
-    static int CollectTrivia(TextSpan[]? trivia, string text, int nodes, int[] start, int[] length, int[] childCount)
+    static int CollectTrivia(TextSpan[]? trivia, string text, int nodes, int[] start, int[] length, int[] childStart)
     {
         int count = 0, previousEnd = 0;
         for (int n = 0; n < nodes; n++)
         {
-            if (childCount[n] != 0 || length[n] == 0) continue;
+            if (childStart[n + 1] != childStart[n] || length[n] == 0) continue;
             if (start[n] > previousEnd)
             {
                 if (trivia is not null) trivia[count] = new TextSpan(previousEnd, start[n] - previousEnd);

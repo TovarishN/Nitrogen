@@ -10,7 +10,8 @@ namespace Nitrogen;
 /// </summary>
 public sealed class SyntaxTree : IDisposable
 {
-    int[]? _kind, _start, _length, _childStart, _childCount, _children, _parent;
+    // _childStart has NodeCount + 1 entries: node n's children are _children[_childStart[n].._childStart[n + 1]).
+    int[]? _kind, _start, _length, _childStart, _children, _parent;
     NodeFlags[]? _flags;
     TextSpan[]? _trivia, _skipped;
     int _triviaCount, _skippedCount;
@@ -18,7 +19,7 @@ public sealed class SyntaxTree : IDisposable
 
     internal SyntaxTree(string text, Language? language, int nodeCount,
         int[] kind, int[] start, int[] length, NodeFlags[] flags,
-        int[] childStart, int[] childCount, int[] children,
+        int[] childStart, int[] children,
         TextSpan[] trivia, int triviaCount, TextSpan[] skipped, int skippedCount, bool pooled)
     {
         _pooled = pooled;
@@ -30,7 +31,6 @@ public sealed class SyntaxTree : IDisposable
         _length = length;
         _flags = flags;
         _childStart = childStart;
-        _childCount = childCount;
         _children = children;
         _trivia = trivia;
         _triviaCount = triviaCount;
@@ -76,14 +76,15 @@ public sealed class SyntaxTree : IDisposable
     public int ChildCount(int node)
     {
         Check(node);
-        return _childCount![node];
+        return _childStart![node + 1] - _childStart[node];
     }
 
     public int Child(int node, int index)
     {
         Check(node);
-        if ((uint)index >= (uint)_childCount![node]) throw new ArgumentOutOfRangeException(nameof(index));
-        return _children![_childStart![node] + index];
+        int first = _childStart![node];
+        if ((uint)index >= (uint)(_childStart[node + 1] - first)) throw new ArgumentOutOfRangeException(nameof(index));
+        return _children![first + index];
     }
 
     /// <summary>The parent's index, or -1 for the root. The parent table is built on first use.</summary>
@@ -122,7 +123,7 @@ public sealed class SyntaxTree : IDisposable
     {
         if (_kind is null) return;
         if (_pooled) ReturnToPool();
-        _kind = _start = _length = _childStart = _childCount = _children = _parent = null;
+        _kind = _start = _length = _childStart = _children = _parent = null;
         _flags = null;
         _trivia = _skipped = null;
         _triviaCount = _skippedCount = 0;
@@ -134,7 +135,6 @@ public sealed class SyntaxTree : IDisposable
         ArrayPool<int>.Shared.Return(_start!);
         ArrayPool<int>.Shared.Return(_length!);
         ArrayPool<int>.Shared.Return(_childStart!);
-        ArrayPool<int>.Shared.Return(_childCount!);
         ArrayPool<int>.Shared.Return(_children!);
         if (_parent is not null) ArrayPool<int>.Shared.Return(_parent);
         ArrayPool<NodeFlags>.Shared.Return(_flags!);
@@ -154,8 +154,7 @@ public sealed class SyntaxTree : IDisposable
         parent[0] = -1;
         for (int n = 0; n < NodeCount; n++)
         {
-            int first = _childStart![n];
-            for (int k = 0; k < _childCount![n]; k++) parent[_children![first + k]] = n;
+            for (int k = _childStart![n], end = _childStart[n + 1]; k < end; k++) parent[_children![k]] = n;
         }
         return parent;
     }
