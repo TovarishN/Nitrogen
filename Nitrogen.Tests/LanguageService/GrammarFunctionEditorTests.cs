@@ -191,6 +191,22 @@ public sealed class GrammarFunctionEditorTests : IDisposable
         Assert.Equal(new DocumentRange(At(grammar, "nope"), At(grammar, "nope", 4)), diagnostic.Range);
     }
 
+    [Fact]
+    public void A_one_letter_name_navigates_from_the_position_after_it()
+    {
+        // A click on the right half of a name's last character puts the position after it.
+        using var service = Service();
+        var after = At(Grammar, ".. n {", 4);
+        var definition = Assert.Single(service.Definition(Uri("Demo.ngr"), after));
+        Assert.Equal(At(Grammar, "let n", 4), definition.Range.Start);
+        Assert.Equal(2, service.Highlights(Uri("Demo.ngr"), after).Count);
+        Assert.Contains("`variable n`", service.Hover(Uri("Demo.ngr"), after)?.Markdown);
+
+        // A name the position is inside still wins over one ending there.
+        var inside = Assert.Single(service.Definition(Uri("Demo.ngr"), At(Grammar, "Twice(\"ab\")", 4)));
+        Assert.Equal(At(Grammar, "Twice(item", 0), inside.Range.Start);
+    }
+
     // ---- expansion preview ----
 
     [Fact]

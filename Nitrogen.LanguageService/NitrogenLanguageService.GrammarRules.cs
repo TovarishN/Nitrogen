@@ -36,12 +36,23 @@ public sealed partial class NitrogenLanguageService
     {
         if (GrammarOccurrencesOf(uri) is not { } scope) return null;
         int offset = new LineMap(scope.Text).OffsetOf(position);
-        var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Span.Start <= offset && offset < o.Span.End);
+        var found = OccurrencesAt(scope, offset).FirstOrDefault();
         if (found is null) return null;
         DocumentLocation Location(GrammarRuleOccurrence occurrence) => new(new Uri(occurrence.Path).AbsoluteUri,
             new LineMap(scope.Files.First(f => f.Path == occurrence.Path).Text).RangeOf(new(occurrence.Span.Start, occurrence.Span.Length)));
         return (scope.Occurrences.Where(o => o.Identity == found.Identity && o.IsDefinition).Select(Location).Distinct().ToArray(),
             scope.Occurrences.Where(o => o.Identity == found.Identity && !o.IsDefinition).Select(Location).Distinct().ToArray());
+    }
+
+    /// <summary>
+    /// The current file's names at <paramref name="offset"/>: those containing it, else those ending there. A click on the
+    /// right half of a name's last character puts the position after it, which for a one-letter name is the whole right half.
+    /// </summary>
+    static List<GrammarRuleOccurrence> OccurrencesAt(GrammarOccurrences scope, int offset, Func<GrammarRuleOccurrence, bool>? where = null)
+    {
+        var mine = scope.Occurrences.Where(o => o.Path == scope.Path && (where is null || where(o))).ToList();
+        var inside = mine.Where(o => o.Span.Start <= offset && offset < o.Span.End).ToList();
+        return inside.Count > 0 ? inside : mine.Where(o => o.Span.End == offset).ToList();
     }
 
     GrammarOccurrences? GrammarOccurrencesOf(string uri)

@@ -198,7 +198,7 @@ public sealed partial class NitrogenLanguageService
         if (GrammarOccurrencesOf(uri) is not { } scope) return null;
         var lines = new LineMap(scope.Text);
         int offset = lines.OffsetOf(position);
-        var under = scope.Occurrences.Where(o => o.Path == scope.Path && o.Span.Start <= offset && offset < o.Span.End).ToList();
+        var under = OccurrencesAt(scope, offset);
         if (under.Any(o => o.Kind == GrammarNameKind.Rule)) return null;
         var found = under.FirstOrDefault();
         if (found is null)
@@ -268,7 +268,7 @@ public sealed partial class NitrogenLanguageService
         if (GrammarOccurrencesOf(uri) is not { } scope) return [];
         var lines = new LineMap(scope.Text);
         int offset = lines.OffsetOf(position);
-        var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Kind != GrammarNameKind.Rule && o.Span.Start <= offset && offset < o.Span.End);
+        var found = OccurrencesAt(scope, offset, o => o.Kind != GrammarNameKind.Rule).FirstOrDefault();
         if (found is null) return [];
         return scope.Occurrences.Where(o => o.Identity == found.Identity && o.Path == scope.Path)
             .Select(o => new DocumentHighlight(lines.RangeOf(new(o.Span.Start, o.Span.Length)), o.IsDefinition ? HighlightKind.Write : HighlightKind.Read))
@@ -344,7 +344,7 @@ public sealed partial class NitrogenLanguageService
     {
         if (GrammarOccurrencesOf(uri) is not { } scope) return null;
         int offset = new LineMap(scope.Text).OffsetOf(position);
-        var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Kind != GrammarNameKind.Rule && o.Span.Start <= offset && offset < o.Span.End);
+        var found = OccurrencesAt(scope, offset, o => o.Kind != GrammarNameKind.Rule).FirstOrDefault();
         if (found is null) return null;
         if (found.Kind == GrammarNameKind.Builtin)
             throw new RenameRefusedException($"'{NameText(scope, found)}' is a built-in grammar function.");
