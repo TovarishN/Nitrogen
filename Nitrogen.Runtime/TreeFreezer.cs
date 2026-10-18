@@ -52,7 +52,8 @@ internal static class TreeFreezer
         }
 
         bool pooled = nodes <= pooledTreeNodes;
-        var kind = Allocate<int>(nodes, pooled);
+        var kinds = language?.Kinds ?? DenseKindTable.Shared;
+        var kind = Allocate<ushort>(nodes, pooled);
         var start = Allocate<int>(nodes, pooled);
         var length = Allocate<int>(nodes, pooled);
         var flags = Allocate<NodeFlags>(nodes, pooled);
@@ -73,7 +74,7 @@ internal static class TreeFreezer
             int old = a.ScratchNode[sp], slot = a.ScratchSlot[sp];
             int n = next++;
             if (a.TemplateLists?.TryGetValue(old, out var shape) == true) listShapes[n] = shape;
-            kind[n] = a.Kind[old];
+            kind[n] = kinds.DenseKind(a.Kind[old]);
             start[n] = a.Start[old];
             length[n] = a.Length[old];
             flags[n] = a.Flags[old];
@@ -111,11 +112,8 @@ internal static class TreeFreezer
         if (recovery && a.TrailingStart >= 0)
             a.AddRepairEntry(new TextSpan(a.TrailingStart, text.Length - a.TrailingStart), DiagnosticCode.ExpectedEndOfInput, -1);
 
-        // Trivia: gaps between consecutive non-empty leaves (preorder is text order). Skipped text
-        // is a gap too. A pooled tree rents the bound; an exact-size one counts the gaps first.
+        // Trivia is built from the tree on first access (SyntaxTree.Trivia).
         childStart[next] = cursor;
-        var trivia = Allocate<TextSpan>(pooled ? next + 1 : CollectTrivia(null, text, next, start, length, childStart), pooled);
-        int triviaCount = CollectTrivia(trivia, text, next, start, length, childStart);
 
         SortRepairs(a);
         var skipped = Array.Empty<TextSpan>();
@@ -134,46 +132,25 @@ internal static class TreeFreezer
                 if (a.RepairCodes[i] != DiagnosticCode.Missing) skipped[skippedCount++] = a.RepairSpans[i];
         }
 
-        return new SyntaxTree(text, language, next, kind, start, length, flags,
-            childStart, children, trivia, triviaCount, skipped, skippedCount, pooled) { TemplateLists = listShapes };
+        // The snapshot is read after every DenseKind call above, so it maps all of this tree's ids.
+        return new SyntaxTree(text, language, next, kind, kinds.Snapshot, start, length, flags,
+            childStart, children, skipped, skippedCount, pooled) { TemplateLists = listShapes };
     }
 
     public static SyntaxTree ErrorTree(string text, Language? language)
     {
-        var kind = Rent<int>(1);
+        var kind = Rent<ushort>(1);
         var start = Rent<int>(1);
         var length = Rent<int>(1);
         var flags = Rent<NodeFlags>(1);
         var childStart = Rent<int>(2);
-        kind[0] = SyntaxKinds.Error;
+        kind[0] = SyntaxKinds.Error; // a built-in: its dense id is the kind itself
         start[0] = 0;
         length[0] = text.Length;
         flags[0] = NodeFlags.Error;
         childStart[0] = childStart[1] = 0;
-        return new SyntaxTree(text, language, 1, kind, start, length, flags,
-            childStart, Rent<int>(1), Rent<TextSpan>(1), 0, Array.Empty<TextSpan>(), 0, pooled: true);
-    }
-
-    /// <summary>Writes the trivia gaps into <paramref name="trivia"/> (when given) and returns their count.</summary>
-    static int CollectTrivia(TextSpan[]? trivia, string text, int nodes, int[] start, int[] length, int[] childStart)
-    {
-        int count = 0, previousEnd = 0;
-        for (int n = 0; n < nodes; n++)
-        {
-            if (childStart[n + 1] != childStart[n] || length[n] == 0) continue;
-            if (start[n] > previousEnd)
-            {
-                if (trivia is not null) trivia[count] = new TextSpan(previousEnd, start[n] - previousEnd);
-                count++;
-            }
-            previousEnd = Math.Max(previousEnd, start[n] + length[n]);
-        }
-        if (text.Length > previousEnd)
-        {
-            if (trivia is not null) trivia[count] = new TextSpan(previousEnd, text.Length - previousEnd);
-            count++;
-        }
-        return count;
+        return new SyntaxTree(text, language, 1, kind, (language?.Kinds ?? DenseKindTable.Shared).Snapshot, start, length, flags,
+            childStart, Rent<int>(1), Array.Empty<TextSpan>(), 0, pooled: true);
     }
 
     /// <summary>Insertion sort of the repair entries by start; there are at most a few hundred.</summary>

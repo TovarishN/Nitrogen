@@ -40,6 +40,7 @@ public class LargeTreeTests
         Assert.Equal(result.Stats.TreeNodes, tree.NodeCount);
         Assert.Equal("(File (List " + string.Join(" ", Enumerable.Repeat(ItemDump(Good), Items)) + "))", SyntaxDumper.Dump(tree));
 
+        Assert.Null(typeof(SyntaxTree).GetField("_trivia", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(tree));
         TextSpan[] one;
         using (var small = Recovery.Parse(Good, RecoveryModule.File)) one = small.Tree.Trivia.ToArray();
         var expected = Enumerable.Range(0, Items)

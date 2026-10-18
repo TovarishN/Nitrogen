@@ -25,6 +25,15 @@ public sealed unsafe partial class Language
 
     public IReadOnlyList<SyntaxModule> Modules { get; }
 
+    /// <summary>This language's dense kind ids: what its trees store per node in place of the full kind.</summary>
+    internal DenseKindTable Kinds { get; } = new();
+
+    /// <summary>The 16-bit id a tree of this language stores for <paramref name="kind"/>, assigned on first sight.</summary>
+    internal ushort DenseKind(int kind) => Kinds.DenseKind(kind);
+
+    /// <summary>The full kind of a dense id that <see cref="DenseKind"/> returned.</summary>
+    internal int KindOf(ushort dense) => Kinds.KindOf(dense);
+
     public SemanticCatalog SemanticCatalog { get; }
 
     /// <summary>The composed declarative rules (issue 251).</summary>
@@ -244,6 +253,113 @@ public sealed unsafe partial class Language
         if (arena.ChildStackCount != 1 || arena.FrameCount != 0)
             throw new InvalidOperationException($"Start rule '{start.Name}' must produce exactly one node.");
         return true;
+    }
+}
+
+/// <summary>
+/// Maps full kinds (<c>(moduleId &lt;&lt; 16) | localKind</c>) to dense 16-bit ids, so a tree stores a
+/// <see cref="ushort"/> per node. Ids are assigned on first sight; the built-in kinds are pre-assigned
+/// (dense id = local kind). Safe for concurrent use: lookups are lock-free, a miss assigns under a lock.
+/// Writers fill an entry, then publish it with a release write; arrays are only appended to in place
+/// or replaced by a grown copy, so a reader sees an entry either unassigned (then takes the lock) or
+/// complete. Trees without a <see cref="Language"/> use <see cref="Shared"/>.
+/// </summary>
+internal sealed class DenseKindTable
+{
+    /// <summary>The table of trees built without a language (hand-built test trees, any module).</summary>
+    public static readonly DenseKindTable Shared = new();
+
+    const int Builtins = SyntaxKinds.ListHole + 1;
+
+    readonly object _gate = new();
+    // [module][local] -> dense id; 0 means unassigned, except for kind None (0), which is dense 0.
+    ushort[]?[] _byModule;
+    // dense id -> kind. Entries [0, _count) are assigned.
+    int[] _kinds;
+    int _count;
+
+    public DenseKindTable()
+    {
+        var builtins = new ushort[Builtins];
+        _kinds = new int[64];
+        for (int k = 0; k < Builtins; k++)
+        {
+            builtins[k] = (ushort)k;
+            _kinds[k] = k;
+        }
+        _byModule = [builtins];
+        _count = Builtins;
+    }
+
+    /// <summary>
+    /// Dense id → kind, for every id assigned so far. A tree keeps the array current when it is
+    /// frozen: later assignments go to new indices or a grown copy, never change existing entries.
+    /// </summary>
+    public int[] Snapshot => Volatile.Read(ref _kinds);
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public ushort DenseKind(int kind)
+    {
+        var modules = Volatile.Read(ref _byModule);
+        int module = kind >>> 16, local = kind & 0xFFFF;
+        if ((uint)module < (uint)modules.Length && Volatile.Read(ref modules[module]) is { } locals && (uint)local < (uint)locals.Length)
+        {
+            ushort dense = Volatile.Read(ref locals[local]);
+            if (dense != 0 || kind == SyntaxKinds.None) return dense;
+        }
+        return Assign(kind);
+    }
+
+    public int KindOf(ushort dense)
+    {
+        var kinds = Volatile.Read(ref _kinds);
+        if (dense < kinds.Length && (kinds[dense] != SyntaxKinds.None || dense == 0)) return kinds[dense];
+        lock (_gate)
+        {
+            if (dense >= _count) throw new ArgumentOutOfRangeException(nameof(dense));
+            return _kinds[dense];
+        }
+    }
+
+    ushort Assign(int kind)
+    {
+        lock (_gate)
+        {
+            int module = kind >>> 16, local = kind & 0xFFFF;
+            var modules = _byModule;
+            var locals = module < modules.Length ? modules[module] : null;
+            if (locals is not null && local < locals.Length && locals[local] != 0) return locals[local];
+            if (_count > ushort.MaxValue)
+                throw new InvalidOperationException($"More than {ushort.MaxValue} distinct syntax kinds in one language.");
+
+            ushort dense = (ushort)_count;
+            if (dense == _kinds.Length)
+            {
+                var grown = new int[Math.Min(_kinds.Length * 2, ushort.MaxValue + 1)];
+                Array.Copy(_kinds, grown, _count);
+                Volatile.Write(ref _kinds, grown);
+            }
+            _kinds[dense] = kind;
+            _count++;
+
+            if (locals is not null && local < locals.Length)
+            {
+                Volatile.Write(ref locals[local], dense);
+                return dense;
+            }
+            var newLocals = new ushort[Math.Max(local + 1, Math.Min((locals?.Length ?? 8) * 2, 0x10000))];
+            locals?.CopyTo(newLocals, 0);
+            newLocals[local] = dense;
+            if (module >= modules.Length)
+            {
+                var newModules = new ushort[]?[Math.Max(module + 1, Math.Min(modules.Length * 2, 0x10000))];
+                modules.CopyTo(newModules, 0);
+                newModules[module] = newLocals;
+                Volatile.Write(ref _byModule, newModules);
+            }
+            else Volatile.Write(ref modules[module], newLocals);
+            return dense;
+        }
     }
 }
 

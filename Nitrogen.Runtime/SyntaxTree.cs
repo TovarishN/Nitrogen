@@ -16,30 +16,33 @@ public sealed class SyntaxTree : IDisposable
     /// </summary>
     public const int NoNode = -1;
 
+    // _kind holds dense ids (DenseKindTable); _kindOf maps them back to full kinds and is shared, not owned.
     // _childStart has NodeCount + 1 entries: node n's children are _children[_childStart[n].._childStart[n + 1]).
-    int[]? _kind, _start, _length, _childStart, _children, _parent;
+    ushort[]? _kind;
+    readonly int[] _kindOf;
+    int[]? _start, _length, _childStart, _children, _parent;
     NodeFlags[]? _flags;
+    // _trivia is built on first access (Trivia); _triviaCount is written before _trivia is published.
     TextSpan[]? _trivia, _skipped;
     int _triviaCount, _skippedCount;
     readonly bool _pooled;
 
     internal SyntaxTree(string text, Language? language, int nodeCount,
-        int[] kind, int[] start, int[] length, NodeFlags[] flags,
+        ushort[] kind, int[] kindOf, int[] start, int[] length, NodeFlags[] flags,
         int[] childStart, int[] children,
-        TextSpan[] trivia, int triviaCount, TextSpan[] skipped, int skippedCount, bool pooled)
+        TextSpan[] skipped, int skippedCount, bool pooled)
     {
         _pooled = pooled;
         Text = text;
         Language = language;
         NodeCount = nodeCount;
         _kind = kind;
+        _kindOf = kindOf;
         _start = start;
         _length = length;
         _flags = flags;
         _childStart = childStart;
         _children = children;
-        _trivia = trivia;
-        _triviaCount = triviaCount;
         _skipped = skipped;
         _skippedCount = skippedCount;
     }
@@ -70,7 +73,7 @@ public sealed class SyntaxTree : IDisposable
     public int Kind(int node)
     {
         Check(node);
-        return _kind![node];
+        return _kindOf[_kind![node]];
     }
 
     public TextSpan Span(int node)
@@ -126,8 +129,17 @@ public sealed class SyntaxTree : IDisposable
         return Text.AsSpan(span.Start, span.Length);
     }
 
-    /// <summary>Gaps between tokens (whitespace and comments), in text order.</summary>
-    public ReadOnlySpan<TextSpan> Trivia => (_trivia ?? throw Disposed()).AsSpan(0, _triviaCount);
+    /// <summary>Gaps between tokens (whitespace and comments), in text order. Built on first access.</summary>
+    public ReadOnlySpan<TextSpan> Trivia
+    {
+        get
+        {
+            if (_kind is null) throw Disposed();
+            // Racing builders compute the same gaps; one array wins (a pooled loser is left to the GC).
+            var trivia = Volatile.Read(ref _trivia) ?? BuildTrivia();
+            return trivia.AsSpan(0, _triviaCount);
+        }
+    }
 
     /// <summary>Input the recovery pass skipped (issue 235), in text order. It is part of <see cref="Trivia"/> too.</summary>
     public ReadOnlySpan<TextSpan> SkippedSpans => (_skipped ?? throw Disposed()).AsSpan(0, _skippedCount);
@@ -148,7 +160,8 @@ public sealed class SyntaxTree : IDisposable
     {
         if (_kind is null) return;
         if (_pooled) ReturnToPool();
-        _kind = _start = _length = _childStart = _children = _parent = null;
+        _kind = null;
+        _start = _length = _childStart = _children = _parent = null;
         _flags = null;
         _trivia = _skipped = null;
         _triviaCount = _skippedCount = 0;
@@ -156,14 +169,14 @@ public sealed class SyntaxTree : IDisposable
 
     void ReturnToPool()
     {
-        ArrayPool<int>.Shared.Return(_kind!);
+        ArrayPool<ushort>.Shared.Return(_kind!);
         ArrayPool<int>.Shared.Return(_start!);
         ArrayPool<int>.Shared.Return(_length!);
         ArrayPool<int>.Shared.Return(_childStart!);
         ArrayPool<int>.Shared.Return(_children!);
         if (_parent is not null) ArrayPool<int>.Shared.Return(_parent);
         ArrayPool<NodeFlags>.Shared.Return(_flags!);
-        ArrayPool<TextSpan>.Shared.Return(_trivia!);
+        if (_trivia is not null) ArrayPool<TextSpan>.Shared.Return(_trivia);
         if (_skipped!.Length > 0) ArrayPool<TextSpan>.Shared.Return(_skipped);
     }
 
@@ -186,6 +199,43 @@ public sealed class SyntaxTree : IDisposable
             }
         }
         return parent;
+    }
+
+    /// <summary>
+    /// Trivia: gaps between consecutive non-empty leaves (preorder is text order). Skipped text is a
+    /// gap too. The gaps are counted first; a pooled tree rents the array, a larger one owns it at exact size.
+    /// </summary>
+    TextSpan[] BuildTrivia()
+    {
+        int count = CollectTrivia(null);
+        var trivia = _pooled ? ArrayPool<TextSpan>.Shared.Rent(Math.Max(count, 1)) : count == 0 ? [] : GC.AllocateUninitializedArray<TextSpan>(count);
+        CollectTrivia(trivia);
+        _triviaCount = count;
+        Volatile.Write(ref _trivia, trivia);
+        return trivia;
+    }
+
+    /// <summary>Writes the trivia gaps into <paramref name="trivia"/> (when given) and returns their count.</summary>
+    int CollectTrivia(TextSpan[]? trivia)
+    {
+        int[] start = _start!, length = _length!, childStart = _childStart!;
+        int count = 0, previousEnd = 0;
+        for (int n = 0; n < NodeCount; n++)
+        {
+            if (childStart[n + 1] != childStart[n] || length[n] == 0) continue;
+            if (start[n] > previousEnd)
+            {
+                if (trivia is not null) trivia[count] = new TextSpan(previousEnd, start[n] - previousEnd);
+                count++;
+            }
+            previousEnd = Math.Max(previousEnd, start[n] + length[n]);
+        }
+        if (Text.Length > previousEnd)
+        {
+            if (trivia is not null) trivia[count] = new TextSpan(previousEnd, Text.Length - previousEnd);
+            count++;
+        }
+        return count;
     }
 
     static ObjectDisposedException Disposed() => new(nameof(SyntaxTree));
