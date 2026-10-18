@@ -10,18 +10,20 @@ public enum Associativity : byte
 /// An alternative of an extension point that does not start with the point itself. The runtime
 /// opens the node of <see cref="Kind"/> before calling <see cref="Parse"/> and closes it after,
 /// so <see cref="Parse"/> matches only the elements. It may leave partial state on failure; the
-/// runtime rolls back.
+/// runtime rolls back. A <see cref="Transparent"/> alternative has no node: its single element's
+/// node stands in for it.
 /// </summary>
 public readonly unsafe struct PrefixExtension
 {
     public PrefixExtension(string name, int kind, int precedence,
-        delegate*<ref ParserState, bool> parse, AsciiSet firstChars = default)
+        delegate*<ref ParserState, bool> parse, AsciiSet firstChars = default, bool transparent = false)
     {
         Name = name;
         Kind = kind;
         Precedence = precedence;
         Parse = parse;
         FirstChars = firstChars;
+        Transparent = transparent;
     }
 
     public readonly string Name;
@@ -29,6 +31,12 @@ public readonly unsafe struct PrefixExtension
     public readonly int Precedence;
     public readonly delegate*<ref ParserState, bool> Parse;
     public readonly AsciiSet FirstChars;
+
+    /// <summary>
+    /// The runtime closes the alternative with <see cref="ParserState.CloseTransparent"/>: the
+    /// <see cref="Kind"/> frame is popped and the one node <see cref="Parse"/> pushed is the result.
+    /// </summary>
+    public readonly bool Transparent;
 }
 
 /// <summary>

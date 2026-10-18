@@ -31,6 +31,9 @@ internal sealed class KindInfo
 
     public string? ImplicitModule { get; }
 
+    /// <summary>A transparent alternative: it keeps a kind for its frame and recovery, but no node, view or visit.</summary>
+    public bool IsTransparent => Alternative?.IsTransparent == true;
+
     public string ViewName => Alternative is not null ? Alternative.Name + Point!.Rule.Name : Rule!.Name + "Node";
 }
 

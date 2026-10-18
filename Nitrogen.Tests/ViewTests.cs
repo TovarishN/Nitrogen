@@ -110,4 +110,31 @@ public class ViewTests
         Assert.False(Token.Is(result.Tree, 0));
         Assert.True(Token.Is(result.Tree, result.Tree.Child(CallNode(result.Tree), 0)));
     }
+
+    [Fact]
+    public void A_transparent_alternative_casts_to_its_standing_in_node()
+    {
+        var shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+        using var result = shapes.Parse("{ var a ; }", Nitrogen.Tests.Shapes.ShapesModule.Block);
+        var tree = result.Tree;
+        var stmts = SyntaxView.Cast<Nitrogen.Tests.Shapes.BlockNode>(tree, tree.Root).Stmts;
+        Assert.Equal(2, stmts.Count);
+
+        // The extension point's union view reaches the Var that stands in for Plain.
+        Nitrogen.Tests.Shapes.StmtNode first = stmts[0];
+        Assert.True(SyntaxView.TryCast<Nitrogen.Tests.Shapes.VarNode>(tree, first.Index, out var variable));
+        Assert.Equal("a", variable.Name.ToString());
+        Assert.Equal("a", first.As<Nitrogen.Tests.Shapes.VarNode>().Name.ToString());
+        Assert.False(SyntaxView.TryCast<Nitrogen.Tests.Shapes.WrappedTie>(tree, first.Index, out _));
+        Assert.Throws<InvalidCastException>(() => first.As<Nitrogen.Tests.Shapes.WrappedTie>());
+
+        // The ";" alternative stands in as a Literal leaf.
+        Assert.True(SyntaxView.TryCast<Token>(tree, stmts[1].Index, out var semicolon));
+        Assert.Equal(";", semicolon.ToString());
+        Assert.False(SyntaxView.TryCast<Nitrogen.Tests.Shapes.VarNode>(tree, stmts[1].Index, out _));
+
+        // The removed wrapper has no view type to cast to.
+        Assert.Null(typeof(Nitrogen.Tests.Shapes.BlockNode).Assembly.GetType("Nitrogen.Tests.Shapes.PlainStmt"));
+        Assert.NotNull(typeof(Nitrogen.Tests.Shapes.BlockNode).Assembly.GetType("Nitrogen.Tests.Shapes.WrappedTie"));
+    }
 }

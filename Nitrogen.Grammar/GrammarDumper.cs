@@ -63,6 +63,7 @@ public static class GrammarDumper
     public static string Dump(Alternative alternative)
     {
         var builder = new StringBuilder("(alt ")
+            .Append(alternative.IsTransparent ? "transparent " : "")
             .Append(alternative.Name.Length == 0 ? "?" : alternative.Name)
             .Append(' ').Append(Dump(alternative.Body));
         if (alternative.Precedence is int precedence) builder.Append(' ').Append(precedence);

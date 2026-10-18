@@ -106,6 +106,10 @@ public enum GrammarAssociativity
 /// <param name="Associativity">Null when not written; the generator treats that as left.</param>
 /// <param name="Clauses">Binding clauses (issue 237).</param>
 /// <param name="Semantics">The alternative's semantics block (issue 239).</param>
+/// <param name="IsTransparent">
+/// <c>| transparent Name = Element</c>: a prefix alternative with no node of its own; the node its one
+/// element yields stands in for it where the extension point was parsed.
+/// </param>
 public sealed record Alternative(
     string Name,
     bool NameIsImplicit,
@@ -114,7 +118,8 @@ public sealed record Alternative(
     GrammarAssociativity? Associativity,
     GrammarSpan Span,
     EquatableArray<BindingClause> Clauses = default,
-    SemanticsBlock? Semantics = null);
+    SemanticsBlock? Semantics = null,
+    bool IsTransparent = false);
 
 public abstract record Expr(GrammarSpan Span);
 

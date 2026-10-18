@@ -98,7 +98,7 @@ internal static class ModuleWriter
         string name = CSharpText.Literal(alternative.Name);
         int precedence = alternative.Precedence ?? 0;
         if (!postfix)
-            return $"registry.AddPrefix({pointRef}, new PrefixExtension({name}, {kindRef}, {precedence}, &{method}, {first}));";
+            return $"registry.AddPrefix({pointRef}, new PrefixExtension({name}, {kindRef}, {precedence}, &{method}, {first}{(alternative.IsTransparent ? ", transparent: true" : "")}));";
         string associativity = alternative.Associativity == GrammarAssociativity.Right ? "Right" : "Left";
         return $"registry.AddPostfix({pointRef}, new PostfixExtension({name}, {kindRef}, {precedence}, Associativity.{associativity}, &{method}, {first}));";
     }

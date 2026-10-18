@@ -23,7 +23,7 @@ internal sealed class ViewWriter
         foreach (var kind in _info.Kinds)
         {
             if (kind.Rule is SyntaxRule syntax) WriteNode(b, kind, SyntaxCodeWriter.Elements(syntax.Body), null);
-            else if (kind.Alternative is { } alternative) WriteNode(b, kind, SyntaxCodeWriter.Elements(alternative.Body), kind.ImplicitModule);
+            else if (kind.Alternative is { IsTransparent: false } alternative) WriteNode(b, kind, SyntaxCodeWriter.Elements(alternative.Body), kind.ImplicitModule);
         }
         WriteVisitor(b);
     }
@@ -151,7 +151,7 @@ internal sealed class ViewWriter
 
     void WriteVisitor(StringBuilder b)
     {
-        var visited = _info.Kinds.Where(k => k.Rule is not TokenRule).ToList();
+        var visited = _info.Kinds.Where(k => k.Rule is not TokenRule && !k.IsTransparent).ToList();
         if (visited.Count == 0) return;
         string cls = _info.ClassName;
         b.Append($"public abstract class {_info.VisitorName}<TResult>\n{{\n")

@@ -168,4 +168,53 @@ public class TreeShapeTests
         Assert.Equal(new TextSpan(2, 0), empty.Tree.Span(0));
         Assert.Equal("(File _)", SyntaxDumper.Dump(empty.Tree));
     }
+
+    [Fact]
+    public void Transparent_alternative_has_no_node()
+    {
+        using var result = Shapes.Parse("{ var a ; }", ShapesModule.Block);
+        Assert.True(result.Success);
+        var tree = result.Tree;
+        // Block = "{" Stmts:Stmt* "}": the Stmts list holds the standing-in Var and ";" directly.
+        int stmts = tree.Child(tree.Root, 1);
+        Assert.Equal(SyntaxKinds.List, tree.Kind(stmts));
+        Assert.Equal(2, tree.ChildCount(stmts));
+        Assert.Equal(ShapesKinds.Var, tree.Kind(tree.Child(stmts, 0)));
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(tree.Child(stmts, 1)));
+        Assert.Equal(";", tree.GetText(tree.Child(stmts, 1)).ToString());
+        for (int n = 0; n < tree.NodeCount; n++) Assert.NotEqual(ShapesKinds.Plain, tree.Kind(n));
+        Assert.Equal("(Block \"{\" (List (Var \"var\" Name:\"a\") \";\") \"}\")", SyntaxDumper.Dump(tree));
+
+        // One statement: the one-item list is its item, which is the Var itself.
+        using var one = Shapes.Parse("{ var b }", ShapesModule.Block);
+        Assert.Equal(ShapesKinds.Var, one.Tree.Kind(one.Tree.Child(one.Tree.Root, 1)));
+    }
+
+    [Fact]
+    public void A_transparent_alternative_stand_in_is_in_the_points_quote_category()
+    {
+        // A hole of the point accepts what can stand in for it: the Var node and the ";" leaf.
+        Assert.Contains("Shapes.Stmt", ShapesModule.Instance.GetQuoteCategories(ShapesModule.LVar));
+        Assert.Contains("Shapes.Var", ShapesModule.Instance.GetQuoteCategories(ShapesModule.LVar));
+        Assert.DoesNotContain("Shapes.Stmt", ShapesModule.Instance.GetQuoteCategories(ShapesModule.LPlain));
+        Assert.True(ShapesModule.Instance.AcceptsQuoteLiteral("Shapes.Stmt", ";"));
+        Assert.False(ShapesModule.Instance.AcceptsQuoteLiteral("Shapes.Stmt", "var"));
+        Assert.Contains("Shapes.Tie", ShapesModule.Instance.GetQuoteCategories(ShapesModule.LName));
+    }
+
+    [Fact]
+    public void A_tie_with_a_transparent_alternative_is_ambiguous_over_the_standing_in_node()
+    {
+        // Tie: | transparent Word = Name | Wrapped = Inner:Name. Both end after "a" at precedence 0.
+        using var result = Shapes.Parse("tie a", ShapesModule.Ties);
+        Assert.True(result.Success);
+        var tree = result.Tree;
+        int tie = tree.Child(tree.Root, 1);
+        Assert.Equal(SyntaxKinds.Ambiguous, tree.Kind(tie));
+        Assert.Equal(2, tree.ChildCount(tie));
+        var kinds = new[] { tree.Kind(tree.Child(tie, 0)), tree.Kind(tree.Child(tie, 1)) };
+        Assert.Contains(ShapesKinds.Name, kinds);
+        Assert.Contains(ShapesKinds.Wrapped, kinds);
+        Assert.Equal(new TextSpan(4, 1), tree.Span(tie));
+    }
 }

@@ -49,6 +49,28 @@ was used, so a tree has no wrapper around a choice of single tokens.
 - A missing alternative in a recovered tree is a `Missing` `Literal` leaf for a leaf alias that lists a
   literal, and a `Missing` error node for other aliases.
 
+## Transparent alternatives
+
+An alternative of an extensible rule marked `transparent` produces no node of its own, the way an alias
+does: `extensible syntax Stmt { | transparent Plain = Body:(Var / ";") }`. The node its element yields
+(the `Var` node, or a `Literal` leaf for `";"`) stands in for it where the extension point was parsed.
+The alternative still competes with the others as usual: longest match first, then precedence, and a tie
+is an `Ambiguous` node whose children are the candidates' nodes, standing-in ones included.
+
+- The body must yield exactly one node on every path: one literal, character class or rule reference,
+  labeled or not, or a choice of them (NGR0160). A sequence, a repetition, a separated list, an optional
+  or a predicate cannot be transparent, because it would leave a group, a `List` node, a null slot or
+  nothing in the point's place.
+- It must be a prefix alternative (NGR0161), and it cannot have a precedence, binding clauses or
+  semantics (NGR0162), which all need a node.
+- `transparent` is read as the marker only when a name (`Name =`) or an element follows it; otherwise it
+  is a reference to a rule named `transparent`. Without a name, a single reference gives the alternative
+  its name, as for other alternatives (`| transparent Var`).
+- The alternative has no typed view and no visitor method. The extension point's union view reaches the
+  standing-in node, so `SyntaxView.TryCast<VarNode>` on it works and a cast to another alternative's view
+  fails. The standing-in node is also a member of the point's quotation category, so a hole of the point
+  accepts it.
+
 ## Typed repetition
 
 `lowers repeat ElementType CountField IteratorField TemplateListField` lowers a checked count and a typed template list into `HirRepeat`. For example:

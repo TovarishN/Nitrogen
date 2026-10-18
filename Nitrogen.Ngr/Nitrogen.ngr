@@ -92,9 +92,12 @@ syntax module Nitrogen
                           lowers Grammar.ExtensibleRule(text Name, sequence Grammar.SemanticItem Properties, sequence Grammar.Alternative Alternatives);
   syntax Extend         = "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"  references? rule Target
                           lowers Grammar.Extend(text Target, sequence Grammar.Alternative Alternatives);
-  syntax Alternative    = "|" Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?
+  // `transparent` (compact trees): the alternative has no node; its one element's node stands in for it.
+  syntax Alternative    = "|" Transparent:TransparentWord? Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?
                           lowers Grammar.Alternative(optional Core.Text Named, Body, optional Grammar.Precedence Precedence,
-                            sequence Grammar.Clause Clauses, optional Grammar.Semantics Semantics);
+                            sequence Grammar.Clause Clauses, optional Grammar.Semantics Semantics, optional Core.Text Transparent);
+  // As in the bootstrap parser, `transparent` is a reference unless a name or an element follows it.
+  syntax TransparentWord = "transparent" &(Identifier "=" / Element)  lowers text Core.Text this;
   syntax AlternativeName = Name:Identifier "="  lowers text Core.Text Name;
   syntax PrecedenceSpec = "precedence" Level:Integer Associativity:Associativity?
                           lowers Grammar.Precedence(text Level, optional Core.Text Associativity);

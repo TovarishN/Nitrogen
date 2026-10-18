@@ -291,6 +291,10 @@ public static class GrammarParser
         Alternative ParseAlternative()
         {
             var bar = Advance();
+            // `transparent` starts the alternative when a name or an element follows; otherwise it is a reference.
+            bool transparent = AtKeyword("transparent")
+                && ((Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.Equals) || IsElementStart(Next));
+            if (transparent) Advance();
             string? name = null;
             if (At(TokenKind.Identifier) && Next.Kind == TokenKind.Equals)
             {
@@ -337,7 +341,8 @@ public static class GrammarParser
                     name = "";
                 }
             }
-            return new Alternative(name, isImplicit, body, precedence, associativity, GrammarSpan.FromBounds(bar.Start, end), clauses.ToArray(), semantics);
+            return new Alternative(name, isImplicit, body, precedence, associativity, GrammarSpan.FromBounds(bar.Start, end), clauses.ToArray(), semantics,
+                transparent);
         }
 
         Expr ParseExpr()
@@ -363,11 +368,13 @@ public static class GrammarParser
             return new SequenceExpr(items.ToArray(), GrammarSpan.FromBounds(items[0].Span.Start, last.Span.End));
         }
 
-        bool IsElementStart() => Current.Kind switch
+        bool IsElementStart() => IsElementStart(Current);
+
+        static bool IsElementStart(GrammarToken token) => token.Kind switch
         {
             TokenKind.String or TokenKind.LBracket or TokenKind.LParen or TokenKind.Dot
                 or TokenKind.Bang or TokenKind.Amp or TokenKind.QualifiedName => true,
-            TokenKind.Identifier => CanUseUnqualifiedReference(Current.Value),
+            TokenKind.Identifier => CanUseUnqualifiedReference(token.Value),
             _ => false,
         };
 

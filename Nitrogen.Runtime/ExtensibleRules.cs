@@ -84,7 +84,10 @@ public static unsafe class ExtensibleRules
             var parse = ext.Parse;
             if (parse(ref s) && s.Position > start)
             {
-                s.Close();
+                // A transparent candidate is the node its element pushed; ties and the Ambiguous node
+                // work on the child stack, so they need no frame of the candidate's own.
+                if (ext.Transparent) s.CloseTransparent();
+                else s.Close();
                 Consider(ref s, ref candidates, ext.Precedence, s.Arena.RepairCount != repairs, mark, start);
             }
             else

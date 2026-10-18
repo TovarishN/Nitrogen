@@ -198,7 +198,7 @@ internal static class NgrProjector
                 }
             }
             alternatives.Add(new Alternative(name, isImplicit, body, precedence, associativity,
-                GrammarSpan.FromBounds(Span(node).Start, end), clauses, semantics));
+                GrammarSpan.FromBounds(Span(node).Start, end), clauses, semantics, IsTransparent: Value(a[5]) is not null));
         }
         return alternatives.ToArray();
     }

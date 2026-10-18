@@ -105,6 +105,25 @@ public class GrammarParserTests
     }
 
     [Fact]
+    public void Transparent_alternatives()
+    {
+        var alternatives = ((ExtensibleRule)ParseOk(
+            "syntax module M { extensible syntax E { | transparent Plain = Body:(D / \";\") | transparent D | transparent | Other = transparent } }")
+            .Modules[0].Rules[0]).Alternatives;
+        Assert.True(alternatives[0].IsTransparent);
+        Assert.Equal("Plain", alternatives[0].Name);
+        Assert.Equal("(alt transparent Plain (label Body (choice (ref D) (lit \";\"))))", GrammarDumper.Dump(alternatives[0]));
+        Assert.True(alternatives[1].IsTransparent);
+        Assert.Equal("D", alternatives[1].Name);
+        Assert.True(alternatives[1].NameIsImplicit);
+        // Not followed by an element or a name, `transparent` is a reference to a rule of that name.
+        Assert.False(alternatives[2].IsTransparent);
+        Assert.Equal("transparent", alternatives[2].Name);
+        Assert.False(alternatives[3].IsTransparent);
+        Assert.Equal(GrammarSpan.FromBounds(40, 75), alternatives[0].Span);
+    }
+
+    [Fact]
     public void Parsing_twice_gives_equal_models()
     {
         const string text = "syntax module M { token T = ['a'..'z']+; syntax R = X:T (T; \",\")*; }";

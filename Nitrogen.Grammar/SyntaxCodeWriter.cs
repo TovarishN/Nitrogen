@@ -196,7 +196,9 @@ internal sealed class SyntaxCodeWriter
             case ReferenceExpr reference:
             {
                 var symbol = _model.Resolve(reference.Name, module, implicitModule);
-                // An alias pushes what one of its alternatives pushes, in the alias's own module.
+                // An alias pushes what one of its alternatives pushes, in the alias's own module. An
+                // extension point pushes one node: a transparent alternative's element must yield
+                // exactly one (NGR0160), never a List node or a null slot.
                 return symbol.Rule is SyntaxRule syntax && EmitModel.IsAlias(syntax) && aliases.Add(symbol.Key) &&
                     (syntax.Body is ChoiceExpr body ? body.Alternatives.ToList() : new List<Expr> { syntax.Body })
                         .Any(a => MayBeListOrNull(a, symbol.Module, null, aliases));

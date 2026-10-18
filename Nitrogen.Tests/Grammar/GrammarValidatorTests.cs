@@ -164,6 +164,33 @@ public class GrammarValidatorTests
     }
 
     [Fact]
+    public void Transparent_alternative_must_yield_one_node()
+    {
+        const string Prelude = "token T = ['a'..'z']+; syntax R = \"r\" T; ";
+        Assert.Empty(Validate("syntax module M { " + Prelude + "extensible syntax E { | transparent A = R | transparent B = Body:(T / \";\") | transparent X = \"x\" } }"));
+        Assert.Equal("transparent alternative 'Bad' must be one element that yields exactly one node: a literal, a rule reference, or a choice of them",
+            Single(GrammarCodes.TransparentShape, "syntax module M { extensible syntax E { | transparent Bad = \"a\" \"b\" } }").Message);
+        // A repetition, separated list or optional can yield a List node or a null slot.
+        foreach (string body in new[] { "\"a\"+", "(\"a\"; \",\")+", "!\"b\" \"a\"", "(\"a\" / \"b\"+)" })
+            Single(GrammarCodes.TransparentShape, "syntax module M { extensible syntax E { | transparent Bad = " + body + " } }");
+        Assert.Contains(Validate("syntax module M { extensible syntax E { | transparent Bad = \"a\"? } }"),
+            d => d.Code == GrammarCodes.TransparentShape);
+    }
+
+    [Fact]
+    public void Transparent_alternative_is_a_plain_prefix_alternative()
+    {
+        const string Prelude = "token T = ['a'..'z']+; ";
+        Assert.Equal("transparent alternative 'Again' must be a prefix alternative",
+            Single(GrammarCodes.TransparentPostfix, "syntax module M { " + Prelude + "extensible syntax E { | T | transparent Again = E } }").Message);
+        Assert.Equal("transparent alternative 'P' cannot have a precedence, binding clauses or semantics: it has no node",
+            Single(GrammarCodes.TransparentDecorated, "syntax module M { " + Prelude + "extensible syntax E { | transparent P = T precedence 3 } }").Message);
+        Single(GrammarCodes.TransparentDecorated,
+            "syntax module M { symbols { value } " + Prelude + "extensible syntax E { | transparent P = Name:T declares value Name } }");
+        Single(GrammarCodes.TransparentDecorated, "syntax module M { " + Prelude + "extensible syntax E { | transparent P = T { } } }");
+    }
+
+    [Fact]
     public void Extend_resolves_names_through_the_extended_module()
     {
         Assert.Empty(Validate(

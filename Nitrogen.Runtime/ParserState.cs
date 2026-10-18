@@ -161,6 +161,28 @@ public unsafe ref partial struct ParserState
         return Close();
     }
 
+    /// <summary>
+    /// Closes a transparent alternative's frame (<see cref="PrefixExtension.Transparent"/>): with exactly
+    /// one child, it pops the frame and leaves that child as the result, so the alternative has no node.
+    /// The grammar validator guarantees one child that is a node; anything else closes as a node.
+    /// </summary>
+    public readonly int CloseTransparent()
+    {
+        var a = Arena;
+        int frame = a.FrameCount - 1;
+        int childBase = a.FrameChildBase[frame];
+        if (a.ChildStackCount - childBase == 1)
+        {
+            int child = a.ChildStack[childBase];
+            if (child != SyntaxTree.NoNode && a.Kind[child] != SyntaxKinds.List)
+            {
+                a.FrameCount = frame;
+                return child;
+            }
+        }
+        return Close();
+    }
+
     static bool IsNullOrEmpty(BuildArena a, int node) => node == SyntaxTree.NoNode || a.Length[node] == 0;
 
     /// <summary>Pushes a leaf <c>[Position, end)</c> and moves to <paramref name="end"/>.</summary>
