@@ -17,8 +17,13 @@ public sealed partial class NitrogenLanguageService
 
     static string FunctionKey(string module, string name) => "function " + module + "." + name;
 
-    /// <summary>What a grammar name names: a rule, a grammar function, or a function's parameter, <c>let</c> or loop variable.</summary>
-    internal enum GrammarNameKind { Rule, Function, Parameter, Variable }
+    /// <summary>
+    /// What a grammar name names: a rule, a grammar function, a function's parameter, <c>let</c> or loop variable, or a
+    /// built-in such as <c>upper</c>, which has uses but no declaration.
+    /// </summary>
+    internal enum GrammarNameKind { Rule, Function, Parameter, Variable, Builtin }
+
+    static string BuiltinKey(string name) => "builtin " + name;
 
     sealed record GrammarRuleOccurrence(string Identity, string Path, GrammarSpan Span, bool IsDefinition, GrammarNameKind Kind = GrammarNameKind.Rule);
 
@@ -31,12 +36,23 @@ public sealed partial class NitrogenLanguageService
     {
         if (GrammarOccurrencesOf(uri) is not { } scope) return null;
         int offset = new LineMap(scope.Text).OffsetOf(position);
-        var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Span.Start <= offset && offset < o.Span.End);
+        var found = OccurrencesAt(scope, offset).FirstOrDefault();
         if (found is null) return null;
         DocumentLocation Location(GrammarRuleOccurrence occurrence) => new(new Uri(occurrence.Path).AbsoluteUri,
             new LineMap(scope.Files.First(f => f.Path == occurrence.Path).Text).RangeOf(new(occurrence.Span.Start, occurrence.Span.Length)));
         return (scope.Occurrences.Where(o => o.Identity == found.Identity && o.IsDefinition).Select(Location).Distinct().ToArray(),
             scope.Occurrences.Where(o => o.Identity == found.Identity && !o.IsDefinition).Select(Location).Distinct().ToArray());
+    }
+
+    /// <summary>
+    /// The current file's names at <paramref name="offset"/>: those containing it, else those ending there. A click on the
+    /// right half of a name's last character puts the position after it, which for a one-letter name is the whole right half.
+    /// </summary>
+    static List<GrammarRuleOccurrence> OccurrencesAt(GrammarOccurrences scope, int offset, Func<GrammarRuleOccurrence, bool>? where = null)
+    {
+        var mine = scope.Occurrences.Where(o => o.Path == scope.Path && (where is null || where(o))).ToList();
+        var inside = mine.Where(o => o.Span.Start <= offset && offset < o.Span.End).ToList();
+        return inside.Count > 0 ? inside : mine.Where(o => o.Span.End == offset).ToList();
     }
 
     GrammarOccurrences? GrammarOccurrencesOf(string uri)
@@ -203,6 +219,11 @@ public sealed partial class NitrogenLanguageService
                 void Called(NameDecl name)
                 {
                     calls?.Invoke(file.Path, name);
+                    if (GrammarFunctions.IsBuiltin(name.Name))
+                    {
+                        occurrences.Add(new(BuiltinKey(name.Name), file.Path, name.Span, false, GrammarNameKind.Builtin));
+                        return;
+                    }
                     int dot = name.Name.LastIndexOf('.');
                     string? owner = dot >= 0
                         ? name.Name.Substring(0, dot)

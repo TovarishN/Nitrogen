@@ -85,7 +85,7 @@ public sealed class GrammarFunctionEditorTests : IDisposable
         Assert.NotNull(hover);
         Assert.Contains("function Twice(item: Grammar.Rule) : Grammar.Rule", hover.Markdown);
         Assert.Contains("declared in Demo.ngr line 20", hover.Markdown);
-        Assert.Contains("Expands to 3 nodes, 0 classes, depth 2.", hover.Markdown);
+        Assert.Contains("Expands to 3 nodes, 0 classes, depth 2:", hover.Markdown);
         Assert.Contains("\"ab\" \"ab\"", hover.Markdown);
         Assert.Equal(At(Grammar, "Twice(\"ab\")"), hover.Range.Start);
         Assert.Equal(At(Grammar, "Twice(\"ab\")", 5), hover.Range.End);
@@ -114,7 +114,7 @@ public sealed class GrammarFunctionEditorTests : IDisposable
             return 1 + GrammarExtraction.Children(e).Select(Depth).DefaultIfEmpty(0).Max();
         }
         int depth = Depth(expansion);
-        Assert.Contains($"Expands to {nodes} nodes, {classes} classes, depth {depth}.", hover.Markdown);
+        Assert.Contains($"Expands to {nodes} nodes, {classes} classes, depth {depth}:", hover.Markdown);
         Assert.True(classes > 1);
         Assert.NotNull(escape);
     }
@@ -147,6 +147,66 @@ public sealed class GrammarFunctionEditorTests : IDisposable
         Assert.Contains("does not expand", hover.Markdown);
     }
 
+    [Fact]
+    public void Built_in_calls_have_a_hover_usages_and_highlights_but_no_declaration()
+    {
+        using var service = Service();
+        var at = At(Grammar, "char(48", 1);
+        var hover = service.Hover(Uri("Demo.ngr"), at);
+        Assert.NotNull(hover);
+        Assert.Equal("```ngr\nchar(code: Grammar.Int) : Grammar.Char\n```\nBuilt-in grammar function: the character with this UTF-16 code.", hover.Markdown);
+        Assert.Equal(At(Grammar, "char(48"), hover.Range.Start);
+
+        Assert.Empty(service.Definition(Uri("Demo.ngr"), at));
+        var uses = new[] { At(Grammar, "char(48"), At(Grammar, "char(55"), At(Grammar, "char(87") };
+        Assert.Equal(uses, service.References(Uri("Demo.ngr"), at, includeDeclaration: true).Select(r => r.Range.Start).OrderBy(p => (p.Line, p.Character)).ToArray());
+        Assert.Equal(uses, service.Highlights(Uri("Demo.ngr"), at).Select(h => h.Range.Start).OrderBy(p => (p.Line, p.Character)).ToArray());
+        Assert.All(service.Highlights(Uri("Demo.ngr"), at), h => Assert.Equal(HighlightKind.Read, h.Kind));
+
+        var refused = Assert.Throws<RenameRefusedException>(() => service.PrepareRename(Uri("Demo.ngr"), at));
+        Assert.Contains("'char' is a built-in grammar function", refused.Message);
+    }
+
+    [Fact]
+    public void Highlights_cover_functions_and_variables_with_their_declarations_as_writes()
+    {
+        using var service = Service();
+        var highlights = service.Highlights(Uri("Demo.ngr"), At(Grammar, "item item", 6));
+        Assert.Equal(3, highlights.Count);
+        Assert.Equal(At(Grammar, "item: Grammar.Rule"), Assert.Single(highlights, h => h.Kind == HighlightKind.Write).Range.Start);
+    }
+
+    [Fact]
+    public void An_unconfigured_grammar_reports_its_function_errors_where_they_are_written()
+    {
+        using var clean = Service();
+        Assert.DoesNotContain(clean.Diagnostics(Uri("Demo.ngr")), d => d.Code.StartsWith("NGR015", StringComparison.Ordinal));
+
+        string grammar = Grammar.Replace("[char(48 + d)]", "[char(48 + nope)]", StringComparison.Ordinal);
+        using var service = Service(grammar, "Broken.ngr");
+        var diagnostic = Assert.Single(service.Diagnostics(Uri("Broken.ngr")), d => d.Code.StartsWith("NGR015", StringComparison.Ordinal));
+        Assert.Equal("NGR0150", diagnostic.Code);
+        Assert.Equal(ServiceSeverity.Error, diagnostic.Severity);
+        Assert.Equal("'nope' is not a parameter, a let, a variable or a rule", diagnostic.Message);
+        Assert.Equal(new DocumentRange(At(grammar, "nope"), At(grammar, "nope", 4)), diagnostic.Range);
+    }
+
+    [Fact]
+    public void A_one_letter_name_navigates_from_the_position_after_it()
+    {
+        // A click on the right half of a name's last character puts the position after it.
+        using var service = Service();
+        var after = At(Grammar, ".. n {", 4);
+        var definition = Assert.Single(service.Definition(Uri("Demo.ngr"), after));
+        Assert.Equal(At(Grammar, "let n", 4), definition.Range.Start);
+        Assert.Equal(2, service.Highlights(Uri("Demo.ngr"), after).Count);
+        Assert.Contains("`variable n`", service.Hover(Uri("Demo.ngr"), after)?.Markdown);
+
+        // A name the position is inside still wins over one ending there.
+        var inside = Assert.Single(service.Definition(Uri("Demo.ngr"), At(Grammar, "Twice(\"ab\")", 4)));
+        Assert.Equal(At(Grammar, "Twice(item", 0), inside.Range.Start);
+    }
+
     // ---- expansion preview ----
 
     [Fact]
@@ -174,6 +234,80 @@ public sealed class GrammarFunctionEditorTests : IDisposable
             return GrammarDumper.Dump(((TokenRule)expanded.Modules.Single(m => m.Name == "Demo").Rules.Single(r => r.Name == "Escape")).Body);
         }
         Assert.Equal(EscapeBody(Grammar), EscapeBody(inlined));
+    }
+
+    const string WideGrammar = """
+        syntax module Wide
+        {
+          function HexDigit(d: Grammar.Int) : Grammar.Rule =
+            if d < 10 then [char(48 + d)] else [char(55 + d) char(87 + d)];
+
+          function HexIn(width: Grammar.Int, values: Grammar.Class) : Grammar.Rule =
+            if width == 0 then ()
+            else choice d in 0 .. 15 {
+              let size = 16 ^ (width - 1);
+              let low = d * size;
+              let part = values & [low .. (low + size - 1)];
+              where part != [] : HexDigit(d) HexIn(width - 1, part - low)
+            };
+
+          token Letter = ['A'..'Z' 'a'..'z' 'À'..'Ö' 'Ø'..'ö'];
+          token Escape = "\\u" HexIn(4, Letter);
+          syntax Start = Escape;
+        }
+        """;
+
+    [Fact]
+    public void Hover_shows_a_long_expansion_one_alternative_per_line()
+    {
+        using var service = Service(WideGrammar);
+        var hover = service.Hover(Uri("Demo.ngr"), At(WideGrammar, "HexIn(4", 1));
+        Assert.NotNull(hover);
+        Assert.Contains("""
+            ```ngr
+            ['0'] ['0'] (
+                ['4' '6'] ['1'..'9' 'A'..'F' 'a'..'f']
+              / ['5' '7'] ['0'..'9' 'A' 'a']
+            """, hover.Markdown);
+        Assert.Contains("\n  / ['F' 'f'] ['0'..'6']\n)\n```", hover.Markdown);
+    }
+
+    [Fact]
+    public void Hover_anywhere_on_a_call_shows_its_expansion_but_rule_names_keep_their_own_hover()
+    {
+        using var service = Service(WideGrammar);
+        var onArgument = service.Hover(Uri("Demo.ngr"), At(WideGrammar, "4, Letter)"));
+        Assert.NotNull(onArgument);
+        Assert.StartsWith("```ngr\nfunction HexIn(width: Grammar.Int, values: Grammar.Class) : Grammar.Rule\n```\nExpands to", onArgument.Markdown);
+        Assert.Equal(At(WideGrammar, "HexIn(4"), onArgument.Range.Start);
+        Assert.Equal(At(WideGrammar, "Letter);", 7), onArgument.Range.End);
+
+        var onRule = service.Hover(Uri("Demo.ngr"), At(WideGrammar, "Letter);", 1));
+        Assert.DoesNotContain("Expands to", onRule?.Markdown ?? "");
+    }
+
+    [Fact]
+    public void A_long_expansion_is_inlined_on_indented_lines_that_parse_back_to_the_same_expression()
+    {
+        using var service = Service(WideGrammar);
+        var action = service.InlineGrammarCall(Uri("Demo.ngr"), new(At(WideGrammar, "HexIn(4", 1), At(WideGrammar, "HexIn(4", 1)));
+        Assert.NotNull(action);
+        string inlined = Apply(WideGrammar, action.Edits[Uri("Demo.ngr")]);
+        Assert.Contains("""
+              token Escape = "\\u" (['0'] ['0'] (
+                    ['4' '6'] ['1'..'9' 'A'..'F' 'a'..'f']
+                  / ['5' '7'] ['0'..'9' 'A' 'a']
+            """, inlined);
+
+        static string EscapeBody(string text)
+        {
+            var parsed = GrammarParser.Parse(text);
+            Assert.NotNull(parsed.File);
+            var expanded = GrammarFunctions.Expand(parsed.File.Modules);
+            Assert.DoesNotContain(expanded.Diagnostics, d => d.Severity == GrammarSeverity.Error);
+            return GrammarDumper.Dump(((TokenRule)expanded.Modules.Single().Rules.Single(r => r.Name == "Escape")).Body);
+        }
+        Assert.Equal(EscapeBody(WideGrammar), EscapeBody(inlined));
     }
 
     [Fact]

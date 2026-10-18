@@ -318,11 +318,12 @@ implement the extraction prompt flow and support annotated resource edits.
 Grammar functions (`function Name(p: Grammar.Int, ...) : Grammar.Rule = ...;`) get the following editor features:
 
 - **Hover** on a call shows the function's signature and where it is declared. A call in a rule body is also evaluated over the composed grammar modules,
-  and the hover gives the size of its expansion: nodes, character classes and depth. A shared subtree
-  counts once for each place it is used. A short expansion is also shown as `.ngr` text. Hovering a
+  and the hover shows the expansion as `.ngr` text, after its size: nodes, character classes and depth. A shared subtree
+  counts once for each place it is used. A choice that does not fit in 80 columns is shown one alternative per line.
+  The hover shows the first 40 lines. Hovering a call's arguments or parentheses also shows its expansion. A rule name in an argument keeps its own hover. Hovering a
   parameter shows its type. Hovering a `let` or loop variable names the function it belongs to.
 - **Refactor → Inline expansion of …** (`refactor.inline`) replaces a call in a rule body with its
-  expansion as readable `.ngr` text. The expansion is parenthesized where precedence needs it. Use the
+  expansion as readable `.ngr` text, laid out like the hover. Its continuation lines are indented under the call's line. The expansion is parenthesized where precedence needs it. Use the
   editor's refactoring preview to look at an expansion without applying it. An expansion over 10,000 nodes is
   not inlined. A call that fails to evaluate is reported, not inlined.
 - **Coloring**: function names in declarations and calls are functions, parameters are
@@ -330,9 +331,15 @@ Grammar functions (`function Name(p: Grammar.Int, ...) : Grammar.Rule = ...;`) g
   `then` and `else` are keywords.
 - **Completion** offers grammar functions wherever a call may start, in rule bodies and function bodies.
   It offers the module's own functions and those of the modules it names in `using`.
-- **Go to definition, usages and rename** work for functions and their parameters, `let` and loop
+- **Go to definition, usages, highlighting and rename** work for functions and their parameters, `let` and loop
   variables. Renaming a function updates qualified and imported calls in the other grammars of the scope.
   Rename refuses names that are already used and grammar keywords.
+- **Diagnostics**: the function checks (NGR0150–NGR0159) run on every open grammar, including one that no
+  configured language compiles. Unknown names, wrong argument types or counts, and evaluation errors are
+  reported where they are written.
+- **Built-ins** (`char`, `code`, `upper`, `lower`, `length`): hover shows the signature and what the built-in
+  does. Usages and highlighting find every call of it in the grammar scope. Built-ins have no
+  declaration to go to and cannot be renamed.
 
 ## Generated language composition factories
 
