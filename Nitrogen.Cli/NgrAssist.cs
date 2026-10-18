@@ -183,7 +183,7 @@ internal sealed partial class NgrAssist : ILanguageAssist
         for (int i = 0; i < tree.ChildCount(node); i++)
         {
             int child = tree.Child(node, i);
-            if (Clauses.Contains(tree.Kind(child)) || (tree.Flags(child) & NodeFlags.Missing) != 0) continue;
+            if (child == SyntaxTree.NoNode || Clauses.Contains(tree.Kind(child)) || (tree.Flags(child) & NodeFlags.Missing) != 0) continue;
             if (tree.ChildCount(child) == 0)
             {
                 if (tree.Span(child).Length > 0) yield return child;
@@ -201,7 +201,7 @@ internal sealed partial class NgrAssist : ILanguageAssist
         for (int i = 0; i < tree.ChildCount(call); i++)
         {
             int child = tree.Child(call, i);
-            if (tree.Kind(child) != SyntaxKinds.List) continue;
+            if (child == SyntaxTree.NoNode || tree.Kind(child) != SyntaxKinds.List) continue; // an empty list is a null slot
             int count = 0;
             for (int k = 0; k < tree.ChildCount(child); k++)
                 if (tree.Kind(tree.Child(child, k)) != SyntaxKinds.Literal) count++;
@@ -217,8 +217,8 @@ internal sealed partial class NgrAssist : ILanguageAssist
         {
             if (tree.Kind(node) != NitrogenKinds.Element || tree.ChildCount(node) == 0) continue;
             int name = tree.Child(node, 0);
-            while (tree.ChildCount(name) > 0) name = tree.Child(name, 0);
-            if (tree.Kind(name) == NitrogenKinds.Identifier && tree.Span(name).Length > 0) yield return tree.Span(name);
+            while (name != SyntaxTree.NoNode && tree.ChildCount(name) > 0) name = tree.Child(name, 0);
+            if (name != SyntaxTree.NoNode && tree.Kind(name) == NitrogenKinds.Identifier && tree.Span(name).Length > 0) yield return tree.Span(name);
         }
     }
 

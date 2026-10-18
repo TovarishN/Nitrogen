@@ -4,7 +4,8 @@ namespace Nitrogen;
 
 /// <summary>
 /// S-expression dump for tests and debugging. Interior node: <c>(Kind child ...)</c>; literal:
-/// <c>"text"</c>; other leaf: <c>Kind:"text"</c>; empty: <c>_</c>; ambiguous: <c>(? a b)</c>.
+/// <c>"text"</c>; other leaf: <c>Kind:"text"</c>; null slot (absent optional, empty list): <c>_</c>;
+/// ambiguous: <c>(? a b)</c>.
 /// Recovery (issue 235): a Missing node is <c>!Kind</c>; a node whose recovery skipped input is
 /// <c>(Kind~ ...)</c>.
 /// </summary>
@@ -26,6 +27,11 @@ public static class SyntaxDumper
 
     static void Write(SyntaxTree tree, int node, StringBuilder builder)
     {
+        if (node == SyntaxTree.NoNode)
+        {
+            builder.Append('_');
+            return;
+        }
         int kind = tree.Kind(node);
         var flags = tree.Flags(node);
         if ((flags & NodeFlags.Missing) != 0)

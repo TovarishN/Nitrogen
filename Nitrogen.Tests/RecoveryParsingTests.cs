@@ -1,4 +1,5 @@
 using Nitrogen.Tests.Recovery;
+using ShapesModule = Nitrogen.Tests.Shapes.ShapesModule;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -65,7 +66,7 @@ public class RecoveryParsingTests
     {
         using var result = Parse("item a { x = 1 ?? } item b { }");
         Assert.Equal(
-            $"(File (List {Item("a", "(List (Field~ Name:\"x\" \"=\" Number:\"1\" !Literal))")} {Item("b", "(List)")}))",
+            $"(File (List {Item("a", "(List (Field~ Name:\"x\" \"=\" Number:\"1\" !Literal))")} {Item("b", "_")}))",
             SyntaxDumper.Dump(result.Tree));
     }
 
@@ -94,7 +95,7 @@ public class RecoveryParsingTests
     public void Trailing_input_is_skipped_trivia()
     {
         using var result = Parse("item a { } junk");
-        Assert.Equal($"(File (List {Item("a", "(List)")}))", SyntaxDumper.Dump(result.Tree));
+        Assert.Equal($"(File (List {Item("a", "_")}))", SyntaxDumper.Dump(result.Tree));
         Assert.Equal(new[] { new TextSpan(11, 4) }, result.Tree.SkippedSpans.ToArray());
         Assert.Single(result.Diagnostics.ToArray());
     }
@@ -117,5 +118,40 @@ public class RecoveryParsingTests
         Assert.False(field.Value.IsMissing);
         Assert.True(new SyntaxNode(result.Tree, result.Tree.Child(field.Index, 3)).IsMissing);
         Assert.False(field.IsMissing);
+    }
+
+    static readonly Language Shapes = new LanguageBuilder().Add(ShapesModule.Instance).Build();
+
+    [Fact]
+    public void A_repair_passes_over_an_absent_optional_as_a_null_slot()
+    {
+        // The missing Name resumes at "{": the optional Type between is pushed as a null slot.
+        using var result = Shapes.Parse("decl { }", ShapesModule.File);
+        Assert.Equal("(File (List (Decl _ \"decl\" !Name _ \"{\" _ \"}\")))", SyntaxDumper.Dump(result.Tree));
+        Assert.Equal(new[] { "expected Name [5..5)" }, Messages(result));
+        int decl = result.Tree.Child(result.Tree.Child(0, 0), 0);
+        Assert.Equal(SyntaxTree.NoNode, result.Tree.Child(decl, 3));
+        Assert.False(SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(result.Tree, decl).Type.HasValue);
+    }
+
+    [Fact]
+    public void A_repair_after_the_last_element_with_width_keeps_null_slots_out_of_the_span()
+    {
+        using var result = Shapes.Parse("decl a", ShapesModule.File);
+        Assert.Equal("(File (List (Decl _ \"decl\" Name:\"a\" _ !Literal _ !Literal)))", SyntaxDumper.Dump(result.Tree));
+        int decl = result.Tree.Child(result.Tree.Child(0, 0), 0);
+        Assert.Equal(new TextSpan(0, 6), result.Tree.Span(decl));
+    }
+
+    [Theory]
+    [InlineData("decl a { }")]
+    [InlineData("public static decl a : int { b, c } decl d { }")]
+    public void Valid_input_with_null_slots_parses_the_same_in_the_recovery_pass(string text)
+    {
+        using var clean = Shapes.Parse(text, ShapesModule.File);
+        using var recovering = Shapes.ParseRecovering(text, ShapesModule.File);
+        Assert.True(recovering.Success);
+        Assert.Equal(SyntaxDumper.Dump(clean.Tree), SyntaxDumper.Dump(recovering.Tree));
+        Assert.Equal(clean.Tree.NodeCount, recovering.Tree.NodeCount);
     }
 }

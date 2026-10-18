@@ -97,16 +97,28 @@ public unsafe class ParserStateTests
     }
 
     [Fact]
-    public void PushEmpty_adds_a_zero_length_leaf_without_moving()
+    public void PushEmpty_pushes_a_null_slot_without_moving()
     {
         var a = new BuildArena();
         var s = State("ab", a);
         s.Position = 1;
         s.PushEmpty();
-        int n = a.ChildStack[0];
-        Assert.Equal(SyntaxKinds.Empty, a.Kind[n]);
-        Assert.Equal((1, 0), (a.Start[n], a.Length[n]));
+        Assert.Equal(1, a.ChildStackCount);
+        Assert.Equal(SyntaxTree.NoNode, a.ChildStack[0]);
+        Assert.Equal(0, a.NodeCount);
         Assert.Equal(1, s.Position);
+    }
+
+    [Fact]
+    public void Closing_an_empty_list_pushes_a_null_slot()
+    {
+        var a = new BuildArena();
+        var s = State("ab", a);
+        s.Open(SyntaxKinds.List);
+        Assert.Equal(SyntaxTree.NoNode, s.Close());
+        Assert.Equal(1, a.ChildStackCount);
+        Assert.Equal(SyntaxTree.NoNode, a.ChildStack[0]);
+        Assert.Equal(0, a.NodeCount);
     }
 
     [Fact]

@@ -6,7 +6,8 @@ namespace Nitrogen;
 /// <summary>Constructs syntax structurally; supplied operands are never reparsed.</summary>
 internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary<string, QuoteArgument> arguments, bool proxies, SourceOrigin? templateOrigin = null)
 {
-    sealed record Built(int Kind, int Start, int Length, NodeFlags Flags, IReadOnlyList<Built> Children,
+    // A null child is a null slot (absent optional, empty list).
+    sealed record Built(int Kind, int Start, int Length, NodeFlags Flags, IReadOnlyList<Built?> Children,
         SourceOrigin? Origin = null, QuoteNode? Proxy = null);
     sealed class Failure(QuoteDiagnostic diagnostic) : Exception
     {
@@ -19,7 +20,7 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
     {
         try
         {
-            var root = Copy(template, template.Root, true, templateOrigin);
+            var root = Copy(template, template.Root, true, templateOrigin)!;
             var arena = new BuildArena();
             int oldRoot = Store(root, arena);
             var tree = TreeFreezer.Freeze(arena, oldRoot, _text.ToString(), template.Language);
@@ -30,8 +31,9 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             Visit(root);
             return new(tree, [], origins, children) { ProxyNodes = sources };
 
-            void Visit(Built node)
+            void Visit(Built? node)
             {
+                if (node is null) return;
                 int n = index++;
                 if (node.Origin is { } origin) origins[n] = origin;
                 if (node.Proxy is { } child)
@@ -45,8 +47,9 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
         catch (Failure failure) { return new(null, [failure.Diagnostic], new Dictionary<int, SourceOrigin>(), new Dictionary<int, int>()); }
     }
 
-    static int Store(Built node, BuildArena arena)
+    static int Store(Built? node, BuildArena arena)
     {
+        if (node is null) return SyntaxTree.NoNode;
         var children = node.Children.Select(child => Store(child, arena)).ToArray();
         int from = arena.ChildStackCount;
         foreach (int child in children) arena.PushChild(child);
@@ -57,14 +60,16 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
 
     Built Insert(QuoteNode source, string name)
     {
-        if (!proxies) return Copy(source.Tree, source.Node, false, source.Origin);
+        if (!proxies) return Copy(source.Tree, source.Node, false, source.Origin)!;
         int start = _text.Length;
         _text.Append('$').Append(name);
         return new(SyntaxKinds.Hole, start, _text.Length - start, NodeFlags.None, [], source.Origin, source);
     }
 
-    Built Copy(SyntaxTree source, int node, bool holes, SourceOrigin? origin)
+    /// <summary>The copy of <paramref name="node"/>; null for a null slot, or a list hole expanded to no items.</summary>
+    Built? Copy(SyntaxTree source, int node, bool holes, SourceOrigin? origin)
     {
+        if (node == SyntaxTree.NoNode) return null;
         int kind = source.Kind(node), start = _text.Length;
         var span = source.Span(node);
         if (holes && kind == SyntaxKinds.Hole)
@@ -75,9 +80,9 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
         }
         if (holes && kind == SyntaxKinds.ListHole)
             throw new Failure(new("NQ0001", span, "A list marker must occupy a supported list item site."));
-        var children = new List<Built>();
+        var children = new List<Built?>();
         bool expand = holes && kind == SyntaxKinds.List && Enumerable.Range(0, source.ChildCount(node))
-            .Any(i => source.Kind(source.Child(node, i)) == SyntaxKinds.ListHole);
+            .Any(i => source.Child(node, i) is var child && child != SyntaxTree.NoNode && source.Kind(child) == SyntaxKinds.ListHole);
         if (expand)
         {
             if (!source.TemplateLists.TryGetValue(node, out var shape))
@@ -106,6 +111,7 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             int itemCount = stride == 1 ? children.Count : (children.Count + 1) / 2;
             if (itemCount < shape.MinimumCount)
                 throw new Failure(new("NQ0005", span, "The instantiated list requires at least one item."));
+            if (children.Count == 0) return null; // an empty list is a null slot, as a parse makes it
 
             void Separator()
             {
@@ -125,6 +131,11 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             for (int i = 0; i < source.ChildCount(node); i++)
             {
                 int child = source.Child(node, i);
+                if (child == SyntaxTree.NoNode)
+                {
+                    children.Add(null);
+                    continue;
+                }
                 var childSpan = source.Span(child);
                 if (childSpan.Start > cursor) _text.Append(source.Text, cursor, childSpan.Start - cursor);
                 // With only an explicit subtree origin, descendants conservatively retain that

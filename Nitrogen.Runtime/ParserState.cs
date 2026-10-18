@@ -89,24 +89,42 @@ public unsafe ref partial struct ParserState
     /// <summary>Opens a node of <paramref name="kind"/>; everything pushed until <see cref="Close"/> becomes its children.</summary>
     public readonly void Open(int kind) => Arena.PushFrame(kind, Position, Arena.ChildStackCount);
 
-    /// <summary>Closes the innermost open node, pushes it as a child of the enclosing one, and returns its arena index.</summary>
+    /// <summary>
+    /// Closes the innermost open node, pushes it as a child of the enclosing one, and returns its arena
+    /// index. An empty <see cref="SyntaxKinds.List"/> pushes and returns <see cref="SyntaxTree.NoNode"/>.
+    /// </summary>
     public readonly int Close(NodeFlags flags = NodeFlags.None)
     {
         var a = Arena;
         int frame = --a.FrameCount;
         int childBase = a.FrameChildBase[frame];
         int count = a.ChildStackCount - childBase;
+        if (count == 0 && a.FrameKind[frame] == SyntaxKinds.List)
+        {
+            // An empty list is a null slot in its parent, not a node.
+            a.PushChild(SyntaxTree.NoNode);
+            return SyntaxTree.NoNode;
+        }
         int start, end;
         if (count > 0)
         {
-            // Zero-length children (absent optionals, empty lists) sit after skipped trivia; they
-            // must not stretch the node over whitespace, so the span runs between children with width.
+            // Null slots (absent optionals, empty lists) and zero-length children sit after skipped
+            // trivia; they must not stretch the node over whitespace, so the span runs between
+            // children with width. With none, it is the last child's position: a null slot was
+            // pushed at the current position, and nothing moves it before the close.
             int first = childBase, last = a.ChildStackCount - 1;
-            while (first < last && a.Length[a.ChildStack[first]] == 0) first++;
-            while (last > first && a.Length[a.ChildStack[last]] == 0) last--;
+            while (first < last && IsNullOrEmpty(a, a.ChildStack[first])) first++;
+            while (last > first && IsNullOrEmpty(a, a.ChildStack[last])) last--;
             int firstNode = a.ChildStack[first], lastNode = a.ChildStack[last];
-            start = a.Start[firstNode];
-            end = a.Start[lastNode] + a.Length[lastNode];
+            if (firstNode == SyntaxTree.NoNode)
+            {
+                start = end = Position;
+            }
+            else
+            {
+                start = a.Start[firstNode];
+                end = a.Start[lastNode] + a.Length[lastNode];
+            }
         }
         else
         {
@@ -119,6 +137,8 @@ public unsafe ref partial struct ParserState
         return node;
     }
 
+    static bool IsNullOrEmpty(BuildArena a, int node) => node == SyntaxTree.NoNode || a.Length[node] == 0;
+
     /// <summary>Pushes a leaf <c>[Position, end)</c> and moves to <paramref name="end"/>.</summary>
     public void PushLeaf(int kind, int end)
     {
@@ -126,9 +146,8 @@ public unsafe ref partial struct ParserState
         Position = end;
     }
 
-    /// <summary>Pushes an <see cref="SyntaxKinds.Empty"/> leaf for an absent optional element.</summary>
-    public readonly void PushEmpty() =>
-        Arena.PushChild(Arena.NewNode(SyntaxKinds.Empty, Position, 0, NodeFlags.None, 0, 0));
+    /// <summary>Pushes a null slot (<see cref="SyntaxTree.NoNode"/>) for an absent optional element.</summary>
+    public readonly void PushEmpty() => Arena.PushChild(SyntaxTree.NoNode);
 
     public bool MatchLiteral(string literal)
     {
@@ -331,9 +350,8 @@ public unsafe ref partial struct ParserState
         a.PushChild(a.NewNode(kind, Position, 0, NodeFlags.Missing, text, 0));
     }
 
-    /// <summary>Pushes an empty list: the shape of a repetition that recovery passed over.</summary>
-    public readonly void PushEmptyList() =>
-        Arena.PushChild(Arena.NewNode(SyntaxKinds.List, Position, 0, NodeFlags.None, 0, 0));
+    /// <summary>Pushes an empty list, a null slot: the shape of a repetition that recovery passed over.</summary>
+    public readonly void PushEmptyList() => Arena.PushChild(SyntaxTree.NoNode);
 
     readonly bool Continues(RepairSite site, int position)
     {

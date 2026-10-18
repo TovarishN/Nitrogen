@@ -24,7 +24,7 @@ public class CalcParsingTests
     [InlineData("(1+2)*3", "(Mul (Paren \"(\" (Add (Num Number:\"1\") \"+\" (Num Number:\"2\")) \")\") \"*\" (Num Number:\"3\"))")]
     [InlineData("f(1, x)", "(Call Identifier:\"f\" \"(\" (List (Num Number:\"1\") \",\" (Ref Identifier:\"x\")) \")\")")]
     [InlineData("f( 1 , x )", "(Call Identifier:\"f\" \"(\" (List (Num Number:\"1\") \",\" (Ref Identifier:\"x\")) \")\")")]
-    [InlineData("f()", "(Call Identifier:\"f\" \"(\" (List) \")\")")]
+    [InlineData("f()", "(Call Identifier:\"f\" \"(\" _ \")\")")]
     [InlineData("2.5", "(Num Number:\"2.5\")")]
     public void Precedence_associativity_and_longest_match(string expr, string expected)
     {

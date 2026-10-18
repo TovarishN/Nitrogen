@@ -1,5 +1,6 @@
 using Nitrogen.Binding;
 using Nitrogen.Tests.Scopes;
+using Nitrogen.Tests.Typed;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -97,5 +98,25 @@ public class FileBindingTests
         Assert.True(binding.Scopes[0].IsOpen("value"));
         Assert.False(binding.Scopes[2].IsOpen("value"));
         Assert.Empty(binding.Diagnostics);
+    }
+
+    [Fact]
+    public void An_absent_optional_before_a_declaration_child_binds_the_same_symbols()
+    {
+        // Let = "let" Name:Identifier Annotation:(":" TypeName)? "=" Value:Expr ";": the absent
+        // annotation is a null slot, and Value keeps its position after it.
+        var typed = new LanguageBuilder().Add(TypedModule.Instance).Build();
+        using var bare = typed.Parse("let x = 1; let y = x;", TypedModule.File);
+        using var annotated = typed.Parse("let x : num = 1; let y : num = x;", TypedModule.File);
+        int let = bare.Tree.Child(bare.Tree.Child(0, 0), 0); // Statement is an alias: File, List, Let
+        Assert.Equal(SyntaxTree.NoNode, bare.Tree.Child(let, 2));
+        var bareBinding = FileBinding.Bind("a.typed", bare.Tree);
+        var annotatedBinding = FileBinding.Bind("b.typed", annotated.Tree);
+        Assert.Equal(new[] { "value x export", "value y export" }, Declarations(bareBinding));
+        Assert.Equal(Declarations(annotatedBinding), Declarations(bareBinding));
+        Assert.Equal(new[] { "value x" }, References(bareBinding));
+        Assert.Equal(References(annotatedBinding), References(bareBinding));
+        Assert.All(bareBinding.Declarations, d => Assert.Equal(d.Name, Text(bareBinding, d.NameSpan)));
+        Assert.Empty(bareBinding.Diagnostics);
     }
 }

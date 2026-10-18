@@ -10,6 +10,12 @@ namespace Nitrogen;
 /// </summary>
 public sealed class SyntaxTree : IDisposable
 {
+    /// <summary>
+    /// What <see cref="Child"/> returns for a null slot: an absent optional or an empty list has no
+    /// node, but keeps its slot so positional child indices stay stable.
+    /// </summary>
+    public const int NoNode = -1;
+
     // _childStart has NodeCount + 1 entries: node n's children are _children[_childStart[n].._childStart[n + 1]).
     int[]? _kind, _start, _length, _childStart, _children, _parent;
     NodeFlags[]? _flags;
@@ -73,18 +79,31 @@ public sealed class SyntaxTree : IDisposable
         return _flags![node];
     }
 
+    /// <summary>The node's child slots, null slots included.</summary>
     public int ChildCount(int node)
     {
         Check(node);
         return _childStart![node + 1] - _childStart[node];
     }
 
+    /// <summary>The child in slot <paramref name="index"/>, or <see cref="NoNode"/> for a null slot.</summary>
     public int Child(int node, int index)
     {
         Check(node);
         int first = _childStart![node];
         if ((uint)index >= (uint)(_childStart[node + 1] - first)) throw new ArgumentOutOfRangeException(nameof(index));
         return _children![first + index];
+    }
+
+    /// <summary>
+    /// Where a null slot of <paramref name="node"/> sits: an empty span at the start of the next child
+    /// that has a node, else at the node's end. Diagnostics and origins about an absent element use it.
+    /// </summary>
+    internal TextSpan NullSlotSpan(int node, int slot)
+    {
+        for (int k = slot + 1, count = ChildCount(node); k < count; k++)
+            if (Child(node, k) is var next && next != NoNode) return new TextSpan(Span(next).Start, 0);
+        return new TextSpan(Span(node).End, 0);
     }
 
     /// <summary>The parent's index, or -1 for the root. The parent table is built on first use.</summary>
@@ -154,7 +173,11 @@ public sealed class SyntaxTree : IDisposable
         parent[0] = -1;
         for (int n = 0; n < NodeCount; n++)
         {
-            for (int k = _childStart![n], end = _childStart[n + 1]; k < end; k++) parent[_children![k]] = n;
+            for (int k = _childStart![n], end = _childStart[n + 1]; k < end; k++)
+            {
+                int child = _children![k];
+                if (child != NoNode) parent[child] = n;
+            }
         }
         return parent;
     }

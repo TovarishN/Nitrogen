@@ -285,4 +285,34 @@ public class FormattingTests
         Assert.Equal("", closer.GetProperty("newText").GetString());
         Assert.Equal(3, closer.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32());
     }
+
+    [Fact]
+    public void Absent_optionals_and_empty_lists_are_skipped_by_the_tree_walkers()
+    {
+        // No Except on the token, no clauses on the rule and an empty module: all null slots.
+        const string text = """
+            syntax module M
+            {
+            token T = ['a'..'z']+;
+                syntax R = "r" T*;
+            }
+            syntax module E { }
+
+            """;
+        Assert.Equal("""
+            syntax module M
+            {
+              token T = ['a'..'z']+;
+              syntax R = "r" T*;
+            }
+            syntax module E { }
+
+            """, Formatted(text));
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.Open(Uri, 1, text);
+        Assert.NotEmpty(service.SemanticTokens(Uri));
+        Assert.Equal(new[] { "M", "E" }, service.DocumentSymbols(Uri).Select(symbol => symbol.Name));
+        Assert.NotEmpty(service.FoldingRanges(Uri));
+        Assert.Empty(service.Diagnostics(Uri));
+    }
 }

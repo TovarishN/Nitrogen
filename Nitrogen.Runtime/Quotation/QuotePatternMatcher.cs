@@ -30,7 +30,8 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 !tree.SkippedTrivia(value.Node).IsEmpty)
                 return Invalid("NQP0004", "Recovered, ambiguous, or template syntax cannot be matched.");
             for (int i = tree.ChildCount(value.Node) - 1; i >= 0; i--)
-                work.Push(new(tree, tree.Child(value.Node, i), value.Origin));
+                if (tree.Child(value.Node, i) is var child && child != SyntaxTree.NoNode)
+                    work.Push(new(tree, child, value.Origin));
         }
         return null;
     }
@@ -41,7 +42,14 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
         work.Push(new(pattern.Root, input));
         while (work.TryPop(out var pair))
         {
+            // A null slot (absent optional, empty list) matches only a null slot.
+            if (pair.Pattern == SyntaxTree.NoNode)
+            {
+                if (pair.Input.Node != SyntaxTree.NoNode) return Mismatch();
+                continue;
+            }
             var source = Resolve(pair.Input);
+            bool absent = source.Node == SyntaxTree.NoNode;
             int kind = pattern.Kind(pair.Pattern);
             if (kind == SyntaxKinds.ListHole)
             {
@@ -61,7 +69,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
             if (kind == SyntaxKinds.Hole)
             {
                 string name = pattern.GetText(pair.Pattern)[1..].ToString();
-                if (!pattern.Language!.AcceptsQuoteNode(contracts[name].Category, source.Tree.Kind(source.Node))) return Mismatch();
+                if (absent || !pattern.Language!.AcceptsQuoteNode(contracts[name].Category, source.Tree.Kind(source.Node))) return Mismatch();
                 if (_captures.TryGetValue(name, out var previous))
                 {
                     if (!Equal(((QuoteArgument.Scalar)previous).Value, source)) return Mismatch();
@@ -69,11 +77,12 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 else _captures[name] = QuoteArgument.Node(source);
                 continue;
             }
-            if (kind != source.Tree.Kind(source.Node)) return Mismatch();
+            if (!absent && kind != source.Tree.Kind(source.Node)) return Mismatch();
             if (lists.TryGetValue(pair.Pattern, out var list))
             {
+                // An absent input list is an empty one: the capture takes no items.
                 int stride = list.Shape.Separator is null ? 1 : 2;
-                int childCount = source.Tree.ChildCount(source.Node);
+                int childCount = absent ? 0 : source.Tree.ChildCount(source.Node);
                 if (stride == 2 && childCount != 0 && childCount % 2 == 0) return Mismatch();
                 int itemCount = (childCount + stride - 1) / stride;
                 int prefix = list.HoleIndex, suffix = list.Items.Length - prefix - 1;
@@ -93,7 +102,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 for (int i = prefix - 1; i >= 0; i--) work.Push(new(list.Items[i], items[i]));
                 continue;
             }
-            if (pattern.ChildCount(pair.Pattern) != source.Tree.ChildCount(source.Node)) return Mismatch();
+            if (absent || pattern.ChildCount(pair.Pattern) != source.Tree.ChildCount(source.Node)) return Mismatch();
             int count = pattern.ChildCount(pair.Pattern);
             if (count == 0 && !pattern.GetText(pair.Pattern).SequenceEqual(source.Tree.GetText(source.Node))) return Mismatch();
             for (int i = count - 1; i >= 0; i--)
@@ -110,6 +119,11 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
         work.Push((first, second));
         while (work.TryPop(out var pair))
         {
+            if (pair.First.Node == SyntaxTree.NoNode || pair.Second.Node == SyntaxTree.NoNode)
+            {
+                if (pair.First.Node != pair.Second.Node) return false;
+                continue;
+            }
             var left = Resolve(pair.First);
             var right = Resolve(pair.Second);
             if (left.Tree.Kind(left.Node) != right.Tree.Kind(right.Node) || left.Tree.ChildCount(left.Node) != right.Tree.ChildCount(right.Node)) return false;

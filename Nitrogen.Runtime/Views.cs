@@ -14,9 +14,10 @@ public interface ISyntaxView<TSelf> where TSelf : struct, ISyntaxView<TSelf>
 
 public static class SyntaxView
 {
+    /// <summary>False for a null slot (<see cref="SyntaxTree.NoNode"/>).</summary>
     public static bool TryCast<T>(SyntaxTree tree, int index, out T view) where T : struct, ISyntaxView<T>
     {
-        if (T.Is(tree, index))
+        if (index != SyntaxTree.NoNode && T.Is(tree, index))
         {
             view = T.Create(tree, index);
             return true;
@@ -26,18 +27,22 @@ public static class SyntaxView
     }
 
     public static T Cast<T>(SyntaxTree tree, int index) where T : struct, ISyntaxView<T> =>
-        T.Is(tree, index)
+        index == SyntaxTree.NoNode ? throw new InvalidCastException($"A null slot is not a {typeof(T).Name}.")
+        : T.Is(tree, index)
             ? T.Create(tree, index)
             : throw new InvalidCastException(
                 $"Node {index} ({SyntaxDumper.KindName(tree.Kind(index), tree.Language)}) is not a {typeof(T).Name}.");
 }
 
-/// <summary>An untyped view of any node. The default value is the null node (<see cref="IsNull"/>).</summary>
+/// <summary>
+/// An untyped view of any node. The default value and a null child slot (<see cref="SyntaxTree.NoNode"/>)
+/// are the null node (<see cref="IsNull"/>).
+/// </summary>
 public readonly struct SyntaxNode(SyntaxTree tree, int index) : ISyntaxView<SyntaxNode>
 {
     public SyntaxTree Tree { get; } = tree;
     public int Index { get; } = index;
-    public bool IsNull => Tree is null;
+    public bool IsNull => Tree is null || Index == SyntaxTree.NoNode;
     public int Kind => Tree.Kind(Index);
     public TextSpan Span => Tree.Span(Index);
     public NodeFlags Flags => Tree.Flags(Index);
@@ -60,7 +65,7 @@ public readonly struct SyntaxNode(SyntaxTree tree, int index) : ISyntaxView<Synt
 
     public override string ToString() => IsNull ? "" : Tree.GetText(Index).ToString();
 
-    public static bool Is(SyntaxTree tree, int index) => true;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode;
 
     public static SyntaxNode Create(SyntaxTree tree, int index) => new(tree, index);
 
@@ -80,7 +85,7 @@ public readonly struct SyntaxNode(SyntaxTree tree, int index) : ISyntaxView<Synt
     }
 }
 
-/// <summary>A leaf: token, literal or keyword (not Empty, not an empty List).</summary>
+/// <summary>A leaf: token, literal or keyword (not a null slot, not an empty List).</summary>
 public readonly struct Token(SyntaxTree tree, int index) : ISyntaxView<Token>
 {
     public SyntaxTree Tree { get; } = tree;
@@ -95,6 +100,7 @@ public readonly struct Token(SyntaxTree tree, int index) : ISyntaxView<Token>
 
     public static bool Is(SyntaxTree tree, int index)
     {
+        if (index == SyntaxTree.NoNode) return false;
         int kind = tree.Kind(index);
         return tree.ChildCount(index) == 0 && kind != SyntaxKinds.Empty && kind != SyntaxKinds.List;
     }

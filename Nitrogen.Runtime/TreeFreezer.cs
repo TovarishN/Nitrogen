@@ -34,6 +34,11 @@ internal static class TreeFreezer
                 for (int k = 0; k < count; k++)
                 {
                     int child = a.ChildLog[first + k];
+                    if (child == SyntaxTree.NoNode)
+                    {
+                        slots++;
+                        continue;
+                    }
                     if (a.Kind[child] == SyntaxKinds.Skipped) continue;
                     slots++;
                     Push(a, ref sp, child, -1);
@@ -56,8 +61,9 @@ internal static class TreeFreezer
         var children = Allocate<int>(slots, pooled);
 
         // Preorder copy. Each node reserves one contiguous child slice; its children fill their
-        // slots when they are visited. A Missing node keeps its diagnostic text index in the arena's
-        // ChildStart; a Skipped marker child becomes a repair and flags its parent.
+        // slots when they are visited, and a null slot is written as NoNode without a visit. A
+        // Missing node keeps its diagnostic text index in the arena's ChildStart; a Skipped marker
+        // child becomes a repair and flags its parent.
         var listShapes = new Dictionary<int, TemplateListShape>();
         int next = 0, cursor = 0;
         Push(a, ref sp, root, -1);
@@ -81,7 +87,7 @@ internal static class TreeFreezer
                 for (int k = 0; k < count; k++)
                 {
                     int child = a.ChildLog[first + k];
-                    if (a.Kind[child] != SyntaxKinds.Skipped) continue;
+                    if (child == SyntaxTree.NoNode || a.Kind[child] != SyntaxKinds.Skipped) continue;
                     kept--;
                     flags[n] |= NodeFlags.Skipped;
                     a.AddRepairEntry(new TextSpan(a.Start[child], a.Length[child]), DiagnosticCode.Skipped, a.ChildStart[child]);
@@ -93,6 +99,11 @@ internal static class TreeFreezer
             for (int k = count - 1, position = kept - 1; k >= 0; k--)
             {
                 int child = a.ChildLog[first + k];
+                if (child == SyntaxTree.NoNode)
+                {
+                    children[slice + position--] = SyntaxTree.NoNode;
+                    continue;
+                }
                 if (recovery && a.Kind[child] == SyntaxKinds.Skipped) continue;
                 Push(a, ref sp, child, slice + position--);
             }

@@ -88,6 +88,10 @@ public sealed class LoweringContext(FileSemantics file, Guid snapshotId, Semanti
     public SemanticCheckScope CheckScope { get; } = checkScope;
     public LoweringAdmission Admission { get; } = admission;
     public SourceOrigin Origin(int node) => new(File.Path, SnapshotId, node, File.Tree.Span(node));
+
+    /// <summary>The origin of <paramref name="node"/>'s child in <paramref name="slot"/>; for a null slot, the node's, at the slot's empty span.</summary>
+    internal SourceOrigin SlotOrigin(int node, int slot) => File.Tree.Child(node, slot) is var child && child != SyntaxTree.NoNode
+        ? Origin(child) : new(File.Path, SnapshotId, node, File.Tree.NullSlotSpan(node, slot));
     public void Report(string code, SourceOrigin origin, string message) => Report(code, origin, message, []);
 
     public void Report(string code, SourceOrigin origin, string message, IReadOnlyList<CompositionDiagnosticLocation> related)
@@ -300,7 +304,8 @@ public static class HirLowering
             var current = stack.Pop();
             if ((tree.Flags(current) & NodeFlags.Missing) != 0 || !tree.SkippedTrivia(current).IsEmpty)
                 return true;
-            for (var i = 0; i < tree.ChildCount(current); i++) stack.Push(tree.Child(current, i));
+            for (var i = 0; i < tree.ChildCount(current); i++)
+                if (tree.Child(current, i) is var child && child != SyntaxTree.NoNode) stack.Push(child);
         }
         return false;
     }
@@ -313,7 +318,8 @@ public static class HirLowering
         {
             var node = stack.Pop();
             yield return node;
-            for (var i = tree.ChildCount(node) - 1; i >= 0; i--) stack.Push(tree.Child(node, i));
+            for (var i = tree.ChildCount(node) - 1; i >= 0; i--)
+                if (tree.Child(node, i) is var child && child != SyntaxTree.NoNode) stack.Push(child);
         }
     }
 }

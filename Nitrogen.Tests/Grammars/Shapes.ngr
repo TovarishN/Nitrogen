@@ -1,0 +1,9 @@
+// Tree shapes (compact trees): absent optionals and empty lists are null child slots.
+syntax module Shapes
+{
+  token Name = ['a'..'z']+ except "decl" "int" "public" "static";
+  syntax File = Decls:Decl*;
+  syntax Decl = Mods:Mod* "decl" Name:Name Type:(":" TypeName)? "{" Items:(Name; ",")* "}";
+  syntax Mod = "public" / "static";
+  syntax TypeName = "int" / Name;
+}

@@ -7,9 +7,9 @@ namespace Nitrogen;
 public static class SyntaxKinds
 {
     public const int None = 0;
-    /// <summary>An absent optional element. Zero-length leaf.</summary>
+    /// <summary>Formerly an absent optional element; no longer emitted (an absent optional is a null slot, <see cref="SyntaxTree.NoNode"/>).</summary>
     public const int Empty = 1;
-    /// <summary>A repetition or separated list; children are the items (and separators).</summary>
+    /// <summary>A non-empty repetition or separated list; children are the items (and separators). An empty list is a null slot.</summary>
     public const int List = 2;
     /// <summary>A quoted literal or keyword matched by the grammar.</summary>
     public const int Literal = 3;

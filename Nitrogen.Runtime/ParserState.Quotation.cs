@@ -21,7 +21,7 @@ public unsafe ref partial struct ParserState
     public void CloseTemplateList(string category, int minimumCount, string? separator)
     {
         int node = Close();
-        if (InTemplate)
+        if (InTemplate && node != SyntaxTree.NoNode)
             (Arena.TemplateLists ??= new())[node] = new(category, minimumCount, separator);
     }
 }

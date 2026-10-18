@@ -351,7 +351,7 @@ internal sealed class SemanticsWriter
         return child.Shape switch
         {
             Shape.Plain => $"new(_s, {item})",
-            Shape.Optional => $"_s.Tree.Kind({at}) == global::Nitrogen.SyntaxKinds.Empty ? null : new {child.ItemType}(_s, {item})",
+            Shape.Optional => $"{at} == global::Nitrogen.SyntaxTree.NoNode ? null : new {child.ItemType}(_s, {item})",
             Shape.List => $"new(_s, {at}, 1, {child.Inner})",
             _ => $"new(_s, {at}, 2, {child.Inner})",
         };

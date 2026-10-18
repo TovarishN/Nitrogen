@@ -230,4 +230,68 @@ public sealed class QuotePatternTests
         Assert.Empty(result.Captures);
         Assert.NotEmpty(result.Diagnostics);
     }
+
+    static readonly Language Shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+
+    static bool ShapesMatch(string pattern, string source, IReadOnlyDictionary<string, QuoteHole>? captures = null)
+    {
+        using var compiled = Shapes.CompilePattern("Shapes.Decl", pattern, captures ?? new Dictionary<string, QuoteHole>());
+        Assert.True(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
+        using var input = Shapes.ParseTemplate(source, "Shapes.Decl", new Dictionary<string, string>());
+        Assert.True(input.Success);
+        var result = compiled.Pattern!.Match(new(input.Tree, input.Tree.Root));
+        Assert.Empty(result.Diagnostics);
+        return result.Matched;
+    }
+
+    [Theory]
+    [InlineData("decl a { }", "decl a { }", true)]
+    [InlineData("decl a { }", "decl a : int { }", false)]
+    [InlineData("decl a { }", "decl a { b }", false)]
+    [InlineData("decl a { }", "public decl a { }", false)]
+    [InlineData("decl a : int { }", "decl a { }", false)]
+    [InlineData("public decl a { b }", "decl a { }", false)]
+    [InlineData("public decl a : int { b }", "public decl a : int { b }", true)]
+    public void A_null_slot_matches_only_a_null_slot(string pattern, string source, bool expected) =>
+        Assert.Equal(expected, ShapesMatch(pattern, source));
+
+    [Fact]
+    public void A_scalar_capture_in_an_optional_does_not_match_an_absent_one() =>
+        Assert.False(ShapesMatch("decl a : $T { }", "decl a { }",
+            new Dictionary<string, QuoteHole> { ["T"] = QuoteHole.Node("Shapes.TypeName") }));
+
+    [Theory]
+    [InlineData("decl a { }", 0)]
+    [InlineData("public decl a { }", 1)]
+    [InlineData("public static decl a { }", 2)]
+    public void A_list_capture_matches_an_empty_list_as_no_items(string source, int count)
+    {
+        using var compiled = Shapes.CompilePattern("Shapes.Decl", "..$Mods decl a { }",
+            new Dictionary<string, QuoteHole> { ["Mods"] = QuoteHole.List("Shapes.Mod") });
+        Assert.True(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
+        using var input = Shapes.ParseTemplate(source, "Shapes.Decl", new Dictionary<string, string>());
+        var result = compiled.Pattern!.Match(new(input.Tree, input.Tree.Root));
+        Assert.True(result.Matched);
+        Assert.Equal(count, Assert.IsType<QuoteArgument.Many>(result.Captures["Mods"]).Values.Count);
+    }
+
+    [Fact]
+    public void Instantiating_an_empty_list_capture_makes_the_null_slot_a_parse_makes()
+    {
+        var holes = new Dictionary<string, QuoteHole> { ["Mods"] = QuoteHole.List("Shapes.Mod") };
+        using var quote = Shapes.CompileQuote("Shapes.Decl", "..$Mods decl a { }", holes);
+        Assert.True(quote.Success, string.Join("; ", quote.Diagnostics.Select(d => d.Message)));
+        using var built = quote.Template!.Instantiate(new Dictionary<string, QuoteArgument>
+        {
+            ["Mods"] = QuoteArgument.List([]),
+        });
+        Assert.True(built.Success, string.Join("; ", built.Diagnostics.Select(d => d.Message)));
+        using var parsed = Shapes.ParseTemplate("decl a { }", "Shapes.Decl", new Dictionary<string, string>());
+        Assert.Equal(SyntaxDumper.Dump(parsed.Tree), SyntaxDumper.Dump(built.Tree!));
+        Assert.Equal(parsed.Tree.NodeCount, built.Tree!.NodeCount);
+        Assert.Equal(SyntaxTree.NoNode, built.Tree.Child(built.Tree.Root, 0));
+        // The constructed tree matches a pattern written with null slots.
+        using var pattern = Shapes.CompilePattern("Shapes.Decl", "decl a { }", new Dictionary<string, QuoteHole>());
+        Assert.True(pattern.Pattern!.Match(new(built.Tree, built.Tree.Root)).Matched);
+    }
 }

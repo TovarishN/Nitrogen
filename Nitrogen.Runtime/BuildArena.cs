@@ -4,7 +4,8 @@ namespace Nitrogen;
 /// Parse-time scratch storage, reused across parses on one thread; it grows and never shrinks.
 /// Nodes are struct-of-arrays. A node's children are a contiguous slice of <see cref="ChildLog"/>,
 /// written when the node closes. <see cref="ChildStack"/> holds the finished children of the
-/// frames that are still open.
+/// frames that are still open. A child entry may be <see cref="SyntaxTree.NoNode"/>, a null slot
+/// (absent optional or empty list); readers of child entries skip it.
 /// </summary>
 internal sealed class BuildArena
 {

@@ -152,7 +152,7 @@ public sealed partial class NitrogenLanguageService
                 yield return end;
             }
             for (int child = tree.ChildCount(node) - 1; child >= 0; child--)
-                pending.Push(tree.Child(node, child));
+                if (tree.Child(node, child) is var next && next != SyntaxTree.NoNode) pending.Push(next);
         }
     }
 
