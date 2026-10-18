@@ -3,50 +3,56 @@ namespace Nitrogen;
 /// <summary>
 /// Packrat memo for extensible rules, keyed by <c>(ruleKey, position)</c> and storing
 /// <c>(node, end)</c>, where a negative node means "failed here". Open addressing with linear
-/// probing. A slot is live only if its stamp equals the current generation, so <see cref="Clear"/>
-/// is O(1) and one table serves every parse on a thread without reallocating.
+/// probing over one array of 16-byte entries, grown at three-quarters load. An empty slot holds
+/// <see cref="Empty"/> as its key, which no <c>(ruleKey, position)</c> can produce, so
+/// <see cref="Clear"/> only rewrites keys, and only when something was stored.
 /// </summary>
 internal sealed class MemoTable
 {
     const int InitialCapacity = 256; // power of two
+    internal const double MaxLoad = 0.75;
+    const long Empty = long.MinValue; // both key halves are non-negative, so the sign bit is never set
 
-    long[] _keys = new long[InitialCapacity];
-    int[] _nodes = new int[InitialCapacity];
-    int[] _ends = new int[InitialCapacity];
-    int[] _stamps = new int[InitialCapacity];
-    int _generation = 1;
+    struct Entry
+    {
+        public long Key;
+        public int Node;
+        public int End;
+    }
+
+    Entry[] _entries = NewEntries(InitialCapacity);
     int _count;
 
     public int Count => _count;
 
-    public int Capacity => _keys.Length;
+    public int Capacity => _entries.Length;
 
     public void Clear()
     {
+        if (_count == 0) return;
         _count = 0;
-        if (++_generation == int.MaxValue)
-        {
-            Array.Clear(_stamps);
-            _generation = 1;
-        }
+        var entries = _entries;
+        for (int i = 0; i < entries.Length; i++) entries[i].Key = Empty;
     }
 
     public bool TryGet(int ruleKey, int position, out int node, out int end)
     {
         long key = Key(ruleKey, position);
-        int mask = _keys.Length - 1;
+        var entries = _entries;
+        int mask = entries.Length - 1;
         for (int i = Hash(key) & mask; ; i = (i + 1) & mask)
         {
-            if (_stamps[i] != _generation)
+            ref Entry e = ref entries[i];
+            if (e.Key == key)
+            {
+                node = e.Node;
+                end = e.End;
+                return true;
+            }
+            if (e.Key == Empty)
             {
                 node = end = 0;
                 return false;
-            }
-            if (_keys[i] == key)
-            {
-                node = _nodes[i];
-                end = _ends[i];
-                return true;
             }
         }
     }
@@ -55,34 +61,34 @@ internal sealed class MemoTable
 
     public void Set(int ruleKey, int position, int node, int end)
     {
-        if ((_count + 1) * 2 > _keys.Length) Grow();
-        Insert(Key(ruleKey, position), node, end);
+        if (_count + 1 > _entries.Length * MaxLoad) Grow();
+        Insert(_entries, Key(ruleKey, position), node, end);
     }
 
-    void Insert(long key, int node, int end)
+    void Insert(Entry[] entries, long key, int node, int end)
     {
-        int mask = _keys.Length - 1;
+        int mask = entries.Length - 1;
         int i = Hash(key) & mask;
-        while (_stamps[i] == _generation && _keys[i] != key) i = (i + 1) & mask;
-        if (_stamps[i] != _generation) _count++;
-        _keys[i] = key;
-        _nodes[i] = node;
-        _ends[i] = end;
-        _stamps[i] = _generation;
+        while (entries[i].Key != Empty && entries[i].Key != key) i = (i + 1) & mask;
+        if (entries[i].Key == Empty) _count++;
+        entries[i] = new Entry { Key = key, Node = node, End = end };
     }
 
     void Grow()
     {
-        var (keys, nodes, ends, stamps, generation) = (_keys, _nodes, _ends, _stamps, _generation);
-        int capacity = keys.Length * 2;
-        _keys = new long[capacity];
-        _nodes = new int[capacity];
-        _ends = new int[capacity];
-        _stamps = new int[capacity];
-        _generation = 1;
+        var old = _entries;
+        var entries = NewEntries(old.Length * 2);
         _count = 0;
-        for (int i = 0; i < keys.Length; i++)
-            if (stamps[i] == generation) Insert(keys[i], nodes[i], ends[i]);
+        foreach (var e in old)
+            if (e.Key != Empty) Insert(entries, e.Key, e.Node, e.End);
+        _entries = entries;
+    }
+
+    static Entry[] NewEntries(int capacity)
+    {
+        var entries = new Entry[capacity];
+        for (int i = 0; i < entries.Length; i++) entries[i].Key = Empty;
+        return entries;
     }
 
     static long Key(int ruleKey, int position) => ((long)ruleKey << 32) | (uint)position;

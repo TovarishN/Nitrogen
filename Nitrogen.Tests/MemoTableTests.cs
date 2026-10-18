@@ -69,6 +69,42 @@ public class MemoTableTests
     }
 
     [Fact]
+    public void Capacity_grows_only_past_three_quarters_load()
+    {
+        var memo = new MemoTable();
+        for (int i = 0; i < 300; i++) memo.Set(i % 5, i, i, i);
+        Assert.Equal(512, memo.Capacity);
+    }
+
+    [Fact]
+    public void Clear_forgets_every_entry_and_keeps_capacity()
+    {
+        var memo = new MemoTable();
+        for (int i = 0; i < 1000; i++) memo.Set(i % 7, i, i, i);
+        int capacity = memo.Capacity;
+        memo.Clear();
+        Assert.Equal(0, memo.Count);
+        Assert.Equal(capacity, memo.Capacity);
+        for (int i = 0; i < 1000; i++) Assert.False(memo.TryGet(i % 7, i, out _, out _));
+        memo.Set(0, 0, 1, 2);
+        Assert.True(memo.TryGet(0, 0, out int node, out int end));
+        Assert.Equal((1, 2), (node, end));
+    }
+
+    [Fact]
+    public void Entries_survive_growth()
+    {
+        var memo = new MemoTable();
+        for (int i = 0; i < 5000; i++) memo.Set(i % 11, i, i * 2 + 1, i * 3 + 2);
+        Assert.Equal(5000, memo.Count);
+        for (int i = 0; i < 5000; i++)
+        {
+            Assert.True(memo.TryGet(i % 11, i, out int node, out int end));
+            Assert.Equal((i * 2 + 1, i * 3 + 2), (node, end));
+        }
+    }
+
+    [Fact]
     public void A_failure_with_no_prefix_candidate_is_not_memoized()
     {
         var calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
