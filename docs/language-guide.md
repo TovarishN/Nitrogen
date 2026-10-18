@@ -30,6 +30,25 @@ Names emitted by checked lowering can replace authored file-scope templates usin
 
 For staged expansion, clear the template index before lowering the relevant subtrees, collect declarations from successful typed projection, then publish the complete index and validate the whole file again. Do not publish a partial result after projection fails. Updating an index invalidates binding resolution and project semantic caches; replacing or removing the document discards its derived indexes. Invalid node/span metadata is rejected before any project change. This API does not run domain expansion itself or automatically connect a language's editor service to its projector.
 
+## Alias rules
+
+A syntax rule whose body is one reference or literal, or a choice of references and literals, is an
+alias: `syntax Mod = "public" / "static";`, `syntax TypeName = "int" / Name;`,
+`syntax Statement = Assign / Call;`. An alias produces no node of its own. It parses whichever
+alternative matches and leaves that alternative's node (a `Literal` leaf for a literal) where the alias
+was used, so a tree has no wrapper around a choice of single tokens.
+
+- The typed view of an alias is a `Token` when every alternative is a literal or a token rule, and a
+  `SyntaxNode` otherwise. A rule that references an alias reads it through that view, and a view of the
+  alias's own name does not exist.
+- An alias is a category for templates and quotation holes: a hole of a leaf alias such as
+  `Shapes.Mod` takes a `Literal` leaf whose text is one of its literals.
+- A rule with `declares`, `lowers` or another binding clause, or with semantics, stays a node even when
+  its body is a single literal (`syntax Terminator = ";" lowers Grammar.Terminator();`), because the
+  clause needs a node to bind. An alias of references only with a clause is an error (NGR0117).
+- A missing alternative in a recovered tree is a `Missing` `Literal` leaf for a leaf alias that lists a
+  literal, and a `Missing` error node for other aliases.
+
 ## Typed repetition
 
 `lowers repeat ElementType CountField IteratorField TemplateListField` lowers a checked count and a typed template list into `HirRepeat`. For example:

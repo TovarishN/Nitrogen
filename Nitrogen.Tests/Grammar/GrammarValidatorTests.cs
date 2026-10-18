@@ -183,6 +183,10 @@ public class GrammarValidatorTests
             "syntax module N { using M; syntax V = \"v\" Name:M.Id declares value Name; syntax G = Head:M.Id \"$\" Seq:M.Num dynamic; }"));
     }
 
+    [Fact]
+    public void A_literal_rule_with_a_clause_is_a_node_not_an_alias() =>
+        Assert.Empty(Validate("syntax module M { " + BindingPrelude + " syntax R = \"r\" scope; syntax S = \"s\" / \"t\"; }"));
+
     [Theory]
     [InlineData("syntax R = \"r\" N:Id declares thing N;", GrammarCodes.UnknownSymbolKind)]
     [InlineData("syntax R = \"r\" N:Id declares unit M;", GrammarCodes.UnknownBindingField)]

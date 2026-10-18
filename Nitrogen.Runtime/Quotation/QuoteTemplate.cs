@@ -88,7 +88,7 @@ public sealed class QuoteTemplate
                         continue;
                     }
                     if (!ReferenceEquals(value.Tree.Language, _parsed.Tree.Language) ||
-                        !_parsed.Tree.Language!.AcceptsQuoteNode(hole.Category, value.Tree.Kind(value.Node)))
+                        !_parsed.Tree.Language!.AcceptsQuoteNode(hole.Category, value.Tree, value.Node))
                         diagnostics.Add(new("NQ0004", value.Tree.Span(value.Node), "Source node category or language snapshot does not match.", name));
                     else if (!ValidSource(value.Tree, value.Node))
                         diagnostics.Add(new("NQ0003", value.Tree.Span(value.Node), "Recovered, ambiguous, or template syntax cannot be inserted.", name));

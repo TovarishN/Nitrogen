@@ -59,6 +59,12 @@ public abstract class SyntaxModule
     /// <summary>Syntax categories supported by this generated module.</summary>
     public virtual IReadOnlyList<string> QuoteCategoryNames => [];
 
+    /// <summary>
+    /// Whether the Literal leaf with this text stands in for <paramref name="category"/>, a leaf-choice
+    /// alias of this module that lists literals (such an alias has no node kind of its own).
+    /// </summary>
+    public virtual bool AcceptsQuoteLiteral(string category, ReadOnlySpan<char> text) => false;
+
     /// <summary>Categories that admit a node of this local kind, including aliases.</summary>
     public virtual IReadOnlyList<string> GetQuoteCategories(int localKind) => [];
 

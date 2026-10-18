@@ -34,10 +34,13 @@ internal sealed class SyntaxCodeWriter
         if (EmitModel.IsAlias(rule))
         {
             var alternatives = rule.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { rule.Body };
-            b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s) =>\n        ")
+            // A literal alternative matches where the caller left off, so a start rule skips its leading trivia.
+            bool skips = alternatives.Any(a => a is LiteralExpr);
+            b.Append(skips ? $"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n        s.SkipTrivia();\n        return "
+                    : $"    internal static bool Parse{rule.Name}(ref ParserState s) =>\n        ")
                 .Append($"s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})\n        || ")
                 .Append(string.Join("\n        || ", alternatives.Select(a => Element(a, module, null, 0))))
-                .Append(";\n\n");
+                .Append(skips ? ";\n    }\n\n" : ";\n\n");
             return;
         }
         var elements = Elements(rule.Body);
@@ -394,6 +397,9 @@ internal sealed class SyntaxCodeWriter
             case ReferenceExpr reference:
             {
                 var symbol = _model.Resolve(reference.Name, module, implicitModule);
+                if (symbol.Rule is SyntaxRule { } leaf && EmitModel.IsAlias(leaf) && leaf.Body is ChoiceExpr or LiteralExpr &&
+                    EmitModel.AliasAlternatives(leaf).Any(a => a is LiteralExpr) && _model.IsLeafAlias(leaf, symbol.Module))
+                    return "SyntaxKinds.Literal"; // a leaf-choice alias stands in as a literal
                 if (symbol.Rule is TokenRule || (symbol.Rule is SyntaxRule syntax && !EmitModel.IsAlias(syntax)))
                 {
                     var target = _model.Info(symbol.Module);

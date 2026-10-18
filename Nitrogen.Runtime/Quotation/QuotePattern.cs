@@ -48,7 +48,7 @@ public sealed class QuotePattern
         var language = _parsed.Tree.Language!;
         var invalid = QuotePatternMatcher.Validate(input, language, resolve);
         if (invalid is not null) return invalid;
-        if (!language.AcceptsQuoteNode(_category, input.Tree.Kind(input.Node)))
+        if (!language.AcceptsQuoteNode(_category, input.Tree, input.Node))
             return QuotePatternMatcher.Invalid("NQP0005", "Input category does not match.");
         return new QuotePatternMatcher(_parsed.Tree, _captures, _lists, resolve).Match(input);
     }

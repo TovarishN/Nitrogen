@@ -71,7 +71,7 @@ internal sealed class EmitModel
     static readonly HashSet<string> ReservedNames = new(StringComparer.Ordinal)
     {
         "Instance", "Name", "Id", "KindBase", "Kind", "GetKindName", "Register", "GetRule", "GetBinding", "Builtins", "HasSemantics", "GetSemantics", "Properties", "SymbolProperties", "Fail",
-        "QuoteCategoryNames", "GetQuoteCategories", "IsListSlot", "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "ReferenceEquals",
+        "QuoteCategoryNames", "GetQuoteCategories", "AcceptsQuoteLiteral", "IsListSlot", "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "ReferenceEquals",
     };
 
     readonly Dictionary<string, ModuleInfo> _infos = new(StringComparer.Ordinal);
@@ -111,9 +111,34 @@ internal sealed class EmitModel
         Analysis.Resolve(name, default, from, implicitModule)
         ?? throw new InvalidOperationException($"'{name}' does not resolve in module '{from.Name}'; validate before emitting");
 
-    /// <summary>A syntax rule that is one reference or a choice of references produces no node of its own.</summary>
+    /// <summary>
+    /// A syntax rule that is one reference or literal, or a choice of references and literals,
+    /// produces no node of its own: a literal alternative is a Literal leaf, a reference is its target.
+    /// A rule with literals stays a node when it has clauses or semantics, which need a node to bind.
+    /// </summary>
     public static bool IsAlias(SyntaxRule rule) =>
-        rule.Body is ReferenceExpr || (rule.Body is ChoiceExpr choice && choice.Alternatives.All(a => a is ReferenceExpr));
+        IsReferences(rule.Body) ||
+        (IsLiteralsAndReferences(rule.Body) && rule.Clauses.Count == 0 && rule.Semantics is null);
+
+    static bool IsReferences(Expr body) =>
+        body is ReferenceExpr || (body is ChoiceExpr choice && choice.Alternatives.All(a => a is ReferenceExpr));
+
+    static bool IsLiteralsAndReferences(Expr body) =>
+        IsAliasPart(body) || (body is ChoiceExpr choice && choice.Alternatives.All(IsAliasPart));
+
+    static bool IsAliasPart(Expr expr) => expr is ReferenceExpr or LiteralExpr;
+
+    /// <summary>The alternatives of an alias: its choice's, or its single body.</summary>
+    public static IReadOnlyList<Expr> AliasAlternatives(SyntaxRule rule) =>
+        rule.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { rule.Body };
+
+    /// <summary>
+    /// True for an alias whose every alternative is a literal or a token: it is a token, so its
+    /// view is a <c>Token</c>.
+    /// </summary>
+    public bool IsLeafAlias(SyntaxRule rule, ModuleDecl from, string? implicitModule = null) =>
+        AliasAlternatives(rule).All(a => a is LiteralExpr ||
+            (a is ReferenceExpr reference && Resolve(reference.Name, from, implicitModule).Rule is TokenRule));
 
     public IReadOnlyList<GrammarDiagnostic> Check()
     {

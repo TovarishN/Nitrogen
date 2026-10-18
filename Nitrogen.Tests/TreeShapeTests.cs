@@ -43,12 +43,43 @@ public class TreeShapeTests
     }
 
     [Fact]
+    public void Leaf_choice_rule_has_no_node()
+    {
+        using var result = Shapes.Parse("static decl a : int { }", ShapesModule.File);
+        Assert.True(result.Success);
+        var tree = result.Tree;
+        int decl = DeclNode(tree);
+        int mods = tree.Child(decl, ModsSlot);
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(mods));
+        Assert.Equal("static", tree.GetText(mods).ToString());
+        int type = tree.Child(decl, TypeSlot);
+        Assert.Equal(SyntaxKinds.Group, tree.Kind(type));
+        int typeName = tree.Child(type, 1);
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(typeName));
+        Assert.Equal("int", tree.GetText(typeName).ToString());
+        for (int n = 0; n < tree.NodeCount; n++)
+        {
+            // No Mod or TypeName kind exists in the module any more.
+            string name = SyntaxDumper.KindName(tree.Kind(n), Shapes);
+            Assert.DoesNotContain("Mod", name);
+            Assert.DoesNotContain("TypeName", name);
+        }
+        // The standing-in leaf casts to Token; the removed wrapper's view does not exist.
+        Assert.True(SyntaxView.TryCast<Token>(tree, mods, out var token));
+        Assert.Equal("static", token.ToString());
+        Assert.Equal("int", new SyntaxNode(tree, type).Child(1).ToString());
+        // A leaf-choice alias gets a Token view, so a list of it is a list of tokens.
+        SyntaxList<Token> modifiers = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(tree, decl).Mods;
+        Assert.Equal("static", modifiers[0].ToString());
+    }
+
+    [Fact]
     public void A_present_optional_and_non_empty_lists_keep_their_nodes()
     {
         using var result = Shapes.Parse("public decl a : int { b, c }", ShapesModule.File);
         var tree = result.Tree;
         int decl = DeclNode(tree);
-        Assert.Equal(ShapesKinds.Mod, tree.Kind(tree.Child(decl, ModsSlot))); // one modifier: the slot is its item
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(tree.Child(decl, ModsSlot))); // one modifier: the slot is its item
         Assert.Equal(SyntaxKinds.Group, tree.Kind(tree.Child(decl, TypeSlot)));
         Assert.Equal(SyntaxKinds.List, tree.Kind(tree.Child(decl, ItemsSlot)));
         var view = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(tree, decl);
@@ -66,15 +97,13 @@ public class TreeShapeTests
         int decl = DeclNode(tree);
         Assert.Equal(ShapesKinds.Decl, tree.Kind(decl));
         int mods = tree.Child(decl, ModsSlot);
-        Assert.Equal(ShapesKinds.Mod, tree.Kind(mods));
-        Assert.Equal(SyntaxKinds.Literal, tree.Kind(tree.Child(mods, 0)));
-        Assert.Equal("public", tree.GetText(tree.Child(mods, 0)).ToString());
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(mods)); // Mod is an alias: the slot is the literal
+        Assert.Equal("public", tree.GetText(mods).ToString());
         Assert.Equal(ShapesKinds.Name, tree.Kind(tree.Child(decl, ItemsSlot)));
         // Generic walkers learn the list slots from the language.
         Assert.True(Shapes.IsListSlot(ShapesKinds.Decl, ModsSlot));
         Assert.True(Shapes.IsListSlot(ShapesKinds.Decl, ItemsSlot));
         Assert.False(Shapes.IsListSlot(ShapesKinds.Decl, TypeSlot));
-        Assert.False(Shapes.IsListSlot(ShapesKinds.Mod, 0));
 
         var view = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(tree, decl);
         Assert.Equal(1, view.Mods.Count);
@@ -83,7 +112,7 @@ public class TreeShapeTests
         Assert.Equal("b", view.Items[0].ToString());
         var seen = new List<string>();
         foreach (var item in view.Items) seen.Add(item.ToString());
-        foreach (var mod in view.Mods) seen.Add(new SyntaxNode(tree, mod.Index).ToString());
+        foreach (var mod in view.Mods) seen.Add(mod.ToString());
         Assert.Equal(["b", "public"], seen);
 
         using var two = Shapes.Parse("decl a { b, c }", ShapesModule.File);
@@ -119,8 +148,8 @@ public class TreeShapeTests
         Assert.False(node.Child(2).IsNull);
         Assert.False(SyntaxView.TryCast<Token>(tree, SyntaxTree.NoNode, out _));
         Assert.False(SyntaxView.TryCast<SyntaxNode>(tree, SyntaxTree.NoNode, out _));
-        Assert.False(SyntaxView.TryCast<Nitrogen.Tests.Shapes.TypeNameNode>(tree, SyntaxTree.NoNode, out _));
-        Assert.Throws<InvalidCastException>(() => SyntaxView.Cast<Nitrogen.Tests.Shapes.TypeNameNode>(tree, SyntaxTree.NoNode));
+        Assert.False(SyntaxView.TryCast<Nitrogen.Tests.Shapes.NestNode>(tree, SyntaxTree.NoNode, out _));
+        Assert.Throws<InvalidCastException>(() => SyntaxView.Cast<Nitrogen.Tests.Shapes.NestNode>(tree, SyntaxTree.NoNode));
         Assert.Equal("_", SyntaxDumper.Dump(tree, SyntaxTree.NoNode));
     }
 

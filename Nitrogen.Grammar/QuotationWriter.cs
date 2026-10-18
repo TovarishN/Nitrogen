@@ -258,7 +258,7 @@ internal static class QuotationWriter
         if (owner is ExtensibleRule)
             return analysis.Resolve((implicitModule ?? module.Name) + "." + owner.Name, owner.Span, module, null)!;
         var aliases = analysis.PrimaryRules(module).OfType<SyntaxRule>().Where(EmitModel.IsAlias)
-            .Where(alias => (alias.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { alias.Body })
+            .Where(alias => EmitModel.AliasAlternatives(alias)
                 .Any(item => item is ReferenceExpr reference && reference.Name == owner.Name)).ToList();
         return new(module, aliases.Count == 1 ? aliases[0] : owner);
     }
@@ -287,14 +287,34 @@ internal static class QuotationWriter
         }
         b.Append("        _ => global::System.Array.Empty<string>(),\n    };\n\n");
 
+        // A leaf-choice alias has no kind: each literal it lists is a Literal leaf standing in for it.
+        var literalCategories = categories.Where(c => c.Module.Name == info.Module.Name && Literals(c, new()).Count > 0).ToList();
+        if (literalCategories.Count > 0)
+        {
+            b.Append("    public override bool AcceptsQuoteLiteral(string category, global::System.ReadOnlySpan<char> text) => category switch\n    {\n");
+            foreach (var c in literalCategories)
+                b.Append($"        {CSharpText.Literal(c.Key)} => text is {string.Join(" or ", Literals(c, new()).Select(CSharpText.Literal))},\n");
+            b.Append("        _ => false,\n    };\n\n");
+        }
+
+        HashSet<string> Literals(GrammarSymbol symbol, HashSet<string> visiting)
+        {
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            if (!visiting.Add(symbol.Key) || symbol.Rule is not SyntaxRule { } syntax || !EmitModel.IsAlias(syntax)) return result;
+            foreach (var alternative in EmitModel.AliasAlternatives(syntax))
+                if (alternative is LiteralExpr literal) result.Add(literal.Value);
+                else if (alternative is ReferenceExpr reference)
+                    result.UnionWith(Literals(model.Resolve(reference.Name, symbol.Module, null), new(visiting)));
+            return result;
+        }
+
         HashSet<KindInfo> Members(GrammarSymbol symbol, HashSet<string> visiting)
         {
             var result = new HashSet<KindInfo>();
             if (!visiting.Add(symbol.Key)) return result;
             if (symbol.Rule is SyntaxRule syntax && EmitModel.IsAlias(syntax))
             {
-                var references = syntax.Body is ReferenceExpr one ? new[] { one } : ((ChoiceExpr)syntax.Body).Alternatives.Cast<ReferenceExpr>();
-                foreach (var reference in references)
+                foreach (var reference in EmitModel.AliasAlternatives(syntax).OfType<ReferenceExpr>())
                     result.UnionWith(Members(model.Resolve(reference.Name, symbol.Module, null), new(visiting)));
             }
             else

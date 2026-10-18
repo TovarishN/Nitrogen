@@ -127,7 +127,8 @@ internal sealed class ViewWriter
                 return symbol.Rule switch
                 {
                     TokenRule => "Token",
-                    SyntaxRule syntax when EmitModel.IsAlias(syntax) => "SyntaxNode",
+                    SyntaxRule syntax when EmitModel.IsAlias(syntax) =>
+                        _model.IsLeafAlias(syntax, symbol.Module) ? "Token" : "SyntaxNode",
                     _ => target.TypeRef(_info, symbol.Rule.Name + "Node"),
                 };
             }

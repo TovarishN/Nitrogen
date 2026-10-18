@@ -143,6 +143,15 @@ public class RecoveryParsingTests
         Assert.Equal(new TextSpan(0, 6), result.Tree.Span(decl));
     }
 
+    [Fact]
+    public void A_missing_leaf_alias_stands_in_as_a_literal()
+    {
+        // TypeName is a leaf-choice alias: its Missing node is a Literal, as for a missing keyword.
+        using var result = Shapes.Parse("decl a : { }", ShapesModule.File);
+        Assert.Equal("(File (Decl _ \"decl\" Name:\"a\" (Group \":\" !Literal) \"{\" _ \"}\"))", SyntaxDumper.Dump(result.Tree));
+        Assert.Single(Messages(result));
+    }
+
     [Theory]
     [InlineData("decl a { }")]
     [InlineData("public static decl a : int { b, c } decl d { }")]

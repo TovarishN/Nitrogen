@@ -24,7 +24,7 @@ public sealed class DocumentCheckTests : IDisposable
         var (code, output) = await Run("parse", "--tree", sample);
         Assert.Equal(0, code);
         Assert.Contains("ok", output);
-        Assert.Contains("(R", output);
+        Assert.Contains("\"allowed\"", output); // R is a leaf-choice alias: the tree is its literal, not an (R ...) node
     }
 
     [Theory]

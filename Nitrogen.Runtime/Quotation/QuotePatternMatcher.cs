@@ -55,7 +55,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
             {
                 string name = pattern.GetText(pair.Pattern)[3..].ToString();
                 var items = pair.Items!;
-                if (items.Any(item => !pattern.Language!.AcceptsQuoteNode(contracts[name].Category, item.Tree.Kind(item.Node)))) return Mismatch();
+                if (items.Any(item => !pattern.Language!.AcceptsQuoteNode(contracts[name].Category, item.Tree, item.Node))) return Mismatch();
                 if (_captures.TryGetValue(name, out var previous))
                 {
                     var first = ((QuoteArgument.Many)previous).Values;
@@ -69,7 +69,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
             if (kind == SyntaxKinds.Hole)
             {
                 string name = pattern.GetText(pair.Pattern)[1..].ToString();
-                if (absent || !pattern.Language!.AcceptsQuoteNode(contracts[name].Category, source.Tree.Kind(source.Node))) return Mismatch();
+                if (absent || !pattern.Language!.AcceptsQuoteNode(contracts[name].Category, source.Tree, source.Node)) return Mismatch();
                 if (_captures.TryGetValue(name, out var previous))
                 {
                     if (!Equal(((QuoteArgument.Scalar)previous).Value, source)) return Mismatch();
