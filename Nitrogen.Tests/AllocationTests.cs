@@ -55,7 +55,8 @@ public class AllocationTests
     {
         Measure(Program(50));
 
-        Assert.NotNull(ParseContext.Cached);
+        // A still-alive oversized context from an earlier large parse is preferred and serves too.
+        Assert.True(ParseContext.Cached is not null || ParseContext.HasOversized);
     }
 
     [Fact]
@@ -68,7 +69,25 @@ public class AllocationTests
         }
         Assert.Null(ParseContext.Cached);
 
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        Assert.False(ParseContext.HasOversized, "the oversized scratch survived a full collection");
+
         Measure(Program(50));
         Assert.NotNull(ParseContext.Cached);
+    }
+
+    [Fact]
+    public void Back_to_back_oversized_parses_reuse_the_weakly_held_scratch()
+    {
+        // The first parse grows fresh scratch and allocates the (exact-size) tree; the second
+        // allocates only the tree.
+        string large = Program(10_000);
+        long first = Measure(large);
+        if (!ParseContext.HasOversized) return; // a collection between the two statements freed it
+
+        long second = Measure(large);
+
+        Assert.True(second * 2 < first, $"the second large parse rebuilt its scratch: {second} B after {first} B");
     }
 }
