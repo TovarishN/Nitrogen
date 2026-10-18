@@ -27,8 +27,8 @@ public sealed partial class NitrogenLanguageService
     /// <summary>Expansions with more nodes than this are summarized but not shown or inlined.</summary>
     const long MaxShownExpansionNodes = 10_000;
 
-    /// <summary>Hover text longer than this shows the size only.</summary>
-    const int MaxHoverExpansionLength = 300;
+    /// <summary>A hover shows at most this many lines of an expansion.</summary>
+    const int MaxHoverExpansionLines = 40;
 
     static readonly HashSet<string> s_grammarWords = new(StringComparer.Ordinal)
     {
@@ -93,7 +93,17 @@ public sealed partial class NitrogenLanguageService
         var range = new LineMap(scope.Text).RangeOf(new(site.Call.Span.Start, site.Call.Span.Length));
         if (expansion is null) return new(callText, signature, range, null, null);
         var size = ExpansionSize(expansion);
-        string? text = size.Nodes <= MaxShownExpansionNodes ? GrammarExpressionText.Format(expansion, inlineContext ? site.Level : 0) : null;
+        string? text = null;
+        if (size.Nodes <= MaxShownExpansionNodes)
+        {
+            // Inlined text continues lines under the call's line, indented one step further.
+            int lineStart = scope.Text.LastIndexOf('\n', Math.Max(0, site.Call.Span.Start - 1)) + 1;
+            int indentEnd = lineStart;
+            while (indentEnd < site.Call.Span.Start && scope.Text[indentEnd] is ' ' or '\t') indentEnd++;
+            text = inlineContext
+                ? GrammarExpressionText.Layout(expansion, site.Level, scope.Text[lineStart..indentEnd] + "  ")
+                : GrammarExpressionText.Layout(expansion);
+        }
         return new(callText, signature, range, size, text);
 
         (GrammarCallExpr Call, int Level)? Find(Expr expression, int level)
@@ -178,8 +188,15 @@ public sealed partial class NitrogenLanguageService
         if (GrammarOccurrencesOf(uri) is not { } scope) return null;
         var lines = new LineMap(scope.Text);
         int offset = lines.OffsetOf(position);
-        var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Kind != GrammarNameKind.Rule && o.Span.Start <= offset && offset < o.Span.End);
-        if (found is null) return null;
+        var under = scope.Occurrences.Where(o => o.Path == scope.Path && o.Span.Start <= offset && offset < o.Span.End).ToList();
+        if (under.Any(o => o.Kind == GrammarNameKind.Rule)) return null;
+        var found = under.FirstOrDefault();
+        if (found is null)
+        {
+            // Elsewhere on a call (its arguments, parentheses): the call's expansion.
+            if (CallExpansion(scope, call => call.Span.Start <= offset && offset < call.Span.End) is not { } call) return null;
+            return new HoverInfo($"```ngr\n{call.Signature}\n```\n" + ExpansionMarkdown(call), call.Range);
+        }
         var range = lines.RangeOf(new(found.Span.Start, found.Span.Length));
         string functionIdentity = string.Join(' ', found.Identity.Split(' ').Take(2));
         if (FunctionOf(scope, functionIdentity) is not { } function) return null;
@@ -197,15 +214,22 @@ public sealed partial class NitrogenLanguageService
         var at = new LineMap(scope.Files.First(f => f.Path == function.Path).Text).PositionOf(function.Declaration.Name.Span.Start);
         text.Append($"Grammar function of `{function.Module.Name}` — declared in {FileName(new Uri(function.Path).AbsoluteUri)} line {at.Line + 1}.");
         if (CallExpansion(scope, call => call.Name.Span.Start == found.Span.Start) is { } expansion)
-        {
-            if (expansion.Size is not { } size) text.Append("\n\nThe call does not expand; see its diagnostics.");
-            else
-            {
-                text.Append(CultureInfo.InvariantCulture, $"\n\nExpands to {size.Nodes} nodes, {size.Classes} {(size.Classes == 1 ? "class" : "classes")}, depth {size.Depth}.");
-                if (expansion.Text is { Length: <= MaxHoverExpansionLength } shown) text.Append($"\n```ngr\n{shown}\n```");
-            }
-        }
+            text.Append("\n\n").Append(ExpansionMarkdown(expansion));
         return new HoverInfo(text.ToString(), range);
+    }
+
+    /// <summary>A call's expansion for a hover: its size, then its text up to <see cref="MaxHoverExpansionLines"/> lines.</summary>
+    static string ExpansionMarkdown(GrammarCallExpansion expansion)
+    {
+        if (expansion.Size is not { } size) return "The call does not expand; see its diagnostics.";
+        var text = new StringBuilder();
+        text.Append(CultureInfo.InvariantCulture, $"Expands to {size.Nodes} nodes, {size.Classes} {(size.Classes == 1 ? "class" : "classes")}, depth {size.Depth}");
+        if (expansion.Text is not { } shown) return text.Append(" — too large to show.").ToString();
+        string[] lines = shown.Split('\n');
+        text.Append(":\n```ngr\n").AppendJoin('\n', lines.Take(MaxHoverExpansionLines)).Append("\n```");
+        if (lines.Length > MaxHoverExpansionLines)
+            text.Append(CultureInfo.InvariantCulture, $"\n{lines.Length - MaxHoverExpansionLines} more lines; the inline refactoring's preview shows the whole expansion.");
+        return text.ToString();
     }
 
     /// <summary>Function names as functions, parameters as parameters, <c>let</c> and loop variables as variables, in an open grammar.</summary>
@@ -343,6 +367,67 @@ internal static class GrammarExpressionText
         var text = new StringBuilder();
         Write(text, expression, level);
         return text.ToString();
+    }
+
+    /// <summary>
+    /// <see cref="Format"/>, but a choice that would make its line longer than <paramref name="width"/> is broken into one
+    /// alternative per line, each continuation line starting with <paramref name="indent"/>. A parenthesized choice becomes
+    /// a block whose alternatives are indented under its parentheses.
+    /// </summary>
+    public static string Layout(Expr expression, int level = 0, string indent = "", int width = 80)
+    {
+        var text = new StringBuilder();
+        WriteLaidOut(text, expression, level, indent, width);
+        return text.ToString();
+    }
+
+    static void WriteLaidOut(StringBuilder text, Expr expression, int level, string indent, int width)
+    {
+        string flat = Format(expression, level);
+        if (indent.Length + flat.Length <= width) { text.Append(flat); return; }
+        switch (expression)
+        {
+            case ChoiceExpr { Alternatives.Count: 1 } single: WriteLaidOut(text, single.Alternatives[0], level, indent, width); break;
+            case SequenceExpr { Items.Count: 1 } single: WriteLaidOut(text, single.Items[0], level, indent, width); break;
+            case ChoiceExpr { Alternatives.Count: > 1 } choice when level > 0:
+                text.Append('(');
+                for (int i = 0; i < choice.Alternatives.Count; i++)
+                {
+                    text.Append('\n').Append(indent).Append(i == 0 ? "    " : "  / ");
+                    WriteLaidOut(text, choice.Alternatives[i], 1, indent + "    ", width);
+                }
+                text.Append('\n').Append(indent).Append(')');
+                break;
+            case ChoiceExpr { Alternatives.Count: > 1 } choice:
+                for (int i = 0; i < choice.Alternatives.Count; i++)
+                {
+                    if (i > 0) text.Append('\n').Append(indent).Append("/ ");
+                    WriteLaidOut(text, choice.Alternatives[i], 1, indent + "  ", width);
+                }
+                break;
+            case SequenceExpr { Items.Count: > 1 } sequence:
+                if (level > 1) text.Append('(');
+                for (int i = 0; i < sequence.Items.Count; i++)
+                {
+                    if (i > 0) text.Append(' ');
+                    WriteLaidOut(text, sequence.Items[i], 2, indent, width);
+                }
+                if (level > 1) text.Append(')');
+                break;
+            case LabeledExpr labeled when level <= 2:
+                text.Append(labeled.Label).Append(':');
+                WriteLaidOut(text, labeled.Inner, labeled.Inner is LabeledExpr ? 3 : 2, indent, width);
+                break;
+            case RepeatExpr repeat when level <= 2:
+                WriteLaidOut(text, repeat.Inner, 3, indent, width);
+                text.Append(repeat.Kind switch { RepeatKind.Optional => '?', RepeatKind.ZeroOrMore => '*', _ => '+' });
+                break;
+            case PredicateExpr predicate when level <= 2:
+                text.Append(predicate.Kind == PredicateKind.Not ? '!' : '&');
+                WriteLaidOut(text, predicate.Inner, 3, indent, width);
+                break;
+            default: text.Append(flat); break;
+        }
     }
 
     /// <summary>The level an expression's children are written at.</summary>
