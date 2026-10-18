@@ -17,6 +17,21 @@ public class CalcParsingTests
         return SyntaxDumper.Dump(tree, tree.Child(statement, 0));
     }
 
+    [Fact]
+    public void Tree_text_can_differ_from_parsed_text()
+    {
+        string treeText = new string("x = 1;");
+        using var result = Calc.Parse("x = 1;", CalcModule.Program, treeText);
+        Assert.True(result.Success);
+        Assert.True(ReferenceEquals(result.Tree.Text, treeText));
+        Assert.Throws<ArgumentException>(() => Calc.Parse("x = 1;", CalcModule.Program, "x = 1"));
+
+        // The failure paths keep the tree text too.
+        string bad = new string("1+;");
+        using var failed = Calc.Parse("1+;", CalcModule.Program, bad);
+        Assert.True(ReferenceEquals(failed.Tree.Text, bad));
+    }
+
     [Theory]
     [InlineData("1+2*3", "(Add (Num Number:\"1\") \"+\" (Mul (Num Number:\"2\") \"*\" (Num Number:\"3\")))")]
     [InlineData("1-2-3", "(Sub (Sub (Num Number:\"1\") \"-\" (Num Number:\"2\")) \"-\" (Num Number:\"3\"))")]
