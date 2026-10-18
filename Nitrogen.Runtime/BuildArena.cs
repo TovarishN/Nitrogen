@@ -18,6 +18,9 @@ internal sealed class BuildArena
     public int[] ChildCount = new int[256];
     public int NodeCount;
 
+    /// <summary>Nodes the arena can hold before it grows.</summary>
+    public int NodeCapacity => Kind.Length;
+
     public int[] ChildLog = new int[256];
     public int ChildLogCount;
 

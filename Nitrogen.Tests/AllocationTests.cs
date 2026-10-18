@@ -49,4 +49,26 @@ public class AllocationTests
             $"allocation grows with input: {smallBytes} B for 50 statements, {largeBytes} B for 2000");
         Assert.True(largeBytes < 4096, $"per-parse fixed cost too high: {largeBytes} B");
     }
+
+    [Fact]
+    public void A_small_parse_keeps_its_scratch_for_reuse()
+    {
+        Measure(Program(50));
+
+        Assert.NotNull(ParseContext.Cached);
+    }
+
+    [Fact]
+    public void An_oversized_parse_does_not_keep_its_scratch_on_the_thread()
+    {
+        using (var result = Calc.Parse(Program(10_000), CalcModule.Program))
+        {
+            Assert.True(result.Success);
+            Assert.True(result.Stats.ArenaNodes > ParseContext.RetainedArenaNodes, $"input too small: {result.Stats.ArenaNodes} arena nodes");
+        }
+        Assert.Null(ParseContext.Cached);
+
+        Measure(Program(50));
+        Assert.NotNull(ParseContext.Cached);
+    }
 }
