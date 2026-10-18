@@ -334,6 +334,9 @@ Grammar functions (`function Name(p: Grammar.Int, ...) : Grammar.Rule = ...;`) g
 - **Go to definition, usages, highlighting and rename** work for functions and their parameters, `let` and loop
   variables. Renaming a function updates qualified and imported calls in the other grammars of the scope.
   Rename refuses names that are already used and grammar keywords.
+- **Diagnostics**: the function checks (NGR0150–NGR0159) run on every open grammar, including one that no
+  configured language compiles. Unknown names, wrong argument types or counts, and evaluation errors are
+  reported where they are written.
 - **Built-ins** (`char`, `code`, `upper`, `lower`, `length`): hover shows the signature and what the built-in
   does. Usages and highlighting find every call of it in the grammar scope. Built-ins have no
   declaration to go to and cannot be renamed.

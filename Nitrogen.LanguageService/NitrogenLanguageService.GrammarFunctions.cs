@@ -247,6 +247,21 @@ public sealed partial class NitrogenLanguageService
         return text.ToString();
     }
 
+    /// <summary>
+    /// The grammar function diagnostics (NGR0150–NGR0159) of the modules declared in this grammar, checked and expanded over
+    /// its navigation scope: unknown names, wrong argument types and counts, evaluation errors and limits.
+    /// </summary>
+    IEnumerable<ServiceDiagnostic> GrammarFunctionDiagnostics(string uri)
+    {
+        if (GrammarOccurrencesOf(uri) is not { } scope || scope.Files.FirstOrDefault(f => f.Path == scope.Path) is not { } current) return [];
+        var lines = new LineMap(scope.Text);
+        return GrammarFunctions.Expand(scope.Files.SelectMany(f => f.File.Modules)).Diagnostics
+            .Where(d => current.File.Modules.Any(m => m.Name == d.Module && m.Span.Start <= d.Span.Start && d.Span.Start + d.Span.Length <= m.Span.End))
+            .Select(d => new ServiceDiagnostic(lines.RangeOf(new(d.Span.Start, d.Span.Length)),
+                d.Severity == GrammarSeverity.Error ? ServiceSeverity.Error : ServiceSeverity.Warning, d.Code, d.Message))
+            .ToList();
+    }
+
     /// <summary>The uses in this grammar of the function, variable or built-in at <paramref name="position"/>; declarations are writes.</summary>
     IReadOnlyList<DocumentHighlight> GrammarFunctionHighlights(string uri, DocumentPosition position)
     {

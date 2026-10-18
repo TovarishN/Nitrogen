@@ -113,7 +113,14 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
                     diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal) ? ServiceSeverity.Warning : ServiceSeverity.Error,
                     diagnostic.Code, diagnostic.Message, Related: QuoteHelperRelated(diagnostic.Related)));
         diagnostics.AddRange(LoweringDiagnostics(document, diagnostics));
-        if (!IsEmbedded(uri)) diagnostics.AddRange(GrammarDiagnostics(uri));
+        if (!IsEmbedded(uri))
+        {
+            var compiled = GrammarDiagnostics(uri).ToList();
+            diagnostics.AddRange(compiled);
+            // A grammar no configured language compiles is still checked for its functions; a compiled one reports them already.
+            diagnostics.AddRange(GrammarFunctionDiagnostics(uri).Where(d =>
+                !compiled.Any(c => c.Code == d.Code && c.Message == d.Message && c.Range.Start == d.Range.Start)));
+        }
         if (AssistOf(document) is { } assisted)
             foreach (var diagnostic in document.Language.Assist!.Diagnostics(assisted))
                 diagnostics.Add(new ServiceDiagnostic(document.Lines.RangeOf(diagnostic.Span), diagnostic.Severity, diagnostic.Code, diagnostic.Message));

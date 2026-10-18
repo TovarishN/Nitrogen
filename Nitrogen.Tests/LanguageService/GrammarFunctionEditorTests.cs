@@ -176,6 +176,21 @@ public sealed class GrammarFunctionEditorTests : IDisposable
         Assert.Equal(At(Grammar, "item: Grammar.Rule"), Assert.Single(highlights, h => h.Kind == HighlightKind.Write).Range.Start);
     }
 
+    [Fact]
+    public void An_unconfigured_grammar_reports_its_function_errors_where_they_are_written()
+    {
+        using var clean = Service();
+        Assert.DoesNotContain(clean.Diagnostics(Uri("Demo.ngr")), d => d.Code.StartsWith("NGR015", StringComparison.Ordinal));
+
+        string grammar = Grammar.Replace("[char(48 + d)]", "[char(48 + nope)]", StringComparison.Ordinal);
+        using var service = Service(grammar, "Broken.ngr");
+        var diagnostic = Assert.Single(service.Diagnostics(Uri("Broken.ngr")), d => d.Code.StartsWith("NGR015", StringComparison.Ordinal));
+        Assert.Equal("NGR0150", diagnostic.Code);
+        Assert.Equal(ServiceSeverity.Error, diagnostic.Severity);
+        Assert.Equal("'nope' is not a parameter, a let, a variable or a rule", diagnostic.Message);
+        Assert.Equal(new DocumentRange(At(grammar, "nope"), At(grammar, "nope", 4)), diagnostic.Range);
+    }
+
     // ---- expansion preview ----
 
     [Fact]
