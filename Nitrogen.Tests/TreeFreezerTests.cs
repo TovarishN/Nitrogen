@@ -10,8 +10,10 @@ public unsafe class TreeFreezerTests
     static ParserState State(string text, BuildArena arena) =>
         new(text, arena, new MemoTable(), &StandardTrivia.WhitespaceAndComments);
 
-    [Fact]
-    public void Freeze_renumbers_reachable_nodes_in_preorder()
+    [Theory]
+    [InlineData(TreeFreezer.PooledTreeNodes)]
+    [InlineData(0)] // forces exact-size arrays
+    public void Freeze_renumbers_reachable_nodes_in_preorder(int pooledTreeNodes)
     {
         var a = new BuildArena();
         var s = State("a  b", a);
@@ -24,8 +26,9 @@ public unsafe class TreeFreezerTests
         s.Close();
         int root = s.Close();
 
-        using var tree = TreeFreezer.Freeze(a, root, "a  b", language: null);
+        using var tree = TreeFreezer.Freeze(a, root, "a  b", language: null, pooledTreeNodes);
 
+        Assert.Equal(pooledTreeNodes > 0, tree.IsPooled);
         Assert.Equal(4, tree.NodeCount);
         Assert.Equal(new[] { K1, SyntaxKinds.Literal, K2, SyntaxKinds.Literal },
             Enumerable.Range(0, 4).Select(tree.Kind));
@@ -39,8 +42,10 @@ public unsafe class TreeFreezerTests
         Assert.Equal(new[] { new TextSpan(1, 2) }, tree.Trivia.ToArray());
     }
 
-    [Fact]
-    public void Freeze_records_leading_and_trailing_trivia()
+    [Theory]
+    [InlineData(TreeFreezer.PooledTreeNodes)]
+    [InlineData(0)] // forces exact-size arrays
+    public void Freeze_records_leading_and_trailing_trivia(int pooledTreeNodes)
     {
         var a = new BuildArena();
         var s = State(" a ", a);
@@ -49,13 +54,15 @@ public unsafe class TreeFreezerTests
         s.MatchLiteral("a");
         int root = s.Close();
 
-        using var tree = TreeFreezer.Freeze(a, root, " a ", language: null);
+        using var tree = TreeFreezer.Freeze(a, root, " a ", language: null, pooledTreeNodes);
 
         Assert.Equal(new[] { new TextSpan(0, 1), new TextSpan(2, 1) }, tree.Trivia.ToArray());
     }
 
-    [Fact]
-    public void Freeze_copies_a_shared_node_once_per_occurrence()
+    [Theory]
+    [InlineData(TreeFreezer.PooledTreeNodes)]
+    [InlineData(0)] // forces exact-size arrays
+    public void Freeze_copies_a_shared_node_once_per_occurrence(int pooledTreeNodes)
     {
         var a = new BuildArena();
         a.HasAmbiguity = true; // a hand-built shared subtree, as only ambiguity produces in a real parse
@@ -68,22 +75,24 @@ public unsafe class TreeFreezerTests
         a.PushChild(shared);
         int root = s.Close();
 
-        using var tree = TreeFreezer.Freeze(a, root, "x", language: null);
+        using var tree = TreeFreezer.Freeze(a, root, "x", language: null, pooledTreeNodes);
 
         Assert.Equal(3, tree.NodeCount);
         Assert.NotEqual(tree.Child(0, 0), tree.Child(0, 1));
         Assert.Equal(tree.Span(tree.Child(0, 0)), tree.Span(tree.Child(0, 1)));
     }
 
-    [Fact]
-    public void Child_index_out_of_range_throws()
+    [Theory]
+    [InlineData(TreeFreezer.PooledTreeNodes)]
+    [InlineData(0)] // forces exact-size arrays
+    public void Child_index_out_of_range_throws(int pooledTreeNodes)
     {
         var a = new BuildArena();
         var s = State("x", a);
         s.Open(K1);
         s.MatchLiteral("x");
         int root = s.Close();
-        using var tree = TreeFreezer.Freeze(a, root, "x", language: null);
+        using var tree = TreeFreezer.Freeze(a, root, "x", language: null, pooledTreeNodes);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => tree.Child(0, 1));
         Assert.Throws<ArgumentOutOfRangeException>(() => tree.Kind(2));

@@ -3,9 +3,10 @@ using System.Buffers;
 namespace Nitrogen;
 
 /// <summary>
-/// Immutable concrete syntax tree in preorder struct-of-arrays form over pooled arrays. Node 0 is
-/// the root. The arrays go back to the pool on <see cref="Dispose"/>; any access after that
-/// throws <see cref="ObjectDisposedException"/>.
+/// Immutable concrete syntax tree in preorder struct-of-arrays form. Node 0 is the root. Trees up
+/// to <see cref="TreeFreezer.PooledTreeNodes"/> nodes use pooled arrays that go back to the pool on
+/// <see cref="Dispose"/>; larger trees own exact-size arrays. Any access after disposal throws
+/// <see cref="ObjectDisposedException"/>.
 /// </summary>
 public sealed class SyntaxTree : IDisposable
 {
@@ -13,12 +14,14 @@ public sealed class SyntaxTree : IDisposable
     NodeFlags[]? _flags;
     TextSpan[]? _trivia, _skipped;
     int _triviaCount, _skippedCount;
+    readonly bool _pooled;
 
     internal SyntaxTree(string text, Language? language, int nodeCount,
         int[] kind, int[] start, int[] length, NodeFlags[] flags,
         int[] childStart, int[] childCount, int[] children,
-        TextSpan[] trivia, int triviaCount, TextSpan[] skipped, int skippedCount)
+        TextSpan[] trivia, int triviaCount, TextSpan[] skipped, int skippedCount, bool pooled)
     {
+        _pooled = pooled;
         Text = text;
         Language = language;
         NodeCount = nodeCount;
@@ -48,6 +51,9 @@ public sealed class SyntaxTree : IDisposable
     public int Root => 0;
 
     public bool IsDisposed => _kind is null;
+
+    /// <summary>The arrays are rented from the pool (a small tree) rather than owned at exact size.</summary>
+    internal bool IsPooled => _pooled;
 
     public int Kind(int node)
     {
@@ -115,7 +121,16 @@ public sealed class SyntaxTree : IDisposable
     public void Dispose()
     {
         if (_kind is null) return;
-        ArrayPool<int>.Shared.Return(_kind);
+        if (_pooled) ReturnToPool();
+        _kind = _start = _length = _childStart = _childCount = _children = _parent = null;
+        _flags = null;
+        _trivia = _skipped = null;
+        _triviaCount = _skippedCount = 0;
+    }
+
+    void ReturnToPool()
+    {
+        ArrayPool<int>.Shared.Return(_kind!);
         ArrayPool<int>.Shared.Return(_start!);
         ArrayPool<int>.Shared.Return(_length!);
         ArrayPool<int>.Shared.Return(_childStart!);
@@ -125,10 +140,6 @@ public sealed class SyntaxTree : IDisposable
         ArrayPool<NodeFlags>.Shared.Return(_flags!);
         ArrayPool<TextSpan>.Shared.Return(_trivia!);
         if (_skipped!.Length > 0) ArrayPool<TextSpan>.Shared.Return(_skipped);
-        _kind = _start = _length = _childStart = _childCount = _children = _parent = null;
-        _flags = null;
-        _trivia = _skipped = null;
-        _triviaCount = _skippedCount = 0;
     }
 
     void Check(int node)
@@ -139,7 +150,7 @@ public sealed class SyntaxTree : IDisposable
 
     int[] BuildParents()
     {
-        var parent = ArrayPool<int>.Shared.Rent(NodeCount);
+        var parent = _pooled ? ArrayPool<int>.Shared.Rent(NodeCount) : GC.AllocateUninitializedArray<int>(NodeCount);
         parent[0] = -1;
         for (int n = 0; n < NodeCount; n++)
         {

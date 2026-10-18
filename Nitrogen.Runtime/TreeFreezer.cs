@@ -5,16 +5,24 @@ namespace Nitrogen;
 /// <summary>Compacts the reachable part of a <see cref="BuildArena"/> into a preorder <see cref="SyntaxTree"/>.</summary>
 internal static class TreeFreezer
 {
-    public static SyntaxTree Freeze(BuildArena a, int root, string text, Language? language)
+    /// <summary>
+    /// Trees up to this many nodes live in pooled arrays, so warm parses stay allocation-free.
+    /// Larger trees get exact-size arrays: the pool would round them up to the next power of two
+    /// and keep them after disposal.
+    /// </summary>
+    public const int PooledTreeNodes = 1 << 17;
+
+    public static SyntaxTree Freeze(BuildArena a, int root, string text, Language? language, int pooledTreeNodes = PooledTreeNodes)
     {
         // Without ambiguity or recovery every reachable node occurs once and is kept, so the arena's
         // counts bound the tree and the counting pass is skipped. Candidates under an Ambiguous node
         // can share subtrees (copied once per occurrence), and recovery's Skipped markers are dropped
-        // from the tree; both need the exact count.
+        // from the tree; both need the exact count. So does an exact-size (unpooled) tree, since the
+        // arena also holds nodes discarded by backtracking.
         bool recovery = a.HasRecovery;
         a.RepairEntryCount = 0;
         int nodes, slots, sp = 0;
-        if (a.HasAmbiguity || recovery)
+        if (a.HasAmbiguity || recovery || a.NodeCount > pooledTreeNodes)
         {
             nodes = slots = 0;
             Push(a, ref sp, root, -1);
@@ -38,13 +46,14 @@ internal static class TreeFreezer
             slots = a.ChildLogCount;
         }
 
-        var kind = Rent<int>(nodes);
-        var start = Rent<int>(nodes);
-        var length = Rent<int>(nodes);
-        var flags = Rent<NodeFlags>(nodes);
-        var childStart = Rent<int>(nodes);
-        var childCount = Rent<int>(nodes);
-        var children = Rent<int>(slots);
+        bool pooled = nodes <= pooledTreeNodes;
+        var kind = Allocate<int>(nodes, pooled);
+        var start = Allocate<int>(nodes, pooled);
+        var length = Allocate<int>(nodes, pooled);
+        var flags = Allocate<NodeFlags>(nodes, pooled);
+        var childStart = Allocate<int>(nodes, pooled);
+        var childCount = Allocate<int>(nodes, pooled);
+        var children = Allocate<int>(slots, pooled);
 
         // Preorder copy. Each node reserves one contiguous child slice; its children fill their
         // slots when they are visited. A Missing node keeps its diagnostic text index in the arena's
@@ -93,29 +102,29 @@ internal static class TreeFreezer
             a.AddRepairEntry(new TextSpan(a.TrailingStart, text.Length - a.TrailingStart), DiagnosticCode.ExpectedEndOfInput, -1);
 
         // Trivia: gaps between consecutive non-empty leaves (preorder is text order). Skipped text
-        // is a gap too.
-        var trivia = Rent<TextSpan>(next + 1);
-        int triviaCount = 0, previousEnd = 0;
-        for (int n = 0; n < next; n++)
-        {
-            if (childCount[n] != 0 || length[n] == 0) continue;
-            if (start[n] > previousEnd) trivia[triviaCount++] = new TextSpan(previousEnd, start[n] - previousEnd);
-            previousEnd = Math.Max(previousEnd, start[n] + length[n]);
-        }
-        if (text.Length > previousEnd) trivia[triviaCount++] = new TextSpan(previousEnd, text.Length - previousEnd);
+        // is a gap too. A pooled tree rents the bound; an exact-size one counts the gaps first.
+        var trivia = Allocate<TextSpan>(pooled ? next + 1 : CollectTrivia(null, text, next, start, length, childCount), pooled);
+        int triviaCount = CollectTrivia(trivia, text, next, start, length, childCount);
 
         SortRepairs(a);
         var skipped = Array.Empty<TextSpan>();
         int skippedCount = 0;
         if (recovery)
         {
-            skipped = Rent<TextSpan>(a.RepairEntryCount);
+            int bound = a.RepairEntryCount;
+            if (!pooled)
+            {
+                bound = 0;
+                for (int i = 0; i < a.RepairEntryCount; i++)
+                    if (a.RepairCodes[i] != DiagnosticCode.Missing) bound++;
+            }
+            skipped = Allocate<TextSpan>(bound, pooled);
             for (int i = 0; i < a.RepairEntryCount; i++)
                 if (a.RepairCodes[i] != DiagnosticCode.Missing) skipped[skippedCount++] = a.RepairSpans[i];
         }
 
         return new SyntaxTree(text, language, next, kind, start, length, flags,
-            childStart, childCount, children, trivia, triviaCount, skipped, skippedCount) { TemplateLists = listShapes };
+            childStart, childCount, children, trivia, triviaCount, skipped, skippedCount, pooled) { TemplateLists = listShapes };
     }
 
     public static SyntaxTree ErrorTree(string text, Language? language)
@@ -133,7 +142,29 @@ internal static class TreeFreezer
         childStart[0] = 0;
         childCount[0] = 0;
         return new SyntaxTree(text, language, 1, kind, start, length, flags,
-            childStart, childCount, Rent<int>(1), Rent<TextSpan>(1), 0, Array.Empty<TextSpan>(), 0);
+            childStart, childCount, Rent<int>(1), Rent<TextSpan>(1), 0, Array.Empty<TextSpan>(), 0, pooled: true);
+    }
+
+    /// <summary>Writes the trivia gaps into <paramref name="trivia"/> (when given) and returns their count.</summary>
+    static int CollectTrivia(TextSpan[]? trivia, string text, int nodes, int[] start, int[] length, int[] childCount)
+    {
+        int count = 0, previousEnd = 0;
+        for (int n = 0; n < nodes; n++)
+        {
+            if (childCount[n] != 0 || length[n] == 0) continue;
+            if (start[n] > previousEnd)
+            {
+                if (trivia is not null) trivia[count] = new TextSpan(previousEnd, start[n] - previousEnd);
+                count++;
+            }
+            previousEnd = Math.Max(previousEnd, start[n] + length[n]);
+        }
+        if (text.Length > previousEnd)
+        {
+            if (trivia is not null) trivia[count] = new TextSpan(previousEnd, text.Length - previousEnd);
+            count++;
+        }
+        return count;
     }
 
     /// <summary>Insertion sort of the repair entries by start; there are at most a few hundred.</summary>
@@ -171,4 +202,7 @@ internal static class TreeFreezer
     }
 
     static T[] Rent<T>(int count) => ArrayPool<T>.Shared.Rent(Math.Max(count, 1));
+
+    static T[] Allocate<T>(int count, bool pooled) =>
+        pooled ? Rent<T>(count) : count == 0 ? [] : GC.AllocateUninitializedArray<T>(count);
 }
