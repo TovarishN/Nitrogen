@@ -119,4 +119,35 @@ public class FileBindingTests
         Assert.All(bareBinding.Declarations, d => Assert.Equal(d.Name, Text(bareBinding, d.NameSpan)));
         Assert.Empty(bareBinding.Diagnostics);
     }
+
+    [Theory]
+    [InlineData("anon a;", new[] { "value a" })]
+    [InlineData("anon ;", new string[0])]
+    public void An_optional_declared_name_declares_only_when_present(string text, string[] declarations)
+    {
+        var shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+        using var parsed = shapes.Parse(text, Nitrogen.Tests.Shapes.ShapesModule.Anon);
+        Assert.True(parsed.Success);
+        Assert.Equal(declarations.Length == 0, parsed.Tree.Child(parsed.Tree.Root, 1) == SyntaxTree.NoNode);
+        var binding = FileBinding.Bind("a.shapes", parsed.Tree);
+        // Absent, as with the old Empty leaf: no symbol, no hole, no diagnostic.
+        Assert.Equal(declarations, Declarations(binding));
+        Assert.All(binding.Declarations, d => Assert.Equal(d.Name, Text(binding, d.NameSpan)));
+        Assert.Empty(binding.Holes);
+        Assert.Empty(binding.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("want a;", new[] { "value a" })]
+    [InlineData("want ;", new string[0])]
+    public void An_optional_referenced_name_references_only_when_present(string text, string[] references)
+    {
+        var shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+        using var parsed = shapes.Parse(text, Nitrogen.Tests.Shapes.ShapesModule.Want);
+        Assert.True(parsed.Success);
+        var binding = FileBinding.Bind("a.shapes", parsed.Tree);
+        Assert.Equal(references, References(binding));
+        Assert.Empty(binding.Holes);
+        Assert.Empty(binding.Diagnostics);
+    }
 }
