@@ -46,15 +46,20 @@ public static unsafe class ExtensibleRules
         s.CallPoint = point;
         s.CallFlags = callFlags;
         // A template's hole is a whole prefix result: operators may extend past it, never into it.
-        bool parsed = (s.InTemplate && s.TryHole(point.Decl.QualifiedName)) || ParsePrefix(ref s, point);
+        bool triedCandidate = true;
+        bool parsed = (s.InTemplate && s.TryHole(point.Decl.QualifiedName)) || ParsePrefix(ref s, point, out triedCandidate);
         if (parsed) ParsePostfix(ref s, point, minPrecedence);
         s.CallPoint = callerPoint;
         s.CallFlags = callerFlags;
 
         if (!parsed)
         {
-            s.Memo.Set(ruleKey, start, -1, -1);
-            arena.MemoWrites++;
+            // A failure that ran no candidate is as cheap to rediscover as to look up.
+            if (triedCandidate)
+            {
+                s.Memo.Set(ruleKey, start, -1, -1);
+                arena.MemoWrites++;
+            }
             return false;
         }
         s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position);
@@ -62,14 +67,16 @@ public static unsafe class ExtensibleRules
         return true;
     }
 
-    static bool ParsePrefix(ref ParserState s, ExtensionPoint point)
+    static bool ParsePrefix(ref ParserState s, ExtensionPoint point, out bool triedCandidate)
     {
+        triedCandidate = false;
         int start = s.Position;
         int bucket = ExtensionPoint.Bucket(s.Text, start);
         var candidates = new Candidates { Base = s.Arena.ChildStackCount };
 
         foreach (int index in point.PrefixCandidates(bucket))
         {
+            triedCandidate = true;
             ref readonly var ext = ref point.Prefix[index];
             var mark = s.Mark();
             int repairs = s.Arena.RepairCount;

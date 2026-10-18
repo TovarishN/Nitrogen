@@ -51,6 +51,8 @@ internal sealed class MemoTable
         }
     }
 
+    internal bool Contains(int ruleKey, int position) => TryGet(ruleKey, position, out _, out _);
+
     public void Set(int ruleKey, int position, int node, int end)
     {
         if ((_count + 1) * 2 > _keys.Length) Grow();

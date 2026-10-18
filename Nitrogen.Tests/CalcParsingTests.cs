@@ -51,14 +51,15 @@ public class CalcParsingTests
     public void Memoized_subtree_survives_the_rollback_of_Assign()
     {
         // Assign parses Expr at 0, fails at ';' and rolls back; ExprStatement reuses the memo.
-        // Hits: Expr@0 in ExprStatement, and the failed Expr@4 at end of input.
-        // Misses: Expr@0, Expr(min 10)@2, Expr@4.
+        // Hits: Expr@0 in ExprStatement. (The failed Expr@4 at end of input ran no candidate, so it
+        // is not memoized, so it is a miss each time it is reached, at no cost.)
+        // Misses: Expr@0, Expr(min 10)@2, and Expr@4 twice.
         using var result = Calc.Parse("a+b;", CalcModule.Program);
         Assert.Equal(
             "(Program (List (ExprStatement (Add (Ref Identifier:\"a\") \"+\" (Ref Identifier:\"b\")) \";\")))",
             SyntaxDumper.Dump(result.Tree));
-        Assert.Equal(2, result.Stats.MemoHits);
-        Assert.Equal(3, result.Stats.MemoMisses);
+        Assert.Equal(1, result.Stats.MemoHits);
+        Assert.Equal(4, result.Stats.MemoMisses);
     }
 
     [Fact]

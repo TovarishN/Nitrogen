@@ -1,3 +1,4 @@
+using Nitrogen.Tests.Calc;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -65,5 +66,18 @@ public class MemoTableTests
             Assert.True(memo.TryGet(i % 7, i, out int node, out int end));
             Assert.Equal((i * 2, i * 3), (node, end));
         }
+    }
+
+    [Fact]
+    public void A_failure_with_no_prefix_candidate_is_not_memoized()
+    {
+        var calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
+        using (var result = calc.Parse("x = ;", CalcModule.Program)) Assert.False(result.Success);
+
+        var memo = ParseContext.Cached!.Memo;
+        int ruleKey = CalcModule.Instance.Expr.GlobalId << 10; // minPrecedence 0, no call flags
+        Assert.True(memo.Contains(ruleKey, 0)); // `x` parsed, so successes are still memoized
+        for (int position = 2; position <= 5; position++)
+            Assert.False(memo.Contains(ruleKey, position), $"failure memoized at {position}");
     }
 }
