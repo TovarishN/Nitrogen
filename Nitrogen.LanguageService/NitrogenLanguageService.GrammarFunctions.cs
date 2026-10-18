@@ -30,6 +30,16 @@ public sealed partial class NitrogenLanguageService
     /// <summary>A hover shows at most this many lines of an expansion.</summary>
     const int MaxHoverExpansionLines = 40;
 
+    /// <summary>The signature and meaning of each built-in grammar function (<see cref="GrammarFunctions.IsBuiltin"/>).</summary>
+    static readonly Dictionary<string, (string Signature, string Meaning)> s_builtinDocs = new(StringComparer.Ordinal)
+    {
+        ["char"] = ("char(code: Grammar.Int) : Grammar.Char", "the character with this UTF-16 code."),
+        ["code"] = ("code(c: Grammar.Char) : Grammar.Int", "the UTF-16 code of a character."),
+        ["upper"] = ("upper(c: Grammar.Char) : Grammar.Char", "the character in upper case (invariant culture)."),
+        ["lower"] = ("lower(c: Grammar.Char) : Grammar.Char", "the character in lower case (invariant culture)."),
+        ["length"] = ("length(text: Grammar.Text) : Grammar.Int", "the number of characters in a text."),
+    };
+
     static readonly HashSet<string> s_grammarWords = new(StringComparer.Ordinal)
     {
         "if", "then", "else", "choice", "seq", "let", "where", "in", "or", "and", "not", "function", "syntax", "token",
@@ -198,6 +208,11 @@ public sealed partial class NitrogenLanguageService
             return new HoverInfo($"```ngr\n{call.Signature}\n```\n" + ExpansionMarkdown(call), call.Range);
         }
         var range = lines.RangeOf(new(found.Span.Start, found.Span.Length));
+        if (found.Kind == GrammarNameKind.Builtin)
+        {
+            var (signature, meaning) = s_builtinDocs[scope.Text.Substring(found.Span.Start, found.Span.Length)];
+            return new HoverInfo($"```ngr\n{signature}\n```\nBuilt-in grammar function: {meaning}", range);
+        }
         string functionIdentity = string.Join(' ', found.Identity.Split(' ').Take(2));
         if (FunctionOf(scope, functionIdentity) is not { } function) return null;
         if (found.Kind != GrammarNameKind.Function)
@@ -232,6 +247,19 @@ public sealed partial class NitrogenLanguageService
         return text.ToString();
     }
 
+    /// <summary>The uses in this grammar of the function, variable or built-in at <paramref name="position"/>; declarations are writes.</summary>
+    IReadOnlyList<DocumentHighlight> GrammarFunctionHighlights(string uri, DocumentPosition position)
+    {
+        if (GrammarOccurrencesOf(uri) is not { } scope) return [];
+        var lines = new LineMap(scope.Text);
+        int offset = lines.OffsetOf(position);
+        var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Kind != GrammarNameKind.Rule && o.Span.Start <= offset && offset < o.Span.End);
+        if (found is null) return [];
+        return scope.Occurrences.Where(o => o.Identity == found.Identity && o.Path == scope.Path)
+            .Select(o => new DocumentHighlight(lines.RangeOf(new(o.Span.Start, o.Span.Length)), o.IsDefinition ? HighlightKind.Write : HighlightKind.Read))
+            .Distinct().ToList();
+    }
+
     /// <summary>Function names as functions, parameters as parameters, <c>let</c> and loop variables as variables, in an open grammar.</summary>
     IEnumerable<AssistToken> GrammarFunctionTokens(Document document)
     {
@@ -241,7 +269,7 @@ public sealed partial class NitrogenLanguageService
         var occurrences = CollectGrammarOccurrences([new GrammarScopeFile(document.Uri, document.Text, file)], (_, name) => calls.Add(name));
         return occurrences.Where(o => o.Kind != GrammarNameKind.Rule).Select(o => new AssistToken(new(o.Span.Start, o.Span.Length), o.Kind switch
             {
-                GrammarNameKind.Function => TokenType.Function,
+                GrammarNameKind.Function or GrammarNameKind.Builtin => TokenType.Function,
                 GrammarNameKind.Parameter => TokenType.Parameter,
                 _ => TokenType.Variable,
             }))
@@ -303,6 +331,8 @@ public sealed partial class NitrogenLanguageService
         int offset = new LineMap(scope.Text).OffsetOf(position);
         var found = scope.Occurrences.FirstOrDefault(o => o.Path == scope.Path && o.Kind != GrammarNameKind.Rule && o.Span.Start <= offset && offset < o.Span.End);
         if (found is null) return null;
+        if (found.Kind == GrammarNameKind.Builtin)
+            throw new RenameRefusedException($"'{NameText(scope, found)}' is a built-in grammar function.");
         if (!scope.Occurrences.Any(o => o.Identity == found.Identity && o.IsDefinition))
             throw new RenameRefusedException($"'{NameText(scope, found)}' is not declared in this grammar's scope.");
         return (scope, found);

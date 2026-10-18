@@ -17,8 +17,13 @@ public sealed partial class NitrogenLanguageService
 
     static string FunctionKey(string module, string name) => "function " + module + "." + name;
 
-    /// <summary>What a grammar name names: a rule, a grammar function, or a function's parameter, <c>let</c> or loop variable.</summary>
-    internal enum GrammarNameKind { Rule, Function, Parameter, Variable }
+    /// <summary>
+    /// What a grammar name names: a rule, a grammar function, a function's parameter, <c>let</c> or loop variable, or a
+    /// built-in such as <c>upper</c>, which has uses but no declaration.
+    /// </summary>
+    internal enum GrammarNameKind { Rule, Function, Parameter, Variable, Builtin }
+
+    static string BuiltinKey(string name) => "builtin " + name;
 
     sealed record GrammarRuleOccurrence(string Identity, string Path, GrammarSpan Span, bool IsDefinition, GrammarNameKind Kind = GrammarNameKind.Rule);
 
@@ -203,6 +208,11 @@ public sealed partial class NitrogenLanguageService
                 void Called(NameDecl name)
                 {
                     calls?.Invoke(file.Path, name);
+                    if (GrammarFunctions.IsBuiltin(name.Name))
+                    {
+                        occurrences.Add(new(BuiltinKey(name.Name), file.Path, name.Span, false, GrammarNameKind.Builtin));
+                        return;
+                    }
                     int dot = name.Name.LastIndexOf('.');
                     string? owner = dot >= 0
                         ? name.Name.Substring(0, dot)

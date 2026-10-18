@@ -22,6 +22,9 @@ public static partial class GrammarFunctions
 
     static readonly HashSet<string> s_builtins = new(StringComparer.Ordinal) { "char", "code", "upper", "lower", "length" };
 
+    /// <summary>Whether a call of <paramref name="name"/> is a built-in; no grammar function may take a built-in's name.</summary>
+    public static bool IsBuiltin(string name) => s_builtins.Contains(name);
+
     /// <param name="onExpanded">Called with each call written in a rule body and what it expanded to (null when evaluation failed); editors use it.</param>
     public static GrammarFunctionsResult Expand(IEnumerable<ModuleDecl> modules, Action<GrammarCallExpr, Expr?>? onExpanded = null)
     {

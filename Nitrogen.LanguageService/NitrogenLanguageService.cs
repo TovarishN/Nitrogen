@@ -194,7 +194,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
             return Into(uri, position) is { } inner
                 ? Highlights(inner.Uri, inner.Position).Select(h => h with { Range = OutOf(inner.Uri, h.Range) }).ToList()
                 : [];
-        if (NameAt(uri, position) is not { } name) return [];
+        if (NameAt(uri, position) is not { } name) return GrammarFunctionHighlights(uri, position);
         var highlights = new List<DocumentHighlight>();
         foreach (var symbol in name.Symbols)
         {

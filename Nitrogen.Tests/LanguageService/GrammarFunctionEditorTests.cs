@@ -147,6 +147,35 @@ public sealed class GrammarFunctionEditorTests : IDisposable
         Assert.Contains("does not expand", hover.Markdown);
     }
 
+    [Fact]
+    public void Built_in_calls_have_a_hover_usages_and_highlights_but_no_declaration()
+    {
+        using var service = Service();
+        var at = At(Grammar, "char(48", 1);
+        var hover = service.Hover(Uri("Demo.ngr"), at);
+        Assert.NotNull(hover);
+        Assert.Equal("```ngr\nchar(code: Grammar.Int) : Grammar.Char\n```\nBuilt-in grammar function: the character with this UTF-16 code.", hover.Markdown);
+        Assert.Equal(At(Grammar, "char(48"), hover.Range.Start);
+
+        Assert.Empty(service.Definition(Uri("Demo.ngr"), at));
+        var uses = new[] { At(Grammar, "char(48"), At(Grammar, "char(55"), At(Grammar, "char(87") };
+        Assert.Equal(uses, service.References(Uri("Demo.ngr"), at, includeDeclaration: true).Select(r => r.Range.Start).OrderBy(p => (p.Line, p.Character)).ToArray());
+        Assert.Equal(uses, service.Highlights(Uri("Demo.ngr"), at).Select(h => h.Range.Start).OrderBy(p => (p.Line, p.Character)).ToArray());
+        Assert.All(service.Highlights(Uri("Demo.ngr"), at), h => Assert.Equal(HighlightKind.Read, h.Kind));
+
+        var refused = Assert.Throws<RenameRefusedException>(() => service.PrepareRename(Uri("Demo.ngr"), at));
+        Assert.Contains("'char' is a built-in grammar function", refused.Message);
+    }
+
+    [Fact]
+    public void Highlights_cover_functions_and_variables_with_their_declarations_as_writes()
+    {
+        using var service = Service();
+        var highlights = service.Highlights(Uri("Demo.ngr"), At(Grammar, "item item", 6));
+        Assert.Equal(3, highlights.Count);
+        Assert.Equal(At(Grammar, "item: Grammar.Rule"), Assert.Single(highlights, h => h.Kind == HighlightKind.Write).Range.Start);
+    }
+
     // ---- expansion preview ----
 
     [Fact]
