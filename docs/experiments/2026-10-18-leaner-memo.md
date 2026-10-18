@@ -26,6 +26,10 @@ The target was 10.5 MB or less (half of 20.97 MB); the memo is 6.29 MB, 70% smal
 
 The lookup count is the same (143,104 + 271,808 and 106,800 + 308,112 are both 414,912), but fewer lookups hit and 31% fewer entries are stored, so the plan stores fewer results in the memo. The parse tree is identical (562,525 nodes both ways) and time did not regress (below).
 
+Arena nodes fall from 698,727 to 660,925 because `ParserState.Reset` (`Nitrogen.Runtime/ParserState.cs`, about line 82) reclaims a rolled-back parse's arena nodes only when no memo write happened since the mark. Writing fewer failure entries lets more rollbacks reclaim their nodes, which is safe because a failure entry references no node.
+
+The transient peak during the final `Grow` holds the old array and the new one together: 131,072 slots of 24 bytes plus 262,144 slots of 24 bytes is about 9.4 MB, still under the 10.5 MB target.
+
 ## Warm full parse (BenchmarkDotNet, `--filter '*FullParse*'`, default job, base then perf in the same sitting, nothing else running)
 
 | | Before (mean) | After (mean) | Allocated before | Allocated after |

@@ -52,7 +52,7 @@ public class CalcParsingTests
     {
         // Assign parses Expr at 0, fails at ';' and rolls back; ExprStatement reuses the memo.
         // Hits: Expr@0 in ExprStatement. (The failed Expr@4 at end of input ran no candidate, so it
-        // is not memoized, so it is a miss each time it is reached, at no cost.)
+        // is not memoized, so it is a miss each time it is reached, at the cost of only a bucket lookup.)
         // Misses: Expr@0, Expr(min 10)@2, and Expr@4 twice.
         using var result = Calc.Parse("a+b;", CalcModule.Program);
         Assert.Equal(

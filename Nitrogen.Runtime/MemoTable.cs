@@ -3,7 +3,8 @@ namespace Nitrogen;
 /// <summary>
 /// Packrat memo for extensible rules, keyed by <c>(ruleKey, position)</c> and storing
 /// <c>(node, end)</c>, where a negative node means "failed here". Open addressing with linear
-/// probing over one array of 20-byte entries, grown at three-quarters load. A slot is live only
+/// probing over one array of 24-byte entries (20 bytes of fields, padded to the <c>long</c> key's
+/// 8-byte alignment), grown at three-quarters load. A slot is live only
 /// if its stamp equals the current generation, so <see cref="Clear"/> is O(1) however large the
 /// table has grown and one table serves every parse on a thread without reallocating.
 /// </summary>

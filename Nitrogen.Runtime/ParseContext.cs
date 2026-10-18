@@ -11,7 +11,7 @@ internal sealed class ParseContext
     /// <summary>Largest arena node capacity kept for reuse (about 3.3 MB of node arrays).</summary>
     public const int RetainedArenaNodes = 1 << 17;
 
-    /// <summary>Largest memo capacity kept for reuse (about 5.2 MB of slots).</summary>
+    /// <summary>Largest memo capacity kept for reuse (about 6.3 MB of slots).</summary>
     public const int RetainedMemoSlots = 1 << 18;
 
     [ThreadStatic] static ParseContext? t_cached;
