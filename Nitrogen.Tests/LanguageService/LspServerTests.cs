@@ -167,6 +167,43 @@ public class LspServerTests
     }
 
     [Fact]
+    public void An_escaped_drive_colon_is_decoded()
+    {
+        using var message = LspServer.DecodeDriveColons(JsonDocument.Parse("""{"uri":"file:///c%3A/w/a%20b.ngr","other":"file:///x%3A"}"""));
+        Assert.Equal("file:///c:/w/a%20b.ngr", message.RootElement.GetProperty("uri").GetString());
+        Assert.Equal("file:///x%3A", message.RootElement.GetProperty("other").GetString());
+    }
+
+    [Fact]
+    public async Task Grammar_definition_works_for_a_uri_with_an_escaped_drive_colon()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        string root = Directory.CreateTempSubdirectory("nitrogen-drive-").FullName;
+        try
+        {
+            const string grammar = "syntax module M {\n  syntax A = B;\n  syntax B = \"b\";\n}\n";
+            string path = Path.Combine(root, "M.ngr");
+            File.WriteAllText(path, grammar);
+            // As VS Code sends it: file:///c%3A/...
+            string uri = "file:///" + char.ToLowerInvariant(path[0]) + "%3A" + new Uri(path).AbsoluteUri["file:///c:".Length..];
+            using var service = new NitrogenLanguageService(Nitrogen.Cli.LspCommand.Registry());
+            var (_, messages, log) = await Session(service, Initialize, DidOpen(uri, 1, grammar),
+                "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"textDocument/definition\",\"params\":{\"textDocument\":{\"uri\":\"" + uri
+                + "\"},\"position\":{\"line\":1,\"character\":13}}}",
+                Shutdown, Exit);
+
+            var response = messages.Single(m => m.TryGetProperty("id", out var id) && id.GetInt32() == 2);
+            Assert.False(response.TryGetProperty("error", out _), response.GetRawText() + log);
+            var target = Assert.Single(response.GetProperty("result").EnumerateArray());
+            Assert.Equal(2, target.GetProperty("range").GetProperty("start").GetProperty("line").GetInt32());
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Completion_over_the_protocol()
     {
         using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());

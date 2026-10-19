@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using System.Text.RegularExpressions;
 using System.Threading.Channels;
 
 namespace Nitrogen.LanguageService.Lsp;
@@ -95,6 +96,20 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
         }
     }
 
+    static readonly Regex s_escapedDriveColon = new(@"""file:///([A-Za-z])%3[Aa]/", RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// VS Code escapes a Windows drive's colon (<c>file:///c%3A/x</c>), which <see cref="Uri.LocalPath"/> keeps as
+    /// <c>/c:/x</c>, no path at all; unescaped, the URI maps to <c>c:\x</c> and matches the URIs the service builds from paths.
+    /// </summary>
+    internal static JsonDocument DecodeDriveColons(JsonDocument message)
+    {
+        string text = message.RootElement.GetRawText();
+        if (!s_escapedDriveColon.IsMatch(text)) return message;
+        message.Dispose();
+        return JsonDocument.Parse(s_escapedDriveColon.Replace(text, @"""file:///$1:/"));
+    }
+
     /// <summary>Reads messages into the queue as they arrive; completes it at the end of input or when reading fails.</summary>
     async Task ReadAllAsync(ChannelWriter<JsonDocument> queue, CancellationToken cancel)
     {
@@ -104,7 +119,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                 lock (_gate)
                 {
                     _idle.Reset();
-                    queue.TryWrite(message);
+                    queue.TryWrite(DecodeDriveColons(message));
                 }
         }
         catch (Exception error) when (error is not OperationCanceledException)
