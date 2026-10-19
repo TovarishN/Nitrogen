@@ -27,7 +27,13 @@ public static class SyntaxKinds
 
     public const int ListHole = 9;
 
-    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole", "ListHole"];
+    /// <summary>
+    /// A reparse's stand-in for a subtree reused from the previous tree: an arena marker only, which the freeze
+    /// expands into a copy of that subtree; never in a frozen tree.
+    /// </summary>
+    public const int Graft = 10;
+
+    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole", "ListHole", "Graft"];
 
     public static int ModuleOf(int kind) => kind >>> 16;
 

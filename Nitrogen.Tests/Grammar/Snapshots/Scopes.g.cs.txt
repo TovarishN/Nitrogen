@@ -225,6 +225,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseFile(ref ParserState s)
     {
         if (!s.Tracking) return ParseFile__(ref s);
+        if (s.TryReuse(ScopesKinds.File)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseFile__(ref s);
         s.EndRule(ScopesKinds.File, at, outer, parsed);
@@ -245,6 +246,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseUnit(ref ParserState s)
     {
         if (!s.Tracking) return ParseUnit__(ref s);
+        if (s.TryReuse(ScopesKinds.Unit)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseUnit__(ref s);
         s.EndRule(ScopesKinds.Unit, at, outer, parsed);
@@ -349,6 +351,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseSequential(ref ParserState s)
     {
         if (!s.Tracking) return ParseSequential__(ref s);
+        if (s.TryReuse(ScopesKinds.Sequential)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseSequential__(ref s);
         s.EndRule(ScopesKinds.Sequential, at, outer, parsed);
@@ -457,6 +460,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseSequentialExport(ref ParserState s)
     {
         if (!s.Tracking) return ParseSequentialExport__(ref s);
+        if (s.TryReuse(ScopesKinds.SequentialExport)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseSequentialExport__(ref s);
         s.EndRule(ScopesKinds.SequentialExport, at, outer, parsed);
@@ -565,6 +569,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseGlobal(ref ParserState s)
     {
         if (!s.Tracking) return ParseGlobal__(ref s);
+        if (s.TryReuse(ScopesKinds.Global)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseGlobal__(ref s);
         s.EndRule(ScopesKinds.Global, at, outer, parsed);
@@ -621,6 +626,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseGlobalGen(ref ParserState s)
     {
         if (!s.Tracking) return ParseGlobalGen__(ref s);
+        if (s.TryReuse(ScopesKinds.GlobalGen)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseGlobalGen__(ref s);
         s.EndRule(ScopesKinds.GlobalGen, at, outer, parsed);
@@ -677,6 +683,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseLet(ref ParserState s)
     {
         if (!s.Tracking) return ParseLet__(ref s);
+        if (s.TryReuse(ScopesKinds.Let)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseLet__(ref s);
         s.EndRule(ScopesKinds.Let, at, outer, parsed);
@@ -785,6 +792,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseUse(ref ParserState s)
     {
         if (!s.Tracking) return ParseUse__(ref s);
+        if (s.TryReuse(ScopesKinds.Use)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseUse__(ref s);
         s.EndRule(ScopesKinds.Use, at, outer, parsed);
@@ -841,6 +849,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseBlock(ref ParserState s)
     {
         if (!s.Tracking) return ParseBlock__(ref s);
+        if (s.TryReuse(ScopesKinds.Block)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseBlock__(ref s);
         s.EndRule(ScopesKinds.Block, at, outer, parsed);
@@ -905,6 +914,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseGen(ref ParserState s)
     {
         if (!s.Tracking) return ParseGen__(ref s);
+        if (s.TryReuse(ScopesKinds.Gen)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseGen__(ref s);
         s.EndRule(ScopesKinds.Gen, at, outer, parsed);
@@ -961,6 +971,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     internal static bool ParseGenName(ref ParserState s)
     {
         if (!s.Tracking) return ParseGenName__(ref s);
+        if (s.TryReuse(ScopesKinds.GenName)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseGenName__(ref s);
         s.EndRule(ScopesKinds.GenName, at, outer, parsed);

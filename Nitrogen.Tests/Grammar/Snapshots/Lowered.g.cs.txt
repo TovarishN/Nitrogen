@@ -197,6 +197,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseFile(ref ParserState s)
     {
         if (!s.Tracking) return ParseFile__(ref s);
+        if (s.TryReuse(LoweredKinds.File)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseFile__(ref s);
         s.EndRule(LoweredKinds.File, at, outer, parsed);
@@ -224,6 +225,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseInput(ref ParserState s)
     {
         if (!s.Tracking) return ParseInput__(ref s);
+        if (s.TryReuse(LoweredKinds.Input)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseInput__(ref s);
         s.EndRule(LoweredKinds.Input, at, outer, parsed);
@@ -332,6 +334,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseFixed(ref ParserState s)
     {
         if (!s.Tracking) return ParseFixed__(ref s);
+        if (s.TryReuse(LoweredKinds.Fixed)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseFixed__(ref s);
         s.EndRule(LoweredKinds.Fixed, at, outer, parsed);
@@ -388,6 +391,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParsePlain(ref ParserState s)
     {
         if (!s.Tracking) return ParsePlain__(ref s);
+        if (s.TryReuse(LoweredKinds.Plain)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParsePlain__(ref s);
         s.EndRule(LoweredKinds.Plain, at, outer, parsed);
@@ -444,6 +448,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseStatement(ref ParserState s)
     {
         if (!s.Tracking) return ParseStatement__(ref s);
+        if (s.TryReuse(LoweredKinds.Statement)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseStatement__(ref s);
         s.EndRule(LoweredKinds.Statement, at, outer, parsed);
@@ -488,6 +493,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseAdd(ref ParserState s)
     {
         if (!s.Tracking) return ParseAdd__(ref s);
+        if (s.TryReuse(LoweredKinds.Add)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseAdd__(ref s);
         s.EndRule(LoweredKinds.Add, at, outer, parsed);
@@ -632,6 +638,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseTurn(ref ParserState s)
     {
         if (!s.Tracking) return ParseTurn__(ref s);
+        if (s.TryReuse(LoweredKinds.Turn)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseTurn__(ref s);
         s.EndRule(LoweredKinds.Turn, at, outer, parsed);
@@ -711,6 +718,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseWrap(ref ParserState s)
     {
         if (!s.Tracking) return ParseWrap__(ref s);
+        if (s.TryReuse(LoweredKinds.Wrap)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseWrap__(ref s);
         s.EndRule(LoweredKinds.Wrap, at, outer, parsed);
@@ -790,6 +798,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseNum(ref ParserState s)
     {
         if (!s.Tracking) return ParseNum__(ref s);
+        if (s.TryReuse(LoweredKinds.Num)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseNum__(ref s);
         s.EndRule(LoweredKinds.Num, at, outer, parsed);
@@ -810,6 +819,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
     internal static bool ParseRef(ref ParserState s)
     {
         if (!s.Tracking) return ParseRef__(ref s);
+        if (s.TryReuse(LoweredKinds.Ref)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseRef__(ref s);
         s.EndRule(LoweredKinds.Ref, at, outer, parsed);

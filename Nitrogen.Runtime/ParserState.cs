@@ -116,6 +116,37 @@ public unsafe ref partial struct ParserState
         return examined;
     }
 
+    /// <summary>A reparse's previous result and edits; null in any other parse.</summary>
+    internal ReuseContext? Reuse { get; init; }
+
+    /// <summary>
+    /// In a reparse, reuses the previous result of <paramref name="rule"/> called at this position when what it
+    /// examined lies outside every edit: pushes a graft for its subtree, moves past it and records it. Generated
+    /// rules try this first.
+    /// </summary>
+    public bool TryReuse(long rule) => Reuse is not null && TryReuse(rule, out _);
+
+    internal bool TryReuse(long rule, out int examined)
+    {
+        examined = 0;
+        var reuse = Reuse!;
+        int position = Position;
+        if (!reuse.TryMapToOld(position, out int old)) return false;
+        int i = reuse.Table.Find(rule, old);
+        if (i < 0) return false;
+        var entry = reuse.Table[i];
+        if (reuse.Touches(entry.Start, entry.ExaminedEnd)) return false;
+        int delta = position - old;
+        var a = Arena;
+        int graft = a.NewGraft(entry.Node, delta, entry.Start, entry.End);
+        a.PushChild(graft);
+        Position = entry.End + delta;
+        examined = entry.ExaminedEnd + delta;
+        Reads.Read(examined - 1);
+        a.AddRecord(new ReuseRecord(rule, position, Position, examined, graft));
+        return true;
+    }
+
     /// <summary>Ends a tracked rule call started at <paramref name="start"/>: a success records the rule's result for reuse.</summary>
     public void EndRule(long rule, int start, int outer, bool parsed)
     {

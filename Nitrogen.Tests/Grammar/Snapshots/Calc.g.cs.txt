@@ -124,6 +124,7 @@ public sealed unsafe class CalcModule : SyntaxModule
     internal static bool ParseProgram(ref ParserState s)
     {
         if (!s.Tracking) return ParseProgram__(ref s);
+        if (s.TryReuse(CalcKinds.Program)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseProgram__(ref s);
         s.EndRule(CalcKinds.Program, at, outer, parsed);
@@ -149,6 +150,7 @@ public sealed unsafe class CalcModule : SyntaxModule
     internal static bool ParseAssign(ref ParserState s)
     {
         if (!s.Tracking) return ParseAssign__(ref s);
+        if (s.TryReuse(CalcKinds.Assign)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseAssign__(ref s);
         s.EndRule(CalcKinds.Assign, at, outer, parsed);
@@ -175,6 +177,7 @@ public sealed unsafe class CalcModule : SyntaxModule
     internal static bool ParseExprStatement(ref ParserState s)
     {
         if (!s.Tracking) return ParseExprStatement__(ref s);
+        if (s.TryReuse(CalcKinds.ExprStatement)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseExprStatement__(ref s);
         s.EndRule(CalcKinds.ExprStatement, at, outer, parsed);

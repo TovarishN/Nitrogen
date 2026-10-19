@@ -155,7 +155,44 @@ public sealed unsafe partial class Language
         return result;
     }
 
-    ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false)
+    /// <summary>
+    /// Parses <paramref name="text"/>, an edit of <paramref name="previous"/>'s text by <paramref name="changes"/>
+    /// (old-text coordinates, sorted by start, non-overlapping), reusing every subtree of <paramref name="previous"/>
+    /// whose parse examined no edited text. The result equals a full parse of <paramref name="text"/>, is incremental
+    /// itself, and is independent of <paramref name="previous"/>: either may be disposed first. Only a successful fast
+    /// pass reuses; a text with errors is parsed whole.
+    /// </summary>
+    /// <exception cref="ObjectDisposedException"><paramref name="previous"/> is disposed.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="previous"/> is not incremental or comes from another Language, or the changes are unsorted,
+    /// overlapping, out of range, or do not turn the old text's length into <paramref name="text"/>'s.
+    /// </exception>
+    public ParseResult Reparse(ParseResult previous, string text, ReadOnlySpan<TextChange> changes, string? treeText = null)
+    {
+        ArgumentNullException.ThrowIfNull(previous);
+        ArgumentNullException.ThrowIfNull(text);
+        if (previous.Tree.IsDisposed) throw new ObjectDisposedException(nameof(ParseResult));
+        if (previous.Reuse is null) throw new ArgumentException("The previous result is not incremental; parse it with ParseIncremental.", nameof(previous));
+        if (!ReferenceEquals(previous.Tree.Language, this)) throw new ArgumentException("The previous result comes from another Language.", nameof(previous));
+        if (treeText is not null && treeText.Length != text.Length)
+            throw new ArgumentException("The tree text must be as long as the parsed text.", nameof(treeText));
+        int oldLength = previous.Tree.Text.Length, length = oldLength, end = 0;
+        foreach (var change in changes)
+        {
+            if (change.Start < end || change.OldLength < 0 || change.NewLength < 0 || change.Start + change.OldLength > oldLength)
+                throw new ArgumentException("Changes must be sorted, non-overlapping and within the old text.", nameof(changes));
+            end = change.Start + change.OldLength;
+            length += change.NewLength - change.OldLength;
+        }
+        if (length != text.Length)
+            throw new ArgumentException($"The changes turn a {oldLength}-character text into {length} characters, not {text.Length}.", nameof(text));
+        var reuse = new ReuseContext(previous.Tree, previous.Reuse, changes.ToArray());
+        var result = Parse(text, previous.StartRule, recoverOnly: false, treeText, incremental: true, reuse);
+        result.StartRule = previous.StartRule;
+        return result;
+    }
+
+    ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false, ReuseContext? reuse = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         treeText ??= text;
@@ -166,13 +203,14 @@ public sealed unsafe partial class Language
             var failure = FirstFailure.None;
             if (!recoverOnly)
             {
-                if (Run(text, start, context, recovering: false, tracking: incremental))
+                if (Run(text, start, context, recovering: false, tracking: incremental, reuse: reuse))
                 {
                     if (!incremental)
                         return ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this), arena);
                     var map = new int[arena.NodeCount];
                     var frozen = ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this, arenaToTree: map), arena);
-                    frozen.Reuse = ReuseTable.From(arena, map);
+                    frozen.Reuse = ReuseTable.From(arena, map, reuse?.Table);
+                    frozen.Stats = frozen.Stats with { ReusedNodes = arena.ReusedNodes };
                     return frozen;
                 }
                 failure = ParseResult.CaptureFailure(arena);
@@ -301,7 +339,8 @@ public sealed unsafe partial class Language
     static bool ParseTemplateStart(ref ParserState s) => s.ParseExtensible(s.TemplateStart!, 0);
 
     bool Run(string text, Rule start, ParseContext context, bool recovering,
-        IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null, bool tracking = false)
+        IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null, bool tracking = false,
+        ReuseContext? reuse = null)
     {
         var arena = context.Arena;
         arena.Clear();
@@ -309,8 +348,10 @@ public sealed unsafe partial class Language
         arena.Recovering = recovering;
         // Only a plain fast pass records reuse data: recovery repairs and template holes depend on more than the text.
         arena.Tracking = tracking && !recovering && holes is null;
+        if (!arena.Tracking) reuse = null;
+        arena.GraftSource = reuse?.Tree;
         arena.CallFlagMask = recovering ? 3 : 0;
-        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart };
+        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart, Reuse = reuse };
         if (holes is not null) state.SkipTrivia();
         var parse = start.Parse;
         if (!parse(ref state)) return false;

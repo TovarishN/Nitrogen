@@ -48,6 +48,7 @@ internal sealed class SyntaxCodeWriter
         // reparse can reuse it; a plain parse goes straight to the body.
         b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n")
             .Append($"        if (!s.Tracking) return Parse{rule.Name}__(ref s);\n")
+            .Append($"        if (s.TryReuse({_info.KindsName}.{CSharpText.Identifier(rule.Name)})) return true;\n")
             .Append("        int at = s.Position, outer = s.BeginExamined();\n")
             .Append($"        bool parsed = Parse{rule.Name}__(ref s);\n")
             .Append($"        s.EndRule({_info.KindsName}.{CSharpText.Identifier(rule.Name)}, at, outer, parsed);\n")

@@ -69,6 +69,50 @@ public sealed class SyntaxTree : IDisposable
     /// <summary>The arrays are rented from the pool (a small tree) rather than owned at exact size.</summary>
     internal bool IsPooled => _pooled;
 
+    /// <summary>One past the last node of <paramref name="node"/>'s subtree, which is contiguous in preorder.</summary>
+    internal int SubtreeEnd(int node)
+    {
+        Check(node);
+        while (true)
+        {
+            int last = SyntaxTree.NoNode;
+            for (int k = _childStart![node + 1] - 1; k >= _childStart[node]; k--)
+                if (_children![k] != NoNode)
+                {
+                    last = _children[k];
+                    break;
+                }
+            if (last == NoNode) return node + 1;
+            node = last;
+        }
+    }
+
+    /// <summary>The first child slot of <paramref name="node"/> (<paramref name="node"/> may be <see cref="NodeCount"/>, the end sentinel).</summary>
+    internal int ChildStart(int node) => _childStart![node];
+
+    /// <summary>
+    /// Copies the preorder block <paramref name="graft"/> into a tree being frozen at node <paramref name="to"/> and
+    /// slot <paramref name="toSlot"/>: rows keep their packed kinds (the same Language's dense ids), positions move
+    /// by its delta, and child indices move with the block, except null slots.
+    /// </summary>
+    internal void CopyBlock(in Graft graft, int to, int toSlot, ushort[] kind, int[] start, int[] length, int[] childStart, int[] children)
+    {
+        int root = graft.Root, size = graft.Size;
+        Array.Copy(_kind!, root, kind, to, size);
+        Array.Copy(_length!, root, length, to, size);
+        int posDelta = graft.PosDelta, slotDelta = toSlot - graft.SlotStart, indexDelta = to - root;
+        for (int j = 0; j < size; j++)
+        {
+            start[to + j] = _start![root + j] + posDelta;
+            childStart[to + j] = _childStart![root + j] + slotDelta;
+        }
+        for (int k = graft.SlotStart; k < graft.SlotEnd; k++)
+        {
+            int child = _children![k];
+            children[k + slotDelta] = child == NoNode ? NoNode : child + indexDelta;
+        }
+    }
+
     public int Kind(int node)
     {
         Check(node);

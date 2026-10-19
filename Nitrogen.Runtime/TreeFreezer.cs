@@ -25,7 +25,7 @@ internal static class TreeFreezer
         bool recovery = a.HasRecovery;
         a.RepairEntryCount = 0;
         int nodes, slots, sp = 0;
-        if (a.HasAmbiguity || recovery || a.NodeCount > pooledTreeNodes)
+        if (a.HasAmbiguity || recovery || a.NodeCount + a.GraftExtraNodes > pooledTreeNodes)
         {
             nodes = slots = 0;
             Push(a, ref sp, root, -1);
@@ -33,6 +33,13 @@ internal static class TreeFreezer
             {
                 int n = a.ScratchNode[--sp];
                 nodes++;
+                if (a.Kind[n] == SyntaxKinds.Graft)
+                {
+                    var graft = a.Grafts[n];
+                    nodes += graft.Size - 1;
+                    slots += graft.SlotEnd - graft.SlotStart;
+                    continue;
+                }
                 int count = a.ChildCount[n], first = a.ChildStart[n];
                 for (int k = 0; k < count; k++)
                 {
@@ -50,8 +57,8 @@ internal static class TreeFreezer
         }
         else
         {
-            nodes = a.NodeCount;
-            slots = a.ChildLogCount;
+            nodes = a.NodeCount + a.GraftExtraNodes;
+            slots = a.ChildLogCount + a.GraftExtraSlots;
         }
 
         bool pooled = nodes <= pooledTreeNodes;
@@ -76,6 +83,17 @@ internal static class TreeFreezer
             int old = a.ScratchNode[sp], slot = a.ScratchSlot[sp];
             int n = next++;
             if (arenaToTree is not null && arenaToTree[old] < 0) arenaToTree[old] = n;
+            if (a.Kind[old] == SyntaxKinds.Graft)
+            {
+                // A reused subtree: copy its block from the previous tree; its rows and slots are already complete.
+                var graft = a.Grafts[old];
+                if (slot >= 0) children[slot] = n;
+                a.GraftSource!.CopyBlock(graft, n, cursor, kind, start, length, childStart, children);
+                next = n + graft.Size;
+                cursor += graft.SlotEnd - graft.SlotStart;
+                a.ReusedNodes += graft.Size;
+                continue;
+            }
             if (a.TemplateLists?.TryGetValue(old, out var shape) == true) listShapes[n] = shape;
             kind[n] = DenseKindTable.Pack(kinds.DenseKind(a.Kind[old]), a.Flags[old]);
             start[n] = a.Start[old];

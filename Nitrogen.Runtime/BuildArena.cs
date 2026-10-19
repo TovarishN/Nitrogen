@@ -28,6 +28,18 @@ internal sealed class BuildArena
     public ReuseRecord[] Records = [];
     public int RecordCount;
 
+    /// <summary>A reparse's previous tree, which <see cref="SyntaxKinds.Graft"/> nodes copy from.</summary>
+    public SyntaxTree? GraftSource;
+
+    /// <summary>Each graft's block in <see cref="GraftSource"/>, by arena node.</summary>
+    public readonly Dictionary<int, Graft> Grafts = new();
+
+    /// <summary>Nodes and child slots the grafts add beyond their own arena node: with the arena's counts, a bound on the tree.</summary>
+    public int GraftExtraNodes, GraftExtraSlots;
+
+    /// <summary>Tree nodes the last freeze copied from <see cref="GraftSource"/>.</summary>
+    public int ReusedNodes;
+
     /// <summary>Nodes the arena can hold before it grows.</summary>
     public int NodeCapacity => Kind.Length;
 
@@ -101,6 +113,9 @@ internal sealed class BuildArena
     {
         TemplateLists?.Clear();
         NodeCount = ChildLogCount = ChildStackCount = FrameCount = RecordCount = 0;
+        GraftSource = null;
+        if (Grafts.Count > 0) Grafts.Clear();
+        GraftExtraNodes = GraftExtraSlots = ReusedNodes = 0;
         MemoWrites = MemoHits = MemoMisses = 0;
         FurthestPosition = -1;
         ExpectedCount = 0;
@@ -126,6 +141,23 @@ internal sealed class BuildArena
         ChildStart[n] = childStart;
         ChildCount[n] = childCount;
         return n;
+    }
+
+    /// <summary>
+    /// Pushes a graft for the previous tree's node <paramref name="oldNode"/>, moved by <paramref name="posDelta"/>,
+    /// and returns its arena node. <paramref name="entryStart"/>..<paramref name="entryEnd"/> is the old call's range.
+    /// </summary>
+    public int NewGraft(int oldNode, int posDelta, int entryStart, int entryEnd)
+    {
+        var tree = GraftSource!;
+        var span = tree.Span(oldNode);
+        int end = tree.SubtreeEnd(oldNode);
+        int slotStart = tree.ChildStart(oldNode), slotEnd = tree.ChildStart(end);
+        int node = NewNode(SyntaxKinds.Graft, span.Start + posDelta, span.Length, NodeFlags.None, oldNode, 0);
+        Grafts[node] = new Graft(oldNode, end - oldNode, slotStart, slotEnd, posDelta, entryStart, entryEnd);
+        GraftExtraNodes += end - oldNode - 1;
+        GraftExtraSlots += slotEnd - slotStart;
+        return node;
     }
 
     public void AddRecord(in ReuseRecord record)
@@ -216,3 +248,10 @@ internal sealed class BuildArena
         Array.Resize(ref ChildCount, capacity);
     }
 }
+
+/// <summary>
+/// A grafted block of the previous tree: <c>[Root, Root + Size)</c> in preorder, its child slots
+/// <c>[SlotStart, SlotEnd)</c>, how far positions move, and the old call's range (for carrying its inner
+/// reuse entries over).
+/// </summary>
+internal readonly record struct Graft(int Root, int Size, int SlotStart, int SlotEnd, int PosDelta, int EntryStart, int EntryEnd);

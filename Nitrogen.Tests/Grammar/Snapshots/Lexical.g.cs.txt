@@ -165,6 +165,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
     internal static bool ParseDocument(ref ParserState s)
     {
         if (!s.Tracking) return ParseDocument__(ref s);
+        if (s.TryReuse(LexicalKinds.Document)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseDocument__(ref s);
         s.EndRule(LexicalKinds.Document, at, outer, parsed);
@@ -214,6 +215,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
     internal static bool ParseBlock(ref ParserState s)
     {
         if (!s.Tracking) return ParseBlock__(ref s);
+        if (s.TryReuse(LexicalKinds.Block)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseBlock__(ref s);
         s.EndRule(LexicalKinds.Block, at, outer, parsed);
@@ -255,6 +257,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
     internal static bool ParsePick(ref ParserState s)
     {
         if (!s.Tracking) return ParsePick__(ref s);
+        if (s.TryReuse(LexicalKinds.Pick)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParsePick__(ref s);
         s.EndRule(LexicalKinds.Pick, at, outer, parsed);
@@ -300,6 +303,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
     internal static bool ParseTagged(ref ParserState s)
     {
         if (!s.Tracking) return ParseTagged__(ref s);
+        if (s.TryReuse(LexicalKinds.Tagged)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseTagged__(ref s);
         s.EndRule(LexicalKinds.Tagged, at, outer, parsed);

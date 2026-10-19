@@ -42,6 +42,12 @@ public static unsafe class ExtensibleRules
             return true;
         }
         arena.MemoMisses++;
+        if (s.Reuse is not null && s.TryReuse(ReuseRecord.ExtensibleTag | (uint)ruleKey, out int reusedExamined))
+        {
+            s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position, reusedExamined);
+            arena.MemoWrites++;
+            return true;
+        }
         int outer = arena.Tracking ? s.BeginExamined() : 0;
 
         var callerPoint = s.CallPoint;

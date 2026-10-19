@@ -73,4 +73,161 @@ public class IncrementalTests
             if (i > 0) Assert.True(table[i - 1].Start <= e.Start, "entries are sorted by start");
         }
     }
+
+    /// <summary>Applies edits given in old-text coordinates (sorted, non-overlapping) and returns the new text and the changes.</summary>
+    internal static (string Text, TextChange[] Changes) Edit(string old, params (int Start, int OldLength, string New)[] edits)
+    {
+        var text = new System.Text.StringBuilder();
+        int at = 0;
+        foreach (var e in edits)
+        {
+            text.Append(old, at, e.Start - at).Append(e.New);
+            at = e.Start + e.OldLength;
+        }
+        text.Append(old, at, old.Length - at);
+        return (text.ToString(), edits.Select(e => new TextChange(e.Start, e.OldLength, e.New.Length)).ToArray());
+    }
+
+    static ParseResult Reparse(string grammar, string old, out string text, params (int Start, int OldLength, string New)[] edits)
+    {
+        var (language, start) = Grammar(grammar);
+        using var previous = language.ParseIncremental(old, start);
+        (text, var changes) = Edit(old, edits);
+        return language.Reparse(previous, text, changes);
+    }
+
+    public static TheoryData<string, string, int, int, string> Edits => new()
+    {
+        { "calc", CalcProgram(20), 0, 0, "q = 1;\n" },                 // insert at the start
+        { "calc", CalcProgram(20), 200, 3, "zz" },                      // replace in the middle
+        { "calc", CalcProgram(20), CalcProgram(20).Length, 0, "y = 2;" }, // append at the end
+        { "calc", CalcProgram(20), 30, 1, "" },                         // delete one character
+        { "calc", "f;\n", 1, 1, "(1);" },                               // lookahead into the edit
+        { "calc", "a;\nb;\n", 3, 0, "c;\n" },                           // insert at an item's start
+        { "calc", "a;\nb;\n", 2, 0, "c;\n" },                           // insert at an item's end
+        { "recovery", "item a { x = 1; }\nitem b { y = 2; }", 9, 1, "w" },
+        { "recovery", "item a { x = 1; }\nitem b { y = 2; }", 17, 0, " item c { }" },
+        { "shapes", "public static decl a : int { b, c }\ndecl d { }", 30, 0, ", e" },
+        { "shapes", "public static decl a : int { b, c }\ndecl d { }", 21, 6, "" },
+        { "shapes", "decl a { }", 0, 0, "public " },
+    };
+
+    [Theory]
+    [MemberData(nameof(Edits))]
+    public void Reparse_equals_full_parse_after_edit(string grammar, string old, int start, int length, string replacement)
+    {
+        using var reparsed = Reparse(grammar, old, out string text, (start, length, replacement));
+        var (language, rule) = Grammar(grammar);
+        using var full = language.Parse(text, rule);
+
+        TreeAssert.Same(full, reparsed);
+        Assert.True(reparsed.IsIncremental);
+    }
+
+    [Fact]
+    public void Untouched_items_are_reused()
+    {
+        string old = CalcProgram(200);
+        int middle = old.IndexOf("x100 = a*(b+100)", StringComparison.Ordinal) + "x100 = a*(b+".Length;
+
+        using var reparsed = Reparse("calc", old, out string text, (middle, 3, "7"));
+
+        using var full = Calc.Parse(text, CalcModule.Program);
+        TreeAssert.Same(full, reparsed);
+        Assert.True(reparsed.Stats.ReusedNodes >= 0.9 * reparsed.Tree.NodeCount,
+            $"{reparsed.Stats.ReusedNodes} of {reparsed.Tree.NodeCount} reused");
+    }
+
+    [Fact]
+    public void Insert_at_node_start_is_not_swallowed()
+    {
+        using var reparsed = Reparse("calc", "a;\nb;\n", out string text, (3, 0, "c+"));
+
+        Assert.Equal("a;\nc+b;\n", text);
+        using var full = Calc.Parse(text, CalcModule.Program);
+        TreeAssert.Same(full, reparsed);
+    }
+
+    [Fact]
+    public void Lookahead_into_the_edit_prevents_reuse()
+    {
+        // Expr "f" ends at 1 but examined the ';' at 1; replacing it makes "f" a call.
+        using var reparsed = Reparse("calc", "f;\n", out string text, (1, 1, "(1);"));
+
+        using var full = Calc.Parse(text, CalcModule.Program);
+        TreeAssert.Same(full, reparsed);
+        Assert.Equal(0, reparsed.Stats.ReusedNodes);
+    }
+
+    [Fact]
+    public void Bad_changes_throw()
+    {
+        using var previous = Calc.ParseIncremental("a;b;c;", CalcModule.Program);
+
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "a;b;c;", [new(4, 0, 0), new(2, 0, 0)]));   // unsorted
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "a;b;", [new(0, 2, 0), new(1, 1, 0)]));     // overlapping
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "a;b;c;", [new(7, 0, 0)]));                // out of range
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "a;b;c;x", [new(0, 1, 1)]));               // wrong new length
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "a;b;c;", [new(0, -1, 0)]));              // negative length
+    }
+
+    [Fact]
+    public void Previous_from_another_language_throws()
+    {
+        var other = new LanguageBuilder().Add(CalcModule.Instance).Build();
+        using var previous = other.ParseIncremental("a;", CalcModule.Program);
+
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "b;", [new(0, 1, 1)]));
+    }
+
+    [Fact]
+    public void Plain_previous_throws()
+    {
+        using var previous = Calc.Parse("a;", CalcModule.Program);
+
+        Assert.Throws<ArgumentException>(() => Calc.Reparse(previous, "b;", [new(0, 1, 1)]));
+    }
+
+    [Fact]
+    public void Disposed_previous_throws()
+    {
+        var previous = Calc.ParseIncremental("a;", CalcModule.Program);
+        previous.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => Calc.Reparse(previous, "b;", [new(0, 1, 1)]));
+    }
+
+    [Fact]
+    public void Results_are_independent()
+    {
+        string old = CalcProgram(10);
+        var previous = Calc.ParseIncremental(old, CalcModule.Program);
+        var (text, changes) = Edit(old, (5, 1, "9"));
+        var reparsed = Calc.Reparse(previous, text, changes);
+        string expected = SyntaxDumper.Dump(reparsed.Tree);
+
+        previous.Dispose();
+        Assert.Equal(expected, SyntaxDumper.Dump(reparsed.Tree));
+        var again = Calc.Reparse(reparsed, text + "z;", [new(text.Length, 0, 2)]);
+        reparsed.Dispose();
+        using var full = Calc.Parse(text + "z;", CalcModule.Program);
+        TreeAssert.Same(full, again);
+        again.Dispose();
+    }
+
+    [Fact]
+    public void Reparse_of_a_reparse_reuses_inside_grafts()
+    {
+        string old = CalcProgram(100);
+        using var first = Calc.ParseIncremental(old, CalcModule.Program);
+        var (second, c1) = Edit(old, (old.IndexOf("x10 ", StringComparison.Ordinal), 3, "y10"));
+        using var middle = Calc.Reparse(first, second, c1);
+        var (third, c2) = Edit(second, (second.IndexOf("x90 ", StringComparison.Ordinal), 3, "y90"));
+
+        using var last = Calc.Reparse(middle, third, c2);
+
+        using var full = Calc.Parse(third, CalcModule.Program);
+        TreeAssert.Same(full, last);
+        Assert.True(last.Stats.ReusedNodes >= 0.9 * last.Tree.NodeCount, $"{last.Stats.ReusedNodes} of {last.Tree.NodeCount}");
+    }
 }

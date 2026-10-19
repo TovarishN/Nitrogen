@@ -88,6 +88,7 @@ public sealed unsafe class MiniModule : SyntaxModule
     internal static bool ParsePair(ref ParserState s)
     {
         if (!s.Tracking) return ParsePair__(ref s);
+        if (s.TryReuse(MiniKinds.Pair)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParsePair__(ref s);
         s.EndRule(MiniKinds.Pair, at, outer, parsed);
@@ -149,6 +150,7 @@ public sealed unsafe class MiniModule : SyntaxModule
     internal static bool ParseAb(ref ParserState s)
     {
         if (!s.Tracking) return ParseAb__(ref s);
+        if (s.TryReuse(MiniKinds.Ab)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseAb__(ref s);
         s.EndRule(MiniKinds.Ab, at, outer, parsed);
@@ -173,6 +175,7 @@ public sealed unsafe class MiniModule : SyntaxModule
     internal static bool ParseAc(ref ParserState s)
     {
         if (!s.Tracking) return ParseAc__(ref s);
+        if (s.TryReuse(MiniKinds.Ac)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseAc__(ref s);
         s.EndRule(MiniKinds.Ac, at, outer, parsed);
@@ -211,6 +214,7 @@ public sealed unsafe class MiniModule : SyntaxModule
     internal static bool ParseIf(ref ParserState s)
     {
         if (!s.Tracking) return ParseIf__(ref s);
+        if (s.TryReuse(MiniKinds.If)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseIf__(ref s);
         s.EndRule(MiniKinds.If, at, outer, parsed);
@@ -249,6 +253,7 @@ public sealed unsafe class MiniModule : SyntaxModule
     internal static bool ParseMaybe(ref ParserState s)
     {
         if (!s.Tracking) return ParseMaybe__(ref s);
+        if (s.TryReuse(MiniKinds.Maybe)) return true;
         int at = s.Position, outer = s.BeginExamined();
         bool parsed = ParseMaybe__(ref s);
         s.EndRule(MiniKinds.Maybe, at, outer, parsed);

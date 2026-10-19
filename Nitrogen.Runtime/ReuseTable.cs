@@ -24,7 +24,12 @@ internal sealed class ReuseTable
     /// The table of a tracked parse just frozen: the arena's records whose nodes made it into the tree, with
     /// <paramref name="arenaToTree"/> mapping arena nodes to tree indices (-1 for nodes the tree dropped).
     /// </summary>
-    public static ReuseTable From(BuildArena arena, int[] arenaToTree)
+    /// <remarks>
+    /// A reparse also carries over <paramref name="previous"/>'s entries inside each grafted block, moved with it:
+    /// what they examined lies inside what the block's own call examined, which no edit touched, so the next reparse
+    /// can reuse inside a block reused this time.
+    /// </remarks>
+    public static ReuseTable From(BuildArena arena, int[] arenaToTree, ReuseTable? previous = null)
     {
         var entries = new List<ReuseRecord>(arena.RecordCount);
         for (int i = 0; i < arena.RecordCount; i++)
@@ -33,19 +38,35 @@ internal sealed class ReuseTable
             int node = (uint)r.Node < (uint)arenaToTree.Length ? arenaToTree[r.Node] : -1;
             if (node >= 0) entries.Add(r with { Node = node });
         }
+        if (previous is not null)
+        {
+            foreach (var (arenaNode, graft) in arena.Grafts)
+            {
+                int to = arenaToTree[arenaNode];
+                if (to < 0) continue;
+                int indexDelta = to - graft.Root, posDelta = graft.PosDelta;
+                for (int i = previous.FirstAtOrAfter(graft.EntryStart); i < previous.Count && previous[i].Start <= graft.EntryEnd; i++)
+                {
+                    var e = previous[i];
+                    if (e.Node < graft.Root || e.Node >= graft.Root + graft.Size) continue;
+                    entries.Add(new ReuseRecord(e.Key, e.Start + posDelta, e.End + posDelta, e.ExaminedEnd + posDelta, e.Node + indexDelta));
+                }
+            }
+        }
         return new ReuseTable(Sorted(entries));
     }
 
     static ReuseRecord[] Sorted(List<ReuseRecord> entries)
     {
         var array = entries.ToArray();
-        // Stable by start; a rule recorded twice at one start (a rollback that kept its nodes) keeps the last.
+        // By start only: entries for one rule at one start (a rollback that kept its nodes, a carried-over copy)
+        // describe the same parse of the same text, so any of them may be reused.
         Array.Sort(array, (x, y) => x.Start.CompareTo(y.Start));
         return array;
     }
 
-    /// <summary>The index of the entry for <paramref name="key"/> at <paramref name="start"/>, or -1.</summary>
-    public int Find(long key, int start)
+    /// <summary>The index of the first entry starting at or after <paramref name="start"/>.</summary>
+    public int FirstAtOrAfter(int start)
     {
         int lo = 0, hi = _entries.Length;
         while (lo < hi)
@@ -54,8 +75,14 @@ internal sealed class ReuseTable
             if (_entries[mid].Start < start) lo = mid + 1;
             else hi = mid;
         }
+        return lo;
+    }
+
+    /// <summary>The index of the entry for <paramref name="key"/> at <paramref name="start"/>, or -1.</summary>
+    public int Find(long key, int start)
+    {
         int found = -1;
-        for (int i = lo; i < _entries.Length && _entries[i].Start == start; i++)
+        for (int i = FirstAtOrAfter(start); i < _entries.Length && _entries[i].Start == start; i++)
             if (_entries[i].Key == key) found = i;
         return found;
     }
