@@ -9,7 +9,8 @@ public class ViewTests
     static readonly Language Calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
     static readonly Language Mini = new LanguageBuilder().Add(MiniModule.Instance).Build();
 
-    static int CallNode(SyntaxTree tree) => tree.Child(tree.Child(tree.Child(0, 0), 0), 0);
+    // Program's one statement is its Statements slot (a one-item list is its item).
+    static int CallNode(SyntaxTree tree) => tree.Child(tree.Child(0, 0), 0);
 
     [Fact]
     public void Typed_views_navigate_labeled_children()
@@ -60,6 +61,24 @@ public class ViewTests
     }
 
     [Fact]
+    public void A_one_item_list_view_reads_the_item_in_the_slot()
+    {
+        using var result = Calc.Parse("f(1);", CalcModule.Program);
+        var tree = result.Tree;
+        int callNode = CallNode(tree);
+        var call = SyntaxView.Cast<CallExpr>(tree, callNode);
+        Assert.Equal(1, call.Args.Count);
+        Assert.Equal(0, call.Args.SeparatorCount);
+        Assert.Equal(tree.Child(callNode, 2), call.Args[0].Index);
+        Assert.True(SyntaxView.TryCast<NumExpr>(tree, call.Args[0].Index, out var one));
+        Assert.Equal("1", one.Number.ToString());
+        var seen = new List<string>();
+        foreach (var arg in call.Args) seen.Add(arg.As<SyntaxNode>().ToString());
+        Assert.Equal(["1"], seen);
+        Assert.Equal(callNode, new SyntaxNode(tree, call.Args[0].Index).Parent.Index);
+    }
+
+    [Fact]
     public void Cast_to_the_wrong_view_throws()
     {
         using var result = Calc.Parse("f(1);", CalcModule.Program);
@@ -85,10 +104,48 @@ public class ViewTests
     }
 
     [Fact]
+    public void Generated_views_reject_a_null_slot()
+    {
+        using var result = Calc.Parse("f(1);", CalcModule.Program);
+        var tree = result.Tree;
+        Assert.False(NumExpr.Is(tree, SyntaxTree.NoNode));
+        Assert.False(ExprNode.Is(tree, SyntaxTree.NoNode));
+        Assert.False(SyntaxView.TryCast<ExprNode>(tree, SyntaxTree.NoNode, out _));
+        Assert.True(ExprNode.Is(tree, tree.Child(CallNode(tree), 2)));
+    }
+
+    [Fact]
     public void Token_view_rejects_interior_nodes()
     {
         using var result = Calc.Parse("f(1);", CalcModule.Program);
         Assert.False(Token.Is(result.Tree, 0));
         Assert.True(Token.Is(result.Tree, result.Tree.Child(CallNode(result.Tree), 0)));
+    }
+
+    [Fact]
+    public void A_transparent_alternative_casts_to_its_standing_in_node()
+    {
+        var shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+        using var result = shapes.Parse("{ var a ; }", Nitrogen.Tests.Shapes.ShapesModule.Block);
+        var tree = result.Tree;
+        var stmts = SyntaxView.Cast<Nitrogen.Tests.Shapes.BlockNode>(tree, tree.Root).Stmts;
+        Assert.Equal(2, stmts.Count);
+
+        // The extension point's union view reaches the Var that stands in for Plain.
+        Nitrogen.Tests.Shapes.StmtNode first = stmts[0];
+        Assert.True(SyntaxView.TryCast<Nitrogen.Tests.Shapes.VarNode>(tree, first.Index, out var variable));
+        Assert.Equal("a", variable.Name.ToString());
+        Assert.Equal("a", first.As<Nitrogen.Tests.Shapes.VarNode>().Name.ToString());
+        Assert.False(SyntaxView.TryCast<Nitrogen.Tests.Shapes.WrappedTie>(tree, first.Index, out _));
+        Assert.Throws<InvalidCastException>(() => first.As<Nitrogen.Tests.Shapes.WrappedTie>());
+
+        // The ";" alternative stands in as a Literal leaf.
+        Assert.True(SyntaxView.TryCast<Token>(tree, stmts[1].Index, out var semicolon));
+        Assert.Equal(";", semicolon.ToString());
+        Assert.False(SyntaxView.TryCast<Nitrogen.Tests.Shapes.VarNode>(tree, stmts[1].Index, out _));
+
+        // The removed wrapper has no view type to cast to.
+        Assert.Null(typeof(Nitrogen.Tests.Shapes.BlockNode).Assembly.GetType("Nitrogen.Tests.Shapes.PlainStmt"));
+        Assert.NotNull(typeof(Nitrogen.Tests.Shapes.BlockNode).Assembly.GetType("Nitrogen.Tests.Shapes.WrappedTie"));
     }
 }

@@ -59,6 +59,13 @@ public sealed unsafe class LexicalModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        8 => slot is 0,
+        9 => slot is 1,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lexical.Document", "Lexical.Item", "Lexical.Block", "Lexical.Pick", "Lexical.Tagged" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -83,21 +90,51 @@ public sealed unsafe class LexicalModule : SyntaxModule
         return false;
     }
 
-    internal static int MatchComment(ReadOnlySpan<char> text, int position) =>
-        T1(text, position);
+    internal static int MatchComment(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchComment(text, position, ref reads);
+    }
 
-    internal static int MatchText(ReadOnlySpan<char> text, int position) =>
-        T4(text, position);
+    internal static int MatchComment<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T1(text, position, ref reads);
 
-    internal static int MatchHex(ReadOnlySpan<char> text, int position) =>
-        T8(text, position);
+    internal static int MatchText(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchText(text, position, ref reads);
+    }
 
-    internal static int MatchDigits(ReadOnlySpan<char> text, int position) =>
-        T11(text, position);
+    internal static int MatchText<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T4(text, position, ref reads);
+
+    internal static int MatchHex(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchHex(text, position, ref reads);
+    }
+
+    internal static int MatchHex<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T8(text, position, ref reads);
+
+    internal static int MatchDigits(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchDigits(text, position, ref reads);
+    }
+
+    internal static int MatchDigits<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T11(text, position, ref reads);
 
     internal static int MatchWord(ReadOnlySpan<char> text, int position)
     {
-        int end = T14(text, position);
+        var reads = default(NoReads);
+        return MatchWord(text, position, ref reads);
+    }
+
+    internal static int MatchWord<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads
+    {
+        int end = T14(text, position, ref reads);
         return end < 0 || IsReservedWord(text.Slice(position, end - position)) ? -1 : end;
     }
 
@@ -107,13 +144,35 @@ public sealed unsafe class LexicalModule : SyntaxModule
         _ => false,
     };
 
-    internal static int MatchSigned(ReadOnlySpan<char> text, int position) =>
-        T16(text, position);
+    internal static int MatchSigned(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchSigned(text, position, ref reads);
+    }
 
-    internal static int MatchUnicode(ReadOnlySpan<char> text, int position) =>
-        T19(text, position);
+    internal static int MatchSigned<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T16(text, position, ref reads);
+
+    internal static int MatchUnicode(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchUnicode(text, position, ref reads);
+    }
+
+    internal static int MatchUnicode<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T19(text, position, ref reads);
 
     internal static bool ParseDocument(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseDocument__(ref s);
+        if (s.TryReuse(LexicalKinds.Document)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseDocument__(ref s);
+        s.EndRule(LexicalKinds.Document, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseDocument__(ref ParserState s)
     {
         if (s.TryHole("Lexical.Document")) return true;
         var start = s.Mark();
@@ -145,15 +204,25 @@ public sealed unsafe class LexicalModule : SyntaxModule
         || ParseBlock(ref s)
         || ParsePick(ref s)
         || ParseTagged(ref s)
-        || s.MatchToken(LexicalKinds.Comment, MatchComment(s.Text, s.Position), "Comment")
-        || s.MatchToken(LexicalKinds.Text, MatchText(s.Text, s.Position), "Text")
-        || s.MatchToken(LexicalKinds.Hex, MatchHex(s.Text, s.Position), "Hex")
-        || s.MatchToken(LexicalKinds.Signed, MatchSigned(s.Text, s.Position), "Signed")
-        || s.MatchToken(LexicalKinds.Digits, MatchDigits(s.Text, s.Position), "Digits")
-        || s.MatchToken(LexicalKinds.Word, MatchWord(s.Text, s.Position), "Word")
-        || s.MatchToken(LexicalKinds.Unicode, MatchUnicode(s.Text, s.Position), "Unicode");
+        || s.MatchToken(LexicalKinds.Comment, (s.Tracking ? MatchComment(s.Input, s.Position, ref s.Reads) : MatchComment(s.Input, s.Position, ref s.Untracked)), "Comment")
+        || s.MatchToken(LexicalKinds.Text, (s.Tracking ? MatchText(s.Input, s.Position, ref s.Reads) : MatchText(s.Input, s.Position, ref s.Untracked)), "Text")
+        || s.MatchToken(LexicalKinds.Hex, (s.Tracking ? MatchHex(s.Input, s.Position, ref s.Reads) : MatchHex(s.Input, s.Position, ref s.Untracked)), "Hex")
+        || s.MatchToken(LexicalKinds.Signed, (s.Tracking ? MatchSigned(s.Input, s.Position, ref s.Reads) : MatchSigned(s.Input, s.Position, ref s.Untracked)), "Signed")
+        || s.MatchToken(LexicalKinds.Digits, (s.Tracking ? MatchDigits(s.Input, s.Position, ref s.Reads) : MatchDigits(s.Input, s.Position, ref s.Untracked)), "Digits")
+        || s.MatchToken(LexicalKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word")
+        || s.MatchToken(LexicalKinds.Unicode, (s.Tracking ? MatchUnicode(s.Input, s.Position, ref s.Reads) : MatchUnicode(s.Input, s.Position, ref s.Untracked)), "Unicode");
 
     internal static bool ParseBlock(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseBlock__(ref s);
+        if (s.TryReuse(LexicalKinds.Block)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseBlock__(ref s);
+        s.EndRule(LexicalKinds.Block, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseBlock__(ref ParserState s)
     {
         if (s.TryHole("Lexical.Block")) return true;
         s.SkipTrivia();
@@ -186,6 +255,16 @@ public sealed unsafe class LexicalModule : SyntaxModule
     }
 
     internal static bool ParsePick(ref ParserState s)
+    {
+        if (!s.Tracking) return ParsePick__(ref s);
+        if (s.TryReuse(LexicalKinds.Pick)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParsePick__(ref s);
+        s.EndRule(LexicalKinds.Pick, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParsePick__(ref ParserState s)
     {
         if (s.TryHole("Lexical.Pick")) return true;
         s.SkipTrivia();
@@ -223,6 +302,16 @@ public sealed unsafe class LexicalModule : SyntaxModule
 
     internal static bool ParseTagged(ref ParserState s)
     {
+        if (!s.Tracking) return ParseTagged__(ref s);
+        if (s.TryReuse(LexicalKinds.Tagged)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseTagged__(ref s);
+        s.EndRule(LexicalKinds.Tagged, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseTagged__(ref ParserState s)
+    {
         if (s.TryHole("Lexical.Tagged")) return true;
         s.SkipTrivia();
         if (s.Current != 't') return s.ExpectLiteral("tag");
@@ -236,7 +325,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
         if (!P7(ref s)) return Fail(ref s, start);
     e2:
         s.SkipTrivia();
-        if (!s.MatchToken(LexicalKinds.Word, MatchWord(s.Text, s.Position), "Word"))
+        if (!s.MatchToken(LexicalKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair6))
@@ -253,179 +342,179 @@ public sealed unsafe class LexicalModule : SyntaxModule
         return true;
     }
 
-    static int T3(ReadOnlySpan<char> text, int p)
+    static int T3<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = ((text.Slice(p).StartsWith("*)") ? p + 2 : -1) >= 0 ? -1 : p);
+        p = ((TokenText.Saw(ref reads, p + 1, text.Length) && text.Slice(p).StartsWith("*)") ? p + 2 : -1) >= 0 ? -1 : p);
         if (p < 0) return -1;
-        p = (p < text.Length ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length ? p + 1 : -1);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T2(ReadOnlySpan<char> text, int p)
+    static int T2<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         while (true)
         {
-            int r = T3(text, p);
+            int r = T3(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T1(ReadOnlySpan<char> text, int p)
+    static int T1<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (text.Slice(p).StartsWith("(*") ? p + 2 : -1);
+        p = (TokenText.Saw(ref reads, p + 1, text.Length) && text.Slice(p).StartsWith("(*") ? p + 2 : -1);
         if (p < 0) return -1;
-        p = T2(text, p);
+        p = T2(text, p, ref reads);
         if (p < 0) return -1;
-        p = (text.Slice(p).StartsWith("*)") ? p + 2 : -1);
+        p = (TokenText.Saw(ref reads, p + 1, text.Length) && text.Slice(p).StartsWith("*)") ? p + 2 : -1);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T7(ReadOnlySpan<char> text, int p)
+    static int T7<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && text[p] == '\\' ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == '\\' ? p + 1 : -1);
         if (p < 0) return -1;
-        p = (p < text.Length ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length ? p + 1 : -1);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T6(ReadOnlySpan<char> text, int p)
+    static int T6<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         int r;
-        if ((r = (p < text.Length && !(text[p] == '"' || text[p] == '\\') ? p + 1 : -1)) >= 0) return r;
-        if ((r = T7(text, p)) >= 0) return r;
+        if ((r = (TokenText.Saw(ref reads, p) && p < text.Length && !(text[p] == '"' || text[p] == '\\') ? p + 1 : -1)) >= 0) return r;
+        if ((r = T7(text, p, ref reads)) >= 0) return r;
         return -1;
     }
 
-    static int T5(ReadOnlySpan<char> text, int p)
+    static int T5<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         while (true)
         {
-            int r = T6(text, p);
+            int r = T6(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T4(ReadOnlySpan<char> text, int p)
+    static int T4<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && text[p] == '"' ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == '"' ? p + 1 : -1);
         if (p < 0) return -1;
-        p = T5(text, p);
+        p = T5(text, p, ref reads);
         if (p < 0) return -1;
-        p = (p < text.Length && text[p] == '"' ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == '"' ? p + 1 : -1);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T10(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9') || (text[p] >= 'a' && text[p] <= 'f') || (text[p] >= 'A' && text[p] <= 'F')) ? p + 1 : -1);
+    static int T10<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9') || (text[p] >= 'a' && text[p] <= 'f') || (text[p] >= 'A' && text[p] <= 'F')) ? p + 1 : -1);
 
-    static int T9(ReadOnlySpan<char> text, int p)
+    static int T9<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T10(text, p);
+        p = T10(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T10(text, p);
+            int r = T10(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T8(ReadOnlySpan<char> text, int p)
+    static int T8<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (text.Slice(p).StartsWith("0x") ? p + 2 : -1);
+        p = (TokenText.Saw(ref reads, p + 1, text.Length) && text.Slice(p).StartsWith("0x") ? p + 2 : -1);
         if (p < 0) return -1;
-        p = T9(text, p);
+        p = T9(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T13(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
+    static int T13<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
 
-    static int T12(ReadOnlySpan<char> text, int p)
+    static int T12<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T13(text, p);
+        p = T13(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T13(text, p);
+            int r = T13(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T11(ReadOnlySpan<char> text, int p)
+    static int T11<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         int start = p;
-        p = T12(text, p);
+        p = T12(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = (p < text.Length && text[p] == '_' ? p + 1 : -1);
+            int r = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == '_' ? p + 1 : -1);
             if (r < 0) return p;
-            r = T12(text, r);
+            r = T12(text, r, ref reads);
             if (r < 0) return p;
             p = r;
         }
     }
 
-    static int T15(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z')) ? p + 1 : -1);
+    static int T15<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z')) ? p + 1 : -1);
 
-    static int T14(ReadOnlySpan<char> text, int p)
+    static int T14<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T15(text, p);
+        p = T15(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T15(text, p);
+            int r = T15(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T18(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
+    static int T18<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
 
-    static int T17(ReadOnlySpan<char> text, int p)
+    static int T17<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T18(text, p);
+        p = T18(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T18(text, p);
+            int r = T18(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T16(ReadOnlySpan<char> text, int p)
+    static int T16<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = ((p < text.Length && (text[p] == '+' || text[p] == '-') ? p + 1 : -1) >= 0 ? p : -1);
+        p = ((TokenText.Saw(ref reads, p) && p < text.Length && (text[p] == '+' || text[p] == '-') ? p + 1 : -1) >= 0 ? p : -1);
         if (p < 0) return -1;
-        p = (p < text.Length && (text[p] == '+' || text[p] == '-') ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && (text[p] == '+' || text[p] == '-') ? p + 1 : -1);
         if (p < 0) return -1;
-        p = T17(text, p);
+        p = T17(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T20(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '\u00e0' && text[p] <= '\u00ff')) ? p + 1 : -1);
+    static int T20<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '\u00e0' && text[p] <= '\u00ff')) ? p + 1 : -1);
 
-    static int T19(ReadOnlySpan<char> text, int p)
+    static int T19<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T20(text, p);
+        p = T20(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T20(text, p);
+            int r = T20(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
@@ -463,7 +552,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
             break;
         }
     done:
-        s.CloseTemplateList("Lexical.Item", 1, ",");
+        s.CloseTemplateList("Lexical.Item", 1, ",", true);
         return true;
     }
 
@@ -496,7 +585,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
         s.Open(SyntaxKinds.Group);
     e0:
         s.SkipTrivia();
-        if (!s.MatchToken(LexicalKinds.Word, MatchWord(s.Text, s.Position), "Word")) return Fail(ref s, start);
+        if (!s.MatchToken(LexicalKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
         if (!s.MatchLiteral("="))
@@ -517,7 +606,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
         }
     e2:
         s.SkipTrivia();
-        if (!s.MatchToken(LexicalKinds.Digits, MatchDigits(s.Text, s.Position), "Digits"))
+        if (!s.MatchToken(LexicalKinds.Digits, (s.Tracking ? MatchDigits(s.Input, s.Position, ref s.Reads) : MatchDigits(s.Input, s.Position, ref s.Untracked)), "Digits"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair3))
@@ -549,7 +638,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
                 break;
             }
         }
-        s.Close();
+        s.CloseList(true);
         return true;
     }
 
@@ -600,12 +689,12 @@ public sealed unsafe class LexicalModule : SyntaxModule
             new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static int T21(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && (text[p] == '!') ? p + 1 : -1);
+    static int T21<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && (text[p] == '!') ? p + 1 : -1);
 
     static bool P6(ref ParserState s)
     {
-        if (!s.MatchToken(SyntaxKinds.Literal, T21(s.Text, s.Position), "character")) s.PushEmpty();
+        if (!s.MatchToken(SyntaxKinds.Literal, (s.Tracking ? T21(s.Input, s.Position, ref s.Reads) : T21(s.Input, s.Position, ref s.Untracked)), "character")) s.PushEmpty();
         return true;
     }
 
@@ -660,7 +749,7 @@ public readonly struct DocumentNode : ISyntaxView<DocumentNode>
 
     public SeparatedList<SyntaxNode> Items => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Document;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Document;
 
     public static DocumentNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -685,7 +774,7 @@ public readonly struct BlockNode : ISyntaxView<BlockNode>
 
     public SyntaxList<SyntaxNode> Body => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Block;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Block;
 
     public static BlockNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -712,7 +801,7 @@ public readonly struct PickNode : ISyntaxView<PickNode>
 
     public Optional<Token> Mark => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Pick;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Pick;
 
     public static PickNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -737,7 +826,7 @@ public readonly struct TaggedNode : ISyntaxView<TaggedNode>
 
     public Token Word => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Tagged;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Tagged;
 
     public static TaggedNode Create(SyntaxTree tree, int index) => new(tree, index);
 }

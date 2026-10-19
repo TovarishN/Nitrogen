@@ -17,6 +17,15 @@ internal static class Formatter
     /// <summary>A replacement of [Start, End) of the original text.</summary>
     internal readonly record struct Edit(int Start, int End, string Text);
 
+    /// <summary>Whether <paramref name="child"/> stands in a list slot of <paramref name="parent"/> as its one-item list.</summary>
+    static bool OneItemList(SyntaxTree tree, int parent, int child)
+    {
+        if (tree.Language is not { } language || tree.Kind(child) == SyntaxKinds.List) return false;
+        for (int k = 0; k < tree.ChildCount(parent); k++)
+            if (tree.Child(parent, k) == child) return language.IsListSlot(tree.Kind(parent), k);
+        return false;
+    }
+
     /// <summary>The tree's leaf tokens in text order: non-Missing nodes with no children and a non-empty span, one per start (an ambiguity's candidates share theirs).</summary>
     internal static List<Token> Tokens(SyntaxTree tree, string text)
     {
@@ -111,11 +120,12 @@ internal static class Formatter
         }
 
         // The innermost list item containing the node that started on an earlier line, when it started in the same block: its first line.
+        // A one-item list is its item, a child in one of its parent's list slots.
         int? ContinuedItem(SyntaxTree syntax, int node, int line, int block)
         {
             for (int child = node, parent = syntax.Parent(node); parent >= 0; child = parent, parent = syntax.Parent(parent))
             {
-                if (syntax.Kind(parent) != SyntaxKinds.List) continue;
+                if (syntax.Kind(parent) != SyntaxKinds.List && !OneItemList(syntax, parent, child)) continue;
                 int itemStart = syntax.Span(child).Start;
                 int itemLine = LineOf(itemStart);
                 if (itemLine >= line) continue;

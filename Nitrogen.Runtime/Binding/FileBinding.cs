@@ -141,7 +141,9 @@ internal sealed class Binder
                     _scopes.Add(new BindingScope(scope, node, kind, _tree.Span(node)));
                 }
             }
-            for (int k = _tree.ChildCount(node) - 1; k >= 0; k--) stack.Push((_tree.Child(node, k), childScope, childGuard, childEnclosing));
+            for (int k = _tree.ChildCount(node) - 1; k >= 0; k--)
+                if (_tree.Child(node, k) is var child && child != SyntaxTree.NoNode)
+                    stack.Push((child, childScope, childGuard, childEnclosing));
         }
         if (derived is not null)
             foreach (var (kind, declarations) in derived)
@@ -197,14 +199,20 @@ internal sealed class Binder
 
     /// <summary>
     /// The name a node's child (or the node, for -1) spells: its tokens' text without trivia. Null
-    /// when it is absent or any part of it is Missing, so a parse error never becomes a binding error.
+    /// when it is absent (a null slot or an empty name) or any part of it is Missing, so a parse error
+    /// never becomes a binding error.
     /// </summary>
     string? NameOf(int node, int child, out TextSpan span, out bool dynamic, out bool missing)
     {
         int target = child < 0 ? node : _tree.Child(node, child);
-        span = _tree.Span(target);
         dynamic = false;
         missing = false;
+        if (target == SyntaxTree.NoNode)
+        {
+            span = _tree.NullSlotSpan(node, child);
+            return null;
+        }
+        span = _tree.Span(target);
         _name.Clear();
         if (!Append(target, ref dynamic))
         {
@@ -216,6 +224,7 @@ internal sealed class Binder
 
     bool Append(int node, ref bool dynamic)
     {
+        if (node == SyntaxTree.NoNode) return true;
         if ((_tree.Flags(node) & NodeFlags.Missing) != 0) return false;
         int kind = _tree.Kind(node);
         if (RuleOf(kind) is { Dynamic: true }) dynamic = true;

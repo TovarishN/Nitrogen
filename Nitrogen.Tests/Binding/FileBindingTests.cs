@@ -1,5 +1,6 @@
 using Nitrogen.Binding;
 using Nitrogen.Tests.Scopes;
+using Nitrogen.Tests.Typed;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -96,6 +97,57 @@ public class FileBindingTests
         Assert.Equal(1, Assert.Single(binding.Declarations, symbol => symbol.Name == "local").Scope);
         Assert.True(binding.Scopes[0].IsOpen("value"));
         Assert.False(binding.Scopes[2].IsOpen("value"));
+        Assert.Empty(binding.Diagnostics);
+    }
+
+    [Fact]
+    public void An_absent_optional_before_a_declaration_child_binds_the_same_symbols()
+    {
+        // Let = "let" Name:Identifier Annotation:(":" TypeName)? "=" Value:Expr ";": the absent
+        // annotation is a null slot, and Value keeps its position after it.
+        var typed = new LanguageBuilder().Add(TypedModule.Instance).Build();
+        using var bare = typed.Parse("let x = 1; let y = x;", TypedModule.File);
+        using var annotated = typed.Parse("let x : num = 1; let y : num = x;", TypedModule.File);
+        int let = bare.Tree.Child(bare.Tree.Child(0, 0), 0); // Statement is an alias: File, List, Let
+        Assert.Equal(SyntaxTree.NoNode, bare.Tree.Child(let, 2));
+        var bareBinding = FileBinding.Bind("a.typed", bare.Tree);
+        var annotatedBinding = FileBinding.Bind("b.typed", annotated.Tree);
+        Assert.Equal(new[] { "value x export", "value y export" }, Declarations(bareBinding));
+        Assert.Equal(Declarations(annotatedBinding), Declarations(bareBinding));
+        Assert.Equal(new[] { "value x" }, References(bareBinding));
+        Assert.Equal(References(annotatedBinding), References(bareBinding));
+        Assert.All(bareBinding.Declarations, d => Assert.Equal(d.Name, Text(bareBinding, d.NameSpan)));
+        Assert.Empty(bareBinding.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("anon a;", new[] { "value a" })]
+    [InlineData("anon ;", new string[0])]
+    public void An_optional_declared_name_declares_only_when_present(string text, string[] declarations)
+    {
+        var shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+        using var parsed = shapes.Parse(text, Nitrogen.Tests.Shapes.ShapesModule.Anon);
+        Assert.True(parsed.Success);
+        Assert.Equal(declarations.Length == 0, parsed.Tree.Child(parsed.Tree.Root, 1) == SyntaxTree.NoNode);
+        var binding = FileBinding.Bind("a.shapes", parsed.Tree);
+        // Absent, as with the old Empty leaf: no symbol, no hole, no diagnostic.
+        Assert.Equal(declarations, Declarations(binding));
+        Assert.All(binding.Declarations, d => Assert.Equal(d.Name, Text(binding, d.NameSpan)));
+        Assert.Empty(binding.Holes);
+        Assert.Empty(binding.Diagnostics);
+    }
+
+    [Theory]
+    [InlineData("want a;", new[] { "value a" })]
+    [InlineData("want ;", new string[0])]
+    public void An_optional_referenced_name_references_only_when_present(string text, string[] references)
+    {
+        var shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+        using var parsed = shapes.Parse(text, Nitrogen.Tests.Shapes.ShapesModule.Want);
+        Assert.True(parsed.Success);
+        var binding = FileBinding.Bind("a.shapes", parsed.Tree);
+        Assert.Equal(references, References(binding));
+        Assert.Empty(binding.Holes);
         Assert.Empty(binding.Diagnostics);
     }
 }

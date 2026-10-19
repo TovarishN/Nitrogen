@@ -57,8 +57,8 @@ Extend: "extend" "syntax" Target:QualifiedName "{" Alternatives:Alternative* "}"
   2 Target:QualifiedName  static  insert {"{"}  sync {DottedName, Identifier} @2, {"{"} @3, {"|"} @4, {"}"} @5
   3 "{"  static  insert {"|", "}"}  sync {"{"} @3, {"|"} @4, {"}"} @5
   5 "}"  static  insert {"builtin", "extend", "extensible", "function", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {"}"} @5, {"|"} @4
-Alternative: "|" Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?
-  2 Body:Expression  static  insert {"declares", "dynamic", "lowers", "precedence", "references", "rewrites", "scope", "{", "|", "}"}  sync {"!", "&", "(", ".", "[", "choice", "if", "seq", CallHead, DottedName, Identifier, String} @2, {"precedence"} @3, {"declares", "dynamic", "lowers", "references", "rewrites", "scope"} @4, {"{"} @5
+Alternative: "|" Transparent:TransparentWord? Named:AlternativeName? Body:Expression Precedence:PrecedenceSpec? Clauses:Clause* Semantics:Semantics?
+  3 Body:Expression  static  insert {"declares", "dynamic", "lowers", "precedence", "references", "rewrites", "scope", "{", "|", "}"}  sync {"!", "&", "(", ".", "[", "choice", "if", "seq", CallHead, DottedName, Identifier, String} @3, {"precedence"} @4, {"declares", "dynamic", "lowers", "references", "rewrites", "scope"} @5, {"{"} @6
 PrecedenceSpec: "precedence" Level:Integer Associativity:Associativity?
   1 Level:Integer  static  insert {"declares", "dynamic", "left", "lowers", "references", "rewrites", "right", "scope", "{", "|", "}"}  sync {Integer} @1, {"left", "right"} @2
 HelperRewrite: "rewrites" Name:QualifiedName "(" Arguments:(HelperArgument; ",")* ")"

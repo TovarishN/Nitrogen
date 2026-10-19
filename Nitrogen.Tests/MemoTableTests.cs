@@ -1,3 +1,4 @@
+using Nitrogen.Tests.Calc;
 using Xunit;
 
 namespace Nitrogen.Tests;
@@ -65,5 +66,91 @@ public class MemoTableTests
             Assert.True(memo.TryGet(i % 7, i, out int node, out int end));
             Assert.Equal((i * 2, i * 3), (node, end));
         }
+    }
+
+    [Fact]
+    public void Capacity_grows_only_past_three_quarters_load()
+    {
+        var memo = new MemoTable();
+        for (int i = 0; i < 300; i++) memo.Set(i % 5, i, i, i);
+        Assert.Equal(512, memo.Capacity);
+    }
+
+    [Fact]
+    public void Clear_forgets_every_entry_and_keeps_capacity()
+    {
+        var memo = new MemoTable();
+        for (int i = 0; i < 1000; i++) memo.Set(i % 7, i, i, i);
+        int capacity = memo.Capacity;
+        memo.Clear();
+        Assert.Equal(0, memo.Count);
+        Assert.Equal(capacity, memo.Capacity);
+        for (int i = 0; i < 1000; i++) Assert.False(memo.TryGet(i % 7, i, out _, out _));
+        memo.Set(0, 0, 1, 2);
+        Assert.True(memo.TryGet(0, 0, out int node, out int end));
+        Assert.Equal((1, 2), (node, end));
+    }
+
+    [Fact]
+    public void Entries_survive_growth()
+    {
+        var memo = new MemoTable();
+        for (int i = 0; i < 5000; i++) memo.Set(i % 11, i, i * 2 + 1, i * 3 + 2);
+        Assert.Equal(5000, memo.Count);
+        for (int i = 0; i < 5000; i++)
+        {
+            Assert.True(memo.TryGet(i % 11, i, out int node, out int end));
+            Assert.Equal((i * 2 + 1, i * 3 + 2), (node, end));
+        }
+    }
+
+    [Fact]
+    public void Growth_happens_on_the_insert_after_three_quarters_full()
+    {
+        var memo = new MemoTable();
+        int slots = memo.Capacity;
+        int limit = (int)(slots * MemoTable.MaxLoad);
+        for (int i = 0; i < limit; i++) memo.Set(0, i, i, i);
+        Assert.Equal(slots, memo.Capacity);
+        memo.Set(0, limit, 0, 0);
+        Assert.Equal(slots * 2, memo.Capacity);
+        Assert.Equal(192, limit);
+    }
+
+    [Fact]
+    public void Overwriting_a_key_leaves_count_unchanged()
+    {
+        var memo = new MemoTable();
+        memo.Set(2, 3, 1, 1);
+        memo.Set(4, 5, 1, 1);
+        memo.Set(2, 3, 9, 9);
+        Assert.Equal(2, memo.Count);
+    }
+
+    [Fact]
+    public void Generation_wrap_does_not_resurrect_stale_entries()
+    {
+        var memo = new MemoTable();
+        memo.Set(1, 1, 7, 8); // stamped with generation 1
+        memo.Generation = int.MaxValue - 1;
+        memo.Clear(); // wraps back to generation 1
+        Assert.Equal(0, memo.Count);
+        Assert.False(memo.TryGet(1, 1, out _, out _));
+        memo.Set(2, 2, 3, 4);
+        Assert.True(memo.TryGet(2, 2, out int node, out _));
+        Assert.Equal(3, node);
+    }
+
+    [Fact]
+    public void A_failure_with_no_prefix_candidate_is_not_memoized()
+    {
+        var calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
+        using (var result = calc.Parse("x = ;", CalcModule.Program)) Assert.False(result.Success);
+
+        var memo = ParseContext.Cached!.Memo;
+        int ruleKey = CalcModule.Instance.Expr.GlobalId << 10; // minPrecedence 0, no call flags
+        Assert.True(memo.Contains(ruleKey, 0)); // `x` parsed, so successes are still memoized
+        for (int position = 2; position <= 5; position++)
+            Assert.False(memo.Contains(ruleKey, position), $"failure memoized at {position}");
     }
 }

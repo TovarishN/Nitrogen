@@ -31,45 +31,66 @@ public static unsafe class ExtensibleRules
         int ruleKey = (decl.GlobalId << 10) | ((callFlags & arena.CallFlagMask) << 8) | minPrecedence;
         int start = s.Position;
 
-        if (s.Memo.TryGet(ruleKey, start, out int memoNode, out int memoEnd))
+        if (s.Memo.TryGet(ruleKey, start, out int memoNode, out int memoEnd, out int memoExamined))
         {
             arena.MemoHits++;
+            // The result depends on what its computation read; a tracked caller must count that too.
+            if (memoExamined > 0) s.MarkRead(memoExamined - 1);
             if (memoNode < 0) return false;
             arena.PushChild(memoNode);
             s.Position = memoEnd;
             return true;
         }
         arena.MemoMisses++;
+        if (s.Reuse is not null && s.TryReuse(ReuseRecord.ExtensibleTag | (uint)ruleKey, out int reusedExamined))
+        {
+            s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position, reusedExamined);
+            arena.MemoWrites++;
+            return true;
+        }
+        int outer = arena.Tracking ? s.BeginExamined() : 0;
 
         var callerPoint = s.CallPoint;
         int callerFlags = s.CallFlags;
         s.CallPoint = point;
         s.CallFlags = callFlags;
         // A template's hole is a whole prefix result: operators may extend past it, never into it.
-        bool parsed = (s.InTemplate && s.TryHole(point.Decl.QualifiedName)) || ParsePrefix(ref s, point);
+        bool triedCandidate = true;
+        bool parsed = (s.InTemplate && s.TryHole(point.Decl.QualifiedName)) || ParsePrefix(ref s, point, out triedCandidate);
         if (parsed) ParsePostfix(ref s, point, minPrecedence);
         s.CallPoint = callerPoint;
         s.CallFlags = callerFlags;
 
+        int examined = arena.Tracking ? s.EndExamined(outer) : 0;
         if (!parsed)
         {
-            s.Memo.Set(ruleKey, start, -1, -1);
-            arena.MemoWrites++;
+            // A failure that ran no candidate is as cheap to rediscover as to look up.
+            if (triedCandidate)
+            {
+                s.Memo.Set(ruleKey, start, -1, -1, examined);
+                arena.MemoWrites++;
+            }
             return false;
         }
-        s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position);
+        int node = arena.ChildStack[arena.ChildStackCount - 1];
+        s.Memo.Set(ruleKey, start, node, s.Position, examined);
         arena.MemoWrites++;
+        if (arena.Tracking)
+            arena.AddRecord(new ReuseRecord(ReuseRecord.ExtensibleTag | (uint)ruleKey, start, s.Position, examined, node));
         return true;
     }
 
-    static bool ParsePrefix(ref ParserState s, ExtensionPoint point)
+    static bool ParsePrefix(ref ParserState s, ExtensionPoint point, out bool triedCandidate)
     {
+        triedCandidate = false;
         int start = s.Position;
-        int bucket = ExtensionPoint.Bucket(s.Text, start);
+        s.MarkRead(start);
+        int bucket = ExtensionPoint.Bucket(s.Input, start);
         var candidates = new Candidates { Base = s.Arena.ChildStackCount };
 
         foreach (int index in point.PrefixCandidates(bucket))
         {
+            triedCandidate = true;
             ref readonly var ext = ref point.Prefix[index];
             var mark = s.Mark();
             int repairs = s.Arena.RepairCount;
@@ -77,7 +98,10 @@ public static unsafe class ExtensibleRules
             var parse = ext.Parse;
             if (parse(ref s) && s.Position > start)
             {
-                s.Close();
+                // A transparent candidate is the node its element pushed; ties and the Ambiguous node
+                // work on the child stack, so they need no frame of the candidate's own.
+                if (ext.Transparent) s.CloseTransparent();
+                else s.Close();
                 Consider(ref s, ref candidates, ext.Precedence, s.Arena.RepairCount != repairs, mark, start);
             }
             else
@@ -103,7 +127,7 @@ public static unsafe class ExtensibleRules
             int left = arena.ChildStack[arena.ChildStackCount - 1];
             int start = s.Position;
             int peek = s.PeekPastTrivia();
-            int bucket = ExtensionPoint.Bucket(s.Text, peek);
+            int bucket = ExtensionPoint.Bucket(s.Input, peek);
 
             arena.ChildStackCount--; // the left operand becomes each candidate's first child
             var candidates = new Candidates { Base = arena.ChildStackCount };

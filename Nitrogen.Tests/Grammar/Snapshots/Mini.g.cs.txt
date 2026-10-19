@@ -76,10 +76,26 @@ public sealed unsafe class MiniModule : SyntaxModule
         return false;
     }
 
-    internal static int MatchWord(ReadOnlySpan<char> text, int position) =>
-        T1(text, position);
+    internal static int MatchWord(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchWord(text, position, ref reads);
+    }
+
+    internal static int MatchWord<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T1(text, position, ref reads);
 
     internal static bool ParsePair(ref ParserState s)
+    {
+        if (!s.Tracking) return ParsePair__(ref s);
+        if (s.TryReuse(MiniKinds.Pair)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParsePair__(ref s);
+        s.EndRule(MiniKinds.Pair, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParsePair__(ref ParserState s)
     {
         if (s.TryHole("Mini.Pair")) return true;
         s.SkipTrivia();
@@ -91,7 +107,7 @@ public sealed unsafe class MiniModule : SyntaxModule
         if (!s.MatchLiteral("(")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(MiniKinds.Word, MatchWord(s.Text, s.Position), "Word"))
+        if (!s.MatchToken(MiniKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair0))
@@ -133,6 +149,16 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     internal static bool ParseAb(ref ParserState s)
     {
+        if (!s.Tracking) return ParseAb__(ref s);
+        if (s.TryReuse(MiniKinds.Ab)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseAb__(ref s);
+        s.EndRule(MiniKinds.Ab, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseAb__(ref ParserState s)
+    {
         if (s.TryHole("Mini.Ab")) return true;
         s.SkipTrivia();
         if (s.Current != 'a') return s.ExpectLiteral("a");
@@ -147,6 +173,16 @@ public sealed unsafe class MiniModule : SyntaxModule
     }
 
     internal static bool ParseAc(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseAc__(ref s);
+        if (s.TryReuse(MiniKinds.Ac)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseAc__(ref s);
+        s.EndRule(MiniKinds.Ac, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseAc__(ref ParserState s)
     {
         if (s.TryHole("Mini.Ac")) return true;
         s.SkipTrivia();
@@ -177,6 +213,16 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     internal static bool ParseIf(ref ParserState s)
     {
+        if (!s.Tracking) return ParseIf__(ref s);
+        if (s.TryReuse(MiniKinds.If)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseIf__(ref s);
+        s.EndRule(MiniKinds.If, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseIf__(ref ParserState s)
+    {
         if (s.TryHole("Mini.If")) return true;
         s.SkipTrivia();
         if (s.Current != 'i') return s.ExpectLiteral("if");
@@ -187,7 +233,7 @@ public sealed unsafe class MiniModule : SyntaxModule
         if (!s.MatchKeyword("if")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(MiniKinds.Word, MatchWord(s.Text, s.Position), "Word"))
+        if (!s.MatchToken(MiniKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair3))
@@ -205,6 +251,16 @@ public sealed unsafe class MiniModule : SyntaxModule
     }
 
     internal static bool ParseMaybe(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseMaybe__(ref s);
+        if (s.TryReuse(MiniKinds.Maybe)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseMaybe__(ref s);
+        s.EndRule(MiniKinds.Maybe, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseMaybe__(ref ParserState s)
     {
         if (s.TryHole("Mini.Maybe")) return true;
         s.SkipTrivia();
@@ -236,16 +292,16 @@ public sealed unsafe class MiniModule : SyntaxModule
         return true;
     }
 
-    static int T2(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z')) ? p + 1 : -1);
+    static int T2<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z')) ? p + 1 : -1);
 
-    static int T1(ReadOnlySpan<char> text, int p)
+    static int T1<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T2(text, p);
+        p = T2(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T2(text, p);
+            int r = T2(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
@@ -282,7 +338,7 @@ public sealed unsafe class MiniModule : SyntaxModule
 
     static bool P1(ref ParserState s)
     {
-        if (!s.MatchToken(MiniKinds.Word, MatchWord(s.Text, s.Position), "Word")) s.PushEmpty();
+        if (!s.MatchToken(MiniKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word")) s.PushEmpty();
         return true;
     }
 
@@ -324,7 +380,7 @@ public readonly struct PairNode : ISyntaxView<PairNode>
 
     public Token Word => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == MiniKinds.Pair;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == MiniKinds.Pair;
 
     public static PairNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -347,7 +403,7 @@ public readonly struct AbNode : ISyntaxView<AbNode>
 
     public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == MiniKinds.Ab;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == MiniKinds.Ab;
 
     public static AbNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -370,7 +426,7 @@ public readonly struct AcNode : ISyntaxView<AcNode>
 
     public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == MiniKinds.Ac;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == MiniKinds.Ac;
 
     public static AcNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -395,7 +451,7 @@ public readonly struct IfNode : ISyntaxView<IfNode>
 
     public Token Word => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == MiniKinds.If;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == MiniKinds.If;
 
     public static IfNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -418,7 +474,7 @@ public readonly struct MaybeNode : ISyntaxView<MaybeNode>
 
     public bool IsSkipped => (Tree.Flags(Index) & NodeFlags.Skipped) != 0;
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == MiniKinds.Maybe;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == MiniKinds.Maybe;
 
     public static MaybeNode Create(SyntaxTree tree, int index) => new(tree, index);
 }

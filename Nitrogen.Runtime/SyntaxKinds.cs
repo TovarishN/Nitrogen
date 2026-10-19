@@ -7,9 +7,9 @@ namespace Nitrogen;
 public static class SyntaxKinds
 {
     public const int None = 0;
-    /// <summary>An absent optional element. Zero-length leaf.</summary>
+    /// <summary>Formerly an absent optional element; no longer emitted (an absent optional is a null slot, <see cref="SyntaxTree.NoNode"/>).</summary>
     public const int Empty = 1;
-    /// <summary>A repetition or separated list; children are the items (and separators).</summary>
+    /// <summary>A non-empty repetition or separated list; children are the items (and separators). An empty list is a null slot.</summary>
     public const int List = 2;
     /// <summary>A quoted literal or keyword matched by the grammar.</summary>
     public const int Literal = 3;
@@ -27,7 +27,13 @@ public static class SyntaxKinds
 
     public const int ListHole = 9;
 
-    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole", "ListHole"];
+    /// <summary>
+    /// A reparse's stand-in for a subtree reused from the previous tree: an arena marker only, which the freeze
+    /// expands into a copy of that subtree; never in a frozen tree.
+    /// </summary>
+    public const int Graft = 10;
+
+    static readonly string[] s_names = ["None", "Empty", "List", "Literal", "Ambiguous", "Error", "Group", "Skipped", "Hole", "ListHole", "Graft"];
 
     public static int ModuleOf(int kind) => kind >>> 16;
 

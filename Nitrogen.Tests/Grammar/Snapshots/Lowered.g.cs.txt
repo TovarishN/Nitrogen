@@ -83,6 +83,12 @@ public sealed unsafe class LoweredModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        5 => slot is 0,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lowered.File", "Lowered.Item", "Lowered.Input", "Lowered.Fixed", "Lowered.Plain", "Lowered.Statement", "Lowered.Value", "Lowered.Add", "Lowered.Turn", "Lowered.Wrap", "Lowered.Num", "Lowered.Ref" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -143,18 +149,42 @@ public sealed unsafe class LoweredModule : SyntaxModule
         return false;
     }
 
-    internal static int MatchDigits(ReadOnlySpan<char> text, int position) =>
-        T1(text, position);
+    internal static int MatchDigits(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchDigits(text, position, ref reads);
+    }
 
-    internal static int MatchNumber(ReadOnlySpan<char> text, int position) =>
-        T3(text, position);
+    internal static int MatchDigits<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T1(text, position, ref reads);
 
-    internal static int MatchWord(ReadOnlySpan<char> text, int position) =>
-        T8(text, position);
+    internal static int MatchNumber(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchNumber(text, position, ref reads);
+    }
+
+    internal static int MatchNumber<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T3(text, position, ref reads);
+
+    internal static int MatchWord(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchWord(text, position, ref reads);
+    }
+
+    internal static int MatchWord<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T8(text, position, ref reads);
 
     internal static int MatchName(ReadOnlySpan<char> text, int position)
     {
-        int end = T11(text, position);
+        var reads = default(NoReads);
+        return MatchName(text, position, ref reads);
+    }
+
+    internal static int MatchName<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads
+    {
+        int end = T11(text, position, ref reads);
         return end < 0 || IsReservedName(text.Slice(position, end - position)) ? -1 : end;
     }
 
@@ -165,6 +195,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
     };
 
     internal static bool ParseFile(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseFile__(ref s);
+        if (s.TryReuse(LoweredKinds.File)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseFile__(ref s);
+        s.EndRule(LoweredKinds.File, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseFile__(ref ParserState s)
     {
         if (s.TryHole("Lowered.File")) return true;
         var start = s.Mark();
@@ -184,6 +224,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseInput(ref ParserState s)
     {
+        if (!s.Tracking) return ParseInput__(ref s);
+        if (s.TryReuse(LoweredKinds.Input)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseInput__(ref s);
+        s.EndRule(LoweredKinds.Input, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseInput__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Input")) return true;
         s.SkipTrivia();
         if (s.Current != 'i') return s.ExpectLiteral("input");
@@ -194,7 +244,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         if (!s.MatchKeyword("input")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(LoweredKinds.Name, MatchName(s.Text, s.Position), "Name"))
+        if (!s.MatchToken(LoweredKinds.Name, (s.Tracking ? MatchName(s.Input, s.Position, ref s.Reads) : MatchName(s.Input, s.Position, ref s.Untracked)), "Name"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair0))
@@ -246,7 +296,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         }
     e3:
         s.SkipTrivia();
-        if (!s.MatchToken(LoweredKinds.Word, MatchWord(s.Text, s.Position), "Word"))
+        if (!s.MatchToken(LoweredKinds.Word, (s.Tracking ? MatchWord(s.Input, s.Position, ref s.Reads) : MatchWord(s.Input, s.Position, ref s.Untracked)), "Word"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair2))
@@ -283,6 +333,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseFixed(ref ParserState s)
     {
+        if (!s.Tracking) return ParseFixed__(ref s);
+        if (s.TryReuse(LoweredKinds.Fixed)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseFixed__(ref s);
+        s.EndRule(LoweredKinds.Fixed, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseFixed__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Fixed")) return true;
         s.SkipTrivia();
         if (s.Current != 'f') return s.ExpectLiteral("fixed");
@@ -293,7 +353,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         if (!s.MatchKeyword("fixed")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(LoweredKinds.Name, MatchName(s.Text, s.Position), "Name"))
+        if (!s.MatchToken(LoweredKinds.Name, (s.Tracking ? MatchName(s.Input, s.Position, ref s.Reads) : MatchName(s.Input, s.Position, ref s.Untracked)), "Name"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair4))
@@ -330,6 +390,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParsePlain(ref ParserState s)
     {
+        if (!s.Tracking) return ParsePlain__(ref s);
+        if (s.TryReuse(LoweredKinds.Plain)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParsePlain__(ref s);
+        s.EndRule(LoweredKinds.Plain, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParsePlain__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Plain")) return true;
         s.SkipTrivia();
         if (s.Current != 'p') return s.ExpectLiteral("plain");
@@ -340,7 +410,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         if (!s.MatchKeyword("plain")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(LoweredKinds.Name, MatchName(s.Text, s.Position), "Name"))
+        if (!s.MatchToken(LoweredKinds.Name, (s.Tracking ? MatchName(s.Input, s.Position, ref s.Reads) : MatchName(s.Input, s.Position, ref s.Untracked)), "Name"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair6))
@@ -377,6 +447,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseStatement(ref ParserState s)
     {
+        if (!s.Tracking) return ParseStatement__(ref s);
+        if (s.TryReuse(LoweredKinds.Statement)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseStatement__(ref s);
+        s.EndRule(LoweredKinds.Statement, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseStatement__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Statement")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.Statement);
@@ -411,6 +491,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
         || ParseRef(ref s);
 
     internal static bool ParseAdd(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseAdd__(ref s);
+        if (s.TryReuse(LoweredKinds.Add)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseAdd__(ref s);
+        s.EndRule(LoweredKinds.Add, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseAdd__(ref ParserState s)
     {
         if (s.TryHole("Lowered.Add")) return true;
         s.SkipTrivia();
@@ -547,6 +637,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseTurn(ref ParserState s)
     {
+        if (!s.Tracking) return ParseTurn__(ref s);
+        if (s.TryReuse(LoweredKinds.Turn)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseTurn__(ref s);
+        s.EndRule(LoweredKinds.Turn, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseTurn__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Turn")) return true;
         s.SkipTrivia();
         if (s.Current != 't') return s.ExpectLiteral("turn");
@@ -616,6 +716,16 @@ public sealed unsafe class LoweredModule : SyntaxModule
     }
 
     internal static bool ParseWrap(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseWrap__(ref s);
+        if (s.TryReuse(LoweredKinds.Wrap)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseWrap__(ref s);
+        s.EndRule(LoweredKinds.Wrap, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseWrap__(ref ParserState s)
     {
         if (s.TryHole("Lowered.Wrap")) return true;
         s.SkipTrivia();
@@ -687,122 +797,142 @@ public sealed unsafe class LoweredModule : SyntaxModule
 
     internal static bool ParseNum(ref ParserState s)
     {
+        if (!s.Tracking) return ParseNum__(ref s);
+        if (s.TryReuse(LoweredKinds.Num)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseNum__(ref s);
+        s.EndRule(LoweredKinds.Num, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseNum__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Num")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.Num);
         s.SkipTrivia();
-        if (!s.MatchToken(LoweredKinds.Number, MatchNumber(s.Text, s.Position), "Number")) return Fail(ref s, start);
+        if (!s.MatchToken(LoweredKinds.Number, (s.Tracking ? MatchNumber(s.Input, s.Position, ref s.Reads) : MatchNumber(s.Input, s.Position, ref s.Untracked)), "Number")) return Fail(ref s, start);
         s.Close();
         return true;
     }
 
     internal static bool ParseRef(ref ParserState s)
     {
+        if (!s.Tracking) return ParseRef__(ref s);
+        if (s.TryReuse(LoweredKinds.Ref)) return true;
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseRef__(ref s);
+        s.EndRule(LoweredKinds.Ref, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseRef__(ref ParserState s)
+    {
         if (s.TryHole("Lowered.Ref")) return true;
         var start = s.Mark();
         s.Open(LoweredKinds.Ref);
         s.SkipTrivia();
-        if (!s.MatchToken(LoweredKinds.Name, MatchName(s.Text, s.Position), "Name")) return Fail(ref s, start);
+        if (!s.MatchToken(LoweredKinds.Name, (s.Tracking ? MatchName(s.Input, s.Position, ref s.Reads) : MatchName(s.Input, s.Position, ref s.Untracked)), "Name")) return Fail(ref s, start);
         s.Close();
         return true;
     }
 
-    static int T2(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
+    static int T2<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
 
-    static int T1(ReadOnlySpan<char> text, int p)
+    static int T1<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T2(text, p);
+        p = T2(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T2(text, p);
+            int r = T2(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T5(ReadOnlySpan<char> text, int p)
+    static int T5<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && text[p] == '.' ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == '.' ? p + 1 : -1);
         if (p < 0) return -1;
-        p = MatchDigits(text, p);
+        p = MatchDigits(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T4(ReadOnlySpan<char> text, int p)
+    static int T4<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        int r = T5(text, p);
+        int r = T5(text, p, ref reads);
         return r >= 0 ? r : p;
     }
 
-    static int T7(ReadOnlySpan<char> text, int p)
+    static int T7<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && text[p] == 'e' ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == 'e' ? p + 1 : -1);
         if (p < 0) return -1;
-        p = MatchDigits(text, p);
+        p = MatchDigits(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T6(ReadOnlySpan<char> text, int p)
+    static int T6<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        int r = T7(text, p);
+        int r = T7(text, p, ref reads);
         return r >= 0 ? r : p;
     }
 
-    static int T3(ReadOnlySpan<char> text, int p)
+    static int T3<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = MatchDigits(text, p);
+        p = MatchDigits(text, p, ref reads);
         if (p < 0) return -1;
-        p = T4(text, p);
+        p = T4(text, p, ref reads);
         if (p < 0) return -1;
-        p = T6(text, p);
+        p = T6(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T10(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '_' || text[p] == '.') ? p + 1 : -1);
+    static int T10<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '_' || text[p] == '.') ? p + 1 : -1);
 
-    static int T9(ReadOnlySpan<char> text, int p)
+    static int T9<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         while (true)
         {
-            int r = T10(text, p);
+            int r = T10(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T8(ReadOnlySpan<char> text, int p)
+    static int T8<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || text[p] == '_') ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || text[p] == '_') ? p + 1 : -1);
         if (p < 0) return -1;
-        p = T9(text, p);
+        p = T9(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T13(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '_') ? p + 1 : -1);
+    static int T13<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '_') ? p + 1 : -1);
 
-    static int T12(ReadOnlySpan<char> text, int p)
+    static int T12<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         while (true)
         {
-            int r = T13(text, p);
+            int r = T13(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T11(ReadOnlySpan<char> text, int p)
+    static int T11<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || text[p] == '_') ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || text[p] == '_') ? p + 1 : -1);
         if (p < 0) return -1;
-        p = T12(text, p);
+        p = T12(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
@@ -821,7 +951,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
                 break;
             }
         }
-        s.CloseTemplateList("Lowered.Item", 0, null);
+        s.CloseTemplateList("Lowered.Item", 0, null, true);
         return true;
     }
 
@@ -1028,7 +1158,7 @@ public readonly struct FileNode : ISyntaxView<FileNode>
 
     public SyntaxList<SyntaxNode> Items => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.File;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.File;
 
     public static FileNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1055,7 +1185,7 @@ public readonly struct InputNode : ISyntaxView<InputNode>
 
     public Token Annotation => new(Tree, Tree.Child(Index, 3));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Input;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Input;
 
     public static InputNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1080,7 +1210,7 @@ public readonly struct FixedNode : ISyntaxView<FixedNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Fixed;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Fixed;
 
     public static FixedNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1105,7 +1235,7 @@ public readonly struct PlainNode : ISyntaxView<PlainNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Plain;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Plain;
 
     public static PlainNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1130,7 +1260,7 @@ public readonly struct StatementNode : ISyntaxView<StatementNode>
 
     public SyntaxNode Body => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Statement;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Statement;
 
     public static StatementNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1157,7 +1287,7 @@ public readonly struct AddNode : ISyntaxView<AddNode>
 
     public SyntaxNode Right => new(Tree, Tree.Child(Index, 4));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Add;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Add;
 
     public static AddNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1182,7 +1312,7 @@ public readonly struct TurnNode : ISyntaxView<TurnNode>
 
     public SyntaxNode Amount => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Turn;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Turn;
 
     public static TurnNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1207,7 +1337,7 @@ public readonly struct WrapNode : ISyntaxView<WrapNode>
 
     public SyntaxNode Inner => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Wrap;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Wrap;
 
     public static WrapNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1232,7 +1362,7 @@ public readonly struct NumNode : ISyntaxView<NumNode>
 
     public Token Text => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Num;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Num;
 
     public static NumNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1257,7 +1387,7 @@ public readonly struct RefNode : ISyntaxView<RefNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Ref;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Ref;
 
     public static RefNode Create(SyntaxTree tree, int index) => new(tree, index);
 }

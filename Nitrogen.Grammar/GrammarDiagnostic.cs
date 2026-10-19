@@ -73,6 +73,9 @@ public static class GrammarCodes
     public const string EvaluationError = "NGR0155";
     public const string DuplicateFunction = "NGR0158";
     public const string CharacterLevelCall = "NGR0159";
+    public const string TransparentShape = "NGR0160";
+    public const string TransparentPostfix = "NGR0161";
+    public const string TransparentDecorated = "NGR0162";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

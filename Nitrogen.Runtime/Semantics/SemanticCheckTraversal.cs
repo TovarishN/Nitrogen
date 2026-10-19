@@ -18,7 +18,8 @@ internal static class SemanticCheckTraversal
                 continue;
             }
             yield return node;
-            for (int index = tree.ChildCount(node) - 1; index >= 0; index--) stack.Push(tree.Child(node, index));
+            for (int index = tree.ChildCount(node) - 1; index >= 0; index--)
+                if (tree.Child(node, index) is var child && child != SyntaxTree.NoNode) stack.Push(child);
         }
         if (ancestors)
             for (int parent = tree.Parent(root); parent >= 0; parent = tree.Parent(parent)) yield return parent;

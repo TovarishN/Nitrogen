@@ -85,7 +85,7 @@ public static class GrammarSemantics
         Op("RuleSemantics", Types.End, Types.Semantics),
         Op("ExtensibleRule", Types.Member, Text, Seq(Types.SemanticItem), Seq(Types.Alternative)),
         Op("Extend", Types.Member, Text, Seq(Types.Alternative)),
-        Op("Alternative", Types.Alternative, Opt(Text), Types.Expression, Opt(Types.Precedence), Seq(Types.Clause), Opt(Types.Semantics)),
+        Op("Alternative", Types.Alternative, Opt(Text), Types.Expression, Opt(Types.Precedence), Seq(Types.Clause), Opt(Types.Semantics), Opt(Text)),
         Op("Precedence", Types.Precedence, Text, Opt(Text)),
         Op("Declares", Types.Clause, Text, Text, Opt(Text), Opt(Text), Opt(Text), Opt(Text)),
         Op("References", Types.Clause, Opt(Text), Types.Kinds, Text, Opt(Text)),

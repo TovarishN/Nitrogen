@@ -49,4 +49,45 @@ public class AllocationTests
             $"allocation grows with input: {smallBytes} B for 50 statements, {largeBytes} B for 2000");
         Assert.True(largeBytes < 4096, $"per-parse fixed cost too high: {largeBytes} B");
     }
+
+    [Fact]
+    public void A_small_parse_keeps_its_scratch_for_reuse()
+    {
+        Measure(Program(50));
+
+        // A still-alive oversized context from an earlier large parse is preferred and serves too.
+        Assert.True(ParseContext.Cached is not null || ParseContext.HasOversized);
+    }
+
+    [Fact]
+    public void An_oversized_parse_does_not_keep_its_scratch_on_the_thread()
+    {
+        using (var result = Calc.Parse(Program(10_000), CalcModule.Program))
+        {
+            Assert.True(result.Success);
+            Assert.True(result.Stats.ArenaNodes > ParseContext.RetainedArenaNodes, $"input too small: {result.Stats.ArenaNodes} arena nodes");
+        }
+        Assert.Null(ParseContext.Cached);
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        Assert.False(ParseContext.HasOversized, "the oversized scratch survived a full collection");
+
+        Measure(Program(50));
+        Assert.NotNull(ParseContext.Cached);
+    }
+
+    [Fact]
+    public void Back_to_back_oversized_parses_reuse_the_weakly_held_scratch()
+    {
+        // The first parse grows fresh scratch and allocates the (exact-size) tree; the second
+        // allocates only the tree.
+        string large = Program(10_000);
+        long first = Measure(large);
+        if (!ParseContext.HasOversized) return; // a collection between the two statements freed it
+
+        long second = Measure(large);
+
+        Assert.True(second * 2 < first, $"the second large parse rebuilt its scratch: {second} B after {first} B");
+    }
 }

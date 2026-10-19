@@ -35,11 +35,11 @@ public sealed unsafe partial class Language
                 used.Add(name);
                 if (kind == SyntaxKinds.ListHole)
                 {
-                    int parent = parsed.Tree.Parent(node);
+                    int parent = parsed.Tree.TemplateList(node);
                     if (!parsed.Tree.TemplateLists.TryGetValue(parent, out var shape) ||
                         shape.Category != copied[name].Category ||
-                        Enumerable.Range(0, parsed.Tree.ChildCount(parent)).Count(index =>
-                            parsed.Tree.Kind(parsed.Tree.Child(parent, index)) == SyntaxKinds.ListHole) != 1)
+                        Enumerable.Range(0, ListSlot.Count(parsed.Tree, parent)).Count(index =>
+                            parsed.Tree.Kind(ListSlot.Child(parsed.Tree, parent, index)) == SyntaxKinds.ListHole) != 1)
                         if (invalidLists.Add(parent))
                             diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "A physical list requires one capture at a supported item site.", name));
                 }

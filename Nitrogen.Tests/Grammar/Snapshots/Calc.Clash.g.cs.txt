@@ -35,6 +35,12 @@ public sealed unsafe class ClashModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsListSlot(int localKind, int slot) => localKind switch
+    {
+        1 => slot is 2,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
@@ -53,7 +59,7 @@ public sealed unsafe class ClashModule : SyntaxModule
     {
     e0:
         s.SkipTrivia();
-        if (!s.MatchToken(CalcKinds.Identifier, CalcModule.MatchIdentifier(s.Text, s.Position), "Identifier")) return false;
+        if (!s.MatchToken(CalcKinds.Identifier, (s.Tracking ? CalcModule.MatchIdentifier(s.Input, s.Position, ref s.Reads) : CalcModule.MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return false;
     e1:
         s.SkipTrivia();
         if (!s.MatchLiteral("("))
@@ -129,7 +135,7 @@ public sealed unsafe class ClashModule : SyntaxModule
                 }
             }
         }
-        s.CloseTemplateList("Calc.Expr", 0, ",");
+        s.CloseTemplateList("Calc.Expr", 0, ",", true);
         return true;
     }
 
@@ -169,7 +175,7 @@ public readonly struct InvokeExpr : ISyntaxView<InvokeExpr>
 
     public SeparatedList<ExprNode> Args => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ClashKinds.Invoke;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ClashKinds.Invoke;
 
     public static InvokeExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }

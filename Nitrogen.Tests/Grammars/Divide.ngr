@@ -1,0 +1,16 @@
+// Incremental reparse: "/" is an operator and also starts trivia ("//" comments), and the postfix "!" binds
+// tighter than both infix operators, so whether an operand continues depends on the character after a "/".
+syntax module Divide
+{
+  token Number = ['0'..'9']+;
+
+  syntax Program = Value:Expr ";";
+
+  extensible syntax Expr
+  {
+    | Num  = Number
+    | Mul  = Expr "*" Expr precedence 20 left
+    | Div  = Expr "/" Expr precedence 10 left
+    | Bang = Expr "!"      precedence 30
+  }
+}

@@ -19,9 +19,18 @@ public sealed unsafe partial class Language
         new Lazy<QuoteMatchPlan>(() => QuoteMatchPlan.Compile(this,
             Modules.SelectMany(module => module.QuoteHelpers).Single(helper => helper.Name == name)))).Value;
 
-    internal bool AcceptsQuoteNode(string category, int kind) => Modules
-        .FirstOrDefault(m => m.Id == SyntaxKinds.ModuleOf(kind))?.GetQuoteCategories(SyntaxKinds.LocalOf(kind))
-        .Contains(category, StringComparer.Ordinal) == true;
+    internal bool AcceptsQuoteNode(string category, SyntaxTree tree, int node)
+    {
+        int kind = tree.Kind(node);
+        if (kind == SyntaxKinds.Literal)
+        {
+            // A leaf-choice alias has no kind: its literal alternatives stand in as Literal leaves.
+            string text = tree.GetText(node).ToString();
+            return Modules.Any(m => m.AcceptsQuoteLiteral(category, text));
+        }
+        return Modules.FirstOrDefault(m => m.Id == SyntaxKinds.ModuleOf(kind))?.GetQuoteCategories(SyntaxKinds.LocalOf(kind))
+            .Contains(category, StringComparer.Ordinal) == true;
+    }
 
     /// <summary>Parses a quotation once. Its compilation owns the template; each instantiation owns fresh syntax.</summary>
     public QuoteCompilation CompileQuote(string category, string text, IReadOnlyDictionary<string, QuoteHole> holes)
@@ -49,7 +58,7 @@ public sealed unsafe partial class Language
             if (diagnostics.Count == 0) diagnostics.Add(new("NQ0001", default, "The quotation did not parse."));
         }
         else if (Enumerable.Range(0, parsed.Tree.NodeCount).Any(n => parsed.Tree.Kind(n) == SyntaxKinds.ListHole &&
-            !parsed.Tree.TemplateLists.ContainsKey(parsed.Tree.Parent(n))))
+            !parsed.Tree.TemplateLists.ContainsKey(parsed.Tree.TemplateList(n))))
             diagnostics.Add(new("NQ0001", parsed.Tree.Span(parsed.Tree.Root), "A list splice requires a direct syntax element and a literal separator."));
         else if (Nitrogen.Binding.FileBinding.Bind("nitrogen:quote", parsed.Tree).Declarations.Count > 0)
             diagnostics.Add(new("NQ0006", parsed.Tree.Span(parsed.Tree.Root), "A quotation template cannot declare names."));

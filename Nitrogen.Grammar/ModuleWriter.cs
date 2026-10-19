@@ -56,6 +56,7 @@ internal static class ModuleWriter
         foreach (var rule in rules.OfType<SyntaxRule>())
             b.Append($"        {CSharpText.Literal(rule.Name)} => {CSharpText.Identifier(rule.Name)},\n");
         b.Append("        _ => null,\n    };\n\n");
+        WriteListSlots(b, info);
         QuotationWriter.Write(b, model, info);
         BindingWriter.Write(b, info);
         QuoteHelperWriter.Write(b, model, info);
@@ -97,8 +98,36 @@ internal static class ModuleWriter
         string name = CSharpText.Literal(alternative.Name);
         int precedence = alternative.Precedence ?? 0;
         if (!postfix)
-            return $"registry.AddPrefix({pointRef}, new PrefixExtension({name}, {kindRef}, {precedence}, &{method}, {first}));";
+            return $"registry.AddPrefix({pointRef}, new PrefixExtension({name}, {kindRef}, {precedence}, &{method}, {first}{(alternative.IsTransparent ? ", transparent: true" : "")}));";
         string associativity = alternative.Associativity == GrammarAssociativity.Right ? "Right" : "Left";
         return $"registry.AddPostfix({pointRef}, new PostfixExtension({name}, {kindRef}, {precedence}, Associativity.{associativity}, &{method}, {first}));";
+    }
+
+    /// <summary>
+    /// <c>IsListSlot</c>: the child slots that hold a list (<c>X*</c>, <c>X+</c>, <c>(X; S)*</c>), so
+    /// generic tree walkers can tell a one-item list, which is its item, from a plain child.
+    /// </summary>
+    static void WriteListSlots(StringBuilder b, ModuleInfo info)
+    {
+        var cases = new List<string>();
+        foreach (var kind in info.Kinds)
+        {
+            var body = kind.Alternative?.Body ?? (kind.Rule as SyntaxRule)?.Body;
+            if (body is null) continue;
+            var slots = new List<int>();
+            int slot = 0;
+            foreach (var element in SyntaxCodeWriter.Elements(body))
+            {
+                var bare = element is LabeledExpr labeled ? labeled.Inner : element;
+                if (bare is PredicateExpr) continue;
+                if (bare is RepeatExpr { Kind: not RepeatKind.Optional } or SeparatedListExpr) slots.Add(slot);
+                slot++;
+            }
+            if (slots.Count > 0) cases.Add($"        {kind.Local} => slot is {string.Join(" or ", slots)},\n");
+        }
+        if (cases.Count == 0) return;
+        b.Append("    public override bool IsListSlot(int localKind, int slot) => localKind switch\n    {\n")
+            .Append(string.Concat(cases))
+            .Append("        _ => false,\n    };\n\n");
     }
 }

@@ -40,7 +40,7 @@ public class CompositionTests
             Assert.True(result.Success);
             Assert.True(result.HasErrors);
             Assert.Equal(
-                "(Program (List (ExprStatement (? (Call Identifier:\"f\" \"(\" (List (Num Number:\"1\")) \")\") (Invoke Identifier:\"f\" \"(\" (List (Num Number:\"1\")) \")\")) \";\")))",
+                "(Program (ExprStatement (? (Call Identifier:\"f\" \"(\" (Num Number:\"1\") \")\") (Invoke Identifier:\"f\" \"(\" (Num Number:\"1\") \")\")) \";\"))",
                 SyntaxDumper.Dump(result.Tree));
             var diagnostic = Assert.Single(result.Diagnostics.ToArray());
             Assert.Equal(DiagnosticCode.Ambiguous, diagnostic.Code);

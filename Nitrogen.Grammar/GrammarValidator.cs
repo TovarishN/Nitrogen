@@ -83,6 +83,11 @@ public static class GrammarValidator
                 CheckClauses(alternative.Clauses, alternative.Body, module, point, isAlias: false, implicitModule, alternative.Name);
 
                 bool postfix = _analysis.IsPostfix(alternative, module, implicitModule, pointKey);
+                if (alternative.IsTransparent)
+                {
+                    CheckTransparent(alternative, postfix, module);
+                    if (postfix) continue;
+                }
                 if (alternative.Precedence is int precedence && (precedence < 0 || precedence > 255))
                     Report(GrammarCodes.BadPrecedence, $"precedence {precedence} is outside 0..255", alternative.Span, module);
                 else if (postfix && (alternative.Precedence ?? 0) == 0)
@@ -97,6 +102,36 @@ public static class GrammarValidator
                     partialTypeProperties: partialTypeProperties);
             }
         }
+
+        /// <summary>
+        /// A transparent alternative has no node: its one element's node stands in for it, so that element
+        /// must yield exactly one node on every path (never a List node or a null slot), it must be a prefix
+        /// alternative, and it can carry nothing that needs a node of its own.
+        /// </summary>
+        void CheckTransparent(Alternative alternative, bool postfix, ModuleDecl module)
+        {
+            if (!YieldsOneNode(alternative.Body))
+                Report(GrammarCodes.TransparentShape,
+                    $"transparent alternative '{alternative.Name}' must be one element that yields exactly one node: a literal, a rule reference, or a choice of them",
+                    alternative.Span, module);
+            if (postfix)
+                Report(GrammarCodes.TransparentPostfix, $"transparent alternative '{alternative.Name}' must be a prefix alternative",
+                    alternative.Span, module);
+            if (alternative.Precedence is not null || alternative.Clauses.Count > 0 || alternative.Semantics is not null)
+                Report(GrammarCodes.TransparentDecorated,
+                    $"transparent alternative '{alternative.Name}' cannot have a precedence, binding clauses or semantics: it has no node",
+                    alternative.Span, module);
+        }
+
+        /// <summary>A literal, character class, rule reference or grammar call, labeled or not, or a choice of them.</summary>
+        static bool YieldsOneNode(Expr expr) => expr switch
+        {
+            LabeledExpr labeled => YieldsOneNode(labeled.Inner),
+            ChoiceExpr choice => choice.Alternatives.All(YieldsOneNode),
+            GrammarCallExpr call => call.Expansion is not { } expansion || YieldsOneNode(expansion),
+            LiteralExpr or CharClassExpr or AnyCharExpr or ReferenceExpr => true,
+            _ => false,
+        };
 
         /// <summary>The module's symbol kinds and those of the modules it uses (issue 237).</summary>
         HashSet<string> SymbolKinds(ModuleDecl module)

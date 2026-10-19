@@ -55,9 +55,10 @@ public sealed partial class FileSemantics
             foreach (var hole in spec.Holes)
             {
                 int child = Tree.Child(node, hole.Child);
+                // An empty list is a null slot (no items), and a one-item list is its item.
                 arguments[hole.Name] = hole.IsList
-                    ? QuoteArgument.List(Enumerable.Range(0, (Tree.ChildCount(child) + hole.Stride - 1) / hole.Stride)
-                        .Select(i => new QuoteNode(Tree, Tree.Child(child, i * hole.Stride))).ToArray())
+                    ? QuoteArgument.List(Enumerable.Range(0, (ListSlot.Count(Tree, child) + hole.Stride - 1) / hole.Stride)
+                        .Select(i => new QuoteNode(Tree, ListSlot.Child(Tree, child, i * hole.Stride))).ToArray())
                     : QuoteArgument.Node(new QuoteNode(Tree, child));
             }
             SyntaxTree? template;

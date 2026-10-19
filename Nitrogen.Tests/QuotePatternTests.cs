@@ -230,4 +230,134 @@ public sealed class QuotePatternTests
         Assert.Empty(result.Captures);
         Assert.NotEmpty(result.Diagnostics);
     }
+
+    static readonly Language Shapes = new LanguageBuilder().Add(Nitrogen.Tests.Shapes.ShapesModule.Instance).Build();
+
+    static bool ShapesMatch(string pattern, string source, IReadOnlyDictionary<string, QuoteHole>? captures = null)
+    {
+        using var compiled = Shapes.CompilePattern("Shapes.Decl", pattern, captures ?? new Dictionary<string, QuoteHole>());
+        Assert.True(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
+        using var input = Shapes.ParseTemplate(source, "Shapes.Decl", new Dictionary<string, string>());
+        Assert.True(input.Success);
+        var result = compiled.Pattern!.Match(new(input.Tree, input.Tree.Root));
+        Assert.Empty(result.Diagnostics);
+        return result.Matched;
+    }
+
+    [Theory]
+    [InlineData("decl a { }", "decl a { }", true)]
+    [InlineData("decl a { }", "decl a : int { }", false)]
+    [InlineData("decl a { }", "decl a { b }", false)]
+    [InlineData("decl a { }", "public decl a { }", false)]
+    [InlineData("decl a : int { }", "decl a { }", false)]
+    [InlineData("public decl a { b }", "decl a { }", false)]
+    [InlineData("public decl a : int { b }", "public decl a : int { b }", true)]
+    public void A_null_slot_matches_only_a_null_slot(string pattern, string source, bool expected) =>
+        Assert.Equal(expected, ShapesMatch(pattern, source));
+
+    [Fact]
+    public void A_scalar_capture_in_an_optional_does_not_match_an_absent_one() =>
+        Assert.False(ShapesMatch("decl a : $T { }", "decl a { }",
+            new Dictionary<string, QuoteHole> { ["T"] = QuoteHole.Node("Shapes.TypeName") }));
+
+    [Theory]
+    [InlineData("decl a { }", 0)]
+    [InlineData("public decl a { }", 1)]
+    [InlineData("public static decl a { }", 2)]
+    public void A_list_capture_matches_an_empty_list_as_no_items(string source, int count)
+    {
+        using var compiled = Shapes.CompilePattern("Shapes.Decl", "..$Mods decl a { }",
+            new Dictionary<string, QuoteHole> { ["Mods"] = QuoteHole.List("Shapes.Mod") });
+        Assert.True(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
+        using var input = Shapes.ParseTemplate(source, "Shapes.Decl", new Dictionary<string, string>());
+        var result = compiled.Pattern!.Match(new(input.Tree, input.Tree.Root));
+        Assert.True(result.Matched);
+        Assert.Equal(count, Assert.IsType<QuoteArgument.Many>(result.Captures["Mods"]).Values.Count);
+    }
+
+    [Fact]
+    public void Instantiating_an_empty_list_capture_makes_the_null_slot_a_parse_makes()
+    {
+        var holes = new Dictionary<string, QuoteHole> { ["Mods"] = QuoteHole.List("Shapes.Mod") };
+        using var quote = Shapes.CompileQuote("Shapes.Decl", "..$Mods decl a { }", holes);
+        Assert.True(quote.Success, string.Join("; ", quote.Diagnostics.Select(d => d.Message)));
+        using var built = quote.Template!.Instantiate(new Dictionary<string, QuoteArgument>
+        {
+            ["Mods"] = QuoteArgument.List([]),
+        });
+        Assert.True(built.Success, string.Join("; ", built.Diagnostics.Select(d => d.Message)));
+        using var parsed = Shapes.ParseTemplate("decl a { }", "Shapes.Decl", new Dictionary<string, string>());
+        Assert.Equal(SyntaxDumper.Dump(parsed.Tree), SyntaxDumper.Dump(built.Tree!));
+        Assert.Equal(parsed.Tree.NodeCount, built.Tree!.NodeCount);
+        Assert.Equal(SyntaxTree.NoNode, built.Tree.Child(built.Tree.Root, 0));
+        // The constructed tree matches a pattern written with null slots.
+        using var pattern = Shapes.CompilePattern("Shapes.Decl", "decl a { }", new Dictionary<string, QuoteHole>());
+        Assert.True(pattern.Pattern!.Match(new(built.Tree, built.Tree.Root)).Matched);
+    }
+
+    static readonly Language CalcLanguage = new LanguageBuilder().Add(Nitrogen.Tests.Calc.CalcModule.Instance).Build();
+
+    static string[]? CalcCaptures(string pattern, string source)
+    {
+        using var compiled = CalcLanguage.CompilePattern("Calc.Expr", pattern,
+            new Dictionary<string, QuoteHole> { ["A"] = QuoteHole.List("Calc.Expr") });
+        Assert.True(compiled.Success, string.Join("; ", compiled.Diagnostics.Select(d => d.Message)));
+        using var input = CalcLanguage.ParseTemplate(source, "Calc.Expr", new Dictionary<string, string>());
+        Assert.True(input.Success);
+        var result = compiled.Pattern!.Match(new(input.Tree, input.Tree.Root));
+        Assert.Empty(result.Diagnostics);
+        return result.Matched
+            ? Assert.IsType<QuoteArgument.Many>(result.Captures["A"]).Values.Select(v => v.Tree.GetText(v.Node).ToString()).ToArray()
+            : null;
+    }
+
+    // A lone list hole is its pattern's one-item list; the input list is collapsed with one item.
+    [Theory]
+    [InlineData("f(..$A)", "f(1)", "1")]
+    [InlineData("f(..$A)", "f(1, 2)", "1|2")]
+    [InlineData("f(..$A)", "f()", "")]
+    [InlineData("f(1, ..$A)", "f(1)", "")]
+    [InlineData("f(1, ..$A)", "f(1, 2)", "2")]
+    [InlineData("f(1, ..$A)", "f(1, 2, 3)", "2|3")]
+    [InlineData("f(..$A, 2)", "f(2)", "")]
+    [InlineData("f(..$A, 2)", "f(1, 2)", "1")]
+    [InlineData("f(1, ..$A)", "f(2)", null)]
+    [InlineData("f(1, ..$A)", "f()", null)]
+    public void A_list_hole_matches_one_item_and_two_item_lists(string pattern, string source, string? captured) =>
+        Assert.Equal(captured?.Split('|', StringSplitOptions.RemoveEmptyEntries), CalcCaptures(pattern, source));
+
+    [Theory]
+    [InlineData("public decl a { }", "public decl a { }", true)]
+    [InlineData("public decl a { }", "public static decl a { }", false)]
+    [InlineData("public static decl a { }", "public decl a { }", false)]
+    [InlineData("decl a { b }", "decl a { b }", true)]
+    [InlineData("decl a { b }", "decl a { b, c }", false)]
+    [InlineData("decl a { b, c }", "decl a { b }", false)]
+    public void A_one_item_list_matches_only_a_one_item_list(string pattern, string source, bool expected) =>
+        Assert.Equal(expected, ShapesMatch(pattern, source));
+
+    [Theory]
+    [InlineData("public decl a { }", 1)]
+    [InlineData("public static decl a { }", 2)]
+    public void Instantiating_a_list_capture_makes_the_list_shape_a_parse_makes(string source, int count)
+    {
+        var holes = new Dictionary<string, QuoteHole> { ["Mods"] = QuoteHole.List("Shapes.Mod") };
+        using var parsed = Shapes.ParseTemplate(source, "Shapes.Decl", new Dictionary<string, string>());
+        var view = SyntaxView.Cast<Nitrogen.Tests.Shapes.DeclNode>(parsed.Tree, parsed.Tree.Root);
+        var mods = new List<QuoteNode>();
+        foreach (var mod in view.Mods) mods.Add(new(parsed.Tree, mod.Index));
+        Assert.Equal(count, mods.Count);
+        using var quote = Shapes.CompileQuote("Shapes.Decl", "..$Mods decl a { }", holes);
+        Assert.True(quote.Success, string.Join("; ", quote.Diagnostics.Select(d => d.Message)));
+        using var built = quote.Template!.Instantiate(new Dictionary<string, QuoteArgument> { ["Mods"] = QuoteArgument.List(mods) });
+        Assert.True(built.Success, string.Join("; ", built.Diagnostics.Select(d => d.Message)));
+        Assert.Equal(SyntaxDumper.Dump(parsed.Tree), SyntaxDumper.Dump(built.Tree!));
+        Assert.Equal(parsed.Tree.NodeCount, built.Tree!.NodeCount);
+        // A template list with a fixed item and a hole also collapses when the hole takes nothing.
+        using var fixedQuote = Shapes.CompileQuote("Shapes.Decl", "public ..$Mods decl a { }", holes);
+        Assert.True(fixedQuote.Success, string.Join("; ", fixedQuote.Diagnostics.Select(d => d.Message)));
+        using var one = fixedQuote.Template!.Instantiate(new Dictionary<string, QuoteArgument> { ["Mods"] = QuoteArgument.List([]) });
+        using var reparsed = Shapes.ParseTemplate("public decl a { }", "Shapes.Decl", new Dictionary<string, string>());
+        Assert.Equal(SyntaxDumper.Dump(reparsed.Tree), SyntaxDumper.Dump(one.Tree!));
+    }
 }

@@ -278,7 +278,8 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
             {
                 foreach (var hole in spec.Holes)
                 {
-                    var child = tree.Span(tree.Child(node, hole.Child));
+                    if (tree.Child(node, hole.Child) is var slot && slot == SyntaxTree.NoNode) continue; // an empty list
+                    var child = tree.Span(slot);
                     if (child.Start <= offset && offset < child.End) return null;
                 }
                 return (spec.Text, tree.Span(node));

@@ -3,6 +3,8 @@ using Xunit;
 
 namespace Nitrogen.Tests;
 
+using TextChange = Nitrogen.LanguageService.TextChange; // not the runtime's reparse TextChange
+
 /// <summary>Applying didChange content changes to a text (LSP positions: 0-based line, UTF-16 column).</summary>
 public class TextEditsTests
 {

@@ -258,7 +258,7 @@ internal static class QuotationWriter
         if (owner is ExtensibleRule)
             return analysis.Resolve((implicitModule ?? module.Name) + "." + owner.Name, owner.Span, module, null)!;
         var aliases = analysis.PrimaryRules(module).OfType<SyntaxRule>().Where(EmitModel.IsAlias)
-            .Where(alias => (alias.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { alias.Body })
+            .Where(alias => EmitModel.AliasAlternatives(alias)
                 .Any(item => item is ReferenceExpr reference && reference.Name == owner.Name)).ToList();
         return new(module, aliases.Count == 1 ? aliases[0] : owner);
     }
@@ -287,21 +287,68 @@ internal static class QuotationWriter
         }
         b.Append("        _ => global::System.Array.Empty<string>(),\n    };\n\n");
 
+        // A leaf-choice alias has no kind: each literal it lists is a Literal leaf standing in for it.
+        var literalCategories = categories.Where(c => c.Module.Name == info.Module.Name && Literals(c, new()).Count > 0).ToList();
+        if (literalCategories.Count > 0)
+        {
+            b.Append("    public override bool AcceptsQuoteLiteral(string category, global::System.ReadOnlySpan<char> text) => category switch\n    {\n");
+            foreach (var c in literalCategories)
+                b.Append($"        {CSharpText.Literal(c.Key)} => text is {string.Join(" or ", Literals(c, new()).Select(CSharpText.Literal))},\n");
+            b.Append("        _ => false,\n    };\n\n");
+        }
+
+        HashSet<string> Literals(GrammarSymbol symbol, HashSet<string> visiting)
+        {
+            var result = new HashSet<string>(StringComparer.Ordinal);
+            if (!visiting.Add(symbol.Key)) return result;
+            if (symbol.Rule is ExtensibleRule)
+            {
+                // A transparent alternative's literal stands in as a Literal leaf for the point.
+                foreach (var p in model.Analysis.Point(symbol.Key).Where(p => p.Alternative.IsTransparent))
+                    foreach (var element in StandIns(p.Alternative.Body))
+                        if (element is LiteralExpr literal) result.Add(literal.Value);
+                        else if (element is ReferenceExpr reference)
+                            result.UnionWith(Literals(model.Resolve(reference.Name, p.Module, p.ImplicitModule), new(visiting)));
+                return result;
+            }
+            if (symbol.Rule is not SyntaxRule { } syntax || !EmitModel.IsAlias(syntax)) return result;
+            foreach (var alternative in EmitModel.AliasAlternatives(syntax))
+                if (alternative is LiteralExpr literal) result.Add(literal.Value);
+                else if (alternative is ReferenceExpr reference)
+                    result.UnionWith(Literals(model.Resolve(reference.Name, symbol.Module, null), new(visiting)));
+            return result;
+        }
+
         HashSet<KindInfo> Members(GrammarSymbol symbol, HashSet<string> visiting)
         {
             var result = new HashSet<KindInfo>();
             if (!visiting.Add(symbol.Key)) return result;
             if (symbol.Rule is SyntaxRule syntax && EmitModel.IsAlias(syntax))
             {
-                var references = syntax.Body is ReferenceExpr one ? new[] { one } : ((ChoiceExpr)syntax.Body).Alternatives.Cast<ReferenceExpr>();
-                foreach (var reference in references)
+                foreach (var reference in EmitModel.AliasAlternatives(syntax).OfType<ReferenceExpr>())
                     result.UnionWith(Members(model.Resolve(reference.Name, symbol.Module, null), new(visiting)));
             }
             else
+            {
                 foreach (var module in model.Modules)
                     foreach (var kind in module.Kinds)
-                        if (ReferenceEquals(kind.Rule, symbol.Rule) || kind.Point?.Key == symbol.Key) result.Add(kind);
+                        if (ReferenceEquals(kind.Rule, symbol.Rule) || (kind.Point?.Key == symbol.Key && !kind.IsTransparent)) result.Add(kind);
+                // A transparent alternative's referenced node stands in for the point.
+                if (symbol.Rule is ExtensibleRule)
+                    foreach (var p in model.Analysis.Point(symbol.Key).Where(p => p.Alternative.IsTransparent))
+                        foreach (var reference in StandIns(p.Alternative.Body).OfType<ReferenceExpr>())
+                            result.UnionWith(Members(model.Resolve(reference.Name, p.Module, p.ImplicitModule), new(visiting)));
+            }
             return result;
         }
     }
+
+    /// <summary>The single elements a transparent alternative's body may leave in its place.</summary>
+    static IEnumerable<Expr> StandIns(Expr body) => body switch
+    {
+        LabeledExpr labeled => StandIns(labeled.Inner),
+        ChoiceExpr choice => choice.Alternatives.SelectMany(StandIns),
+        GrammarCallExpr { Expansion: { } expansion } => StandIns(expansion),
+        _ => new[] { body },
+    };
 }

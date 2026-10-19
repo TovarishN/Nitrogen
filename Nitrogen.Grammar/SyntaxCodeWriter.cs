@@ -34,14 +34,26 @@ internal sealed class SyntaxCodeWriter
         if (EmitModel.IsAlias(rule))
         {
             var alternatives = rule.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { rule.Body };
-            b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s) =>\n        ")
+            // A literal alternative matches where the caller left off, so a start rule skips its leading trivia.
+            bool skips = alternatives.Any(a => a is LiteralExpr);
+            b.Append(skips ? $"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n        s.SkipTrivia();\n        return "
+                    : $"    internal static bool Parse{rule.Name}(ref ParserState s) =>\n        ")
                 .Append($"s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})\n        || ")
                 .Append(string.Join("\n        || ", alternatives.Select(a => Element(a, module, null, 0))))
-                .Append(";\n\n");
+                .Append(skips ? ";\n    }\n\n" : ";\n\n");
             return;
         }
         var elements = Elements(rule.Body);
-        b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n");
+        // A tracked parse records each rule result and how far it examined the text, so an incremental
+        // reparse can reuse it; a plain parse goes straight to the body.
+        b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n")
+            .Append($"        if (!s.Tracking) return Parse{rule.Name}__(ref s);\n")
+            .Append($"        if (s.TryReuse({_info.KindsName}.{CSharpText.Identifier(rule.Name)})) return true;\n")
+            .Append("        int at = s.Position, outer = s.BeginExamined();\n")
+            .Append($"        bool parsed = Parse{rule.Name}__(ref s);\n")
+            .Append($"        s.EndRule({_info.KindsName}.{CSharpText.Identifier(rule.Name)}, at, outer, parsed);\n")
+            .Append("        return parsed;\n    }\n\n");
+        b.Append($"    static bool Parse{rule.Name}__(ref ParserState s)\n    {{\n");
         b.Append($"        if (s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})) return true;\n");
         if (LeadingLiteral(elements[0]) is { } literal)
         {
@@ -55,6 +67,13 @@ internal sealed class SyntaxCodeWriter
         WriteElements(b, rule.Body as SequenceExpr, elements, module, null);
         b.Append("    }\n\n");
     }
+
+    /// <summary>
+    /// A token matcher call: a tracked parse (incremental reparse) records every character it reads in
+    /// <c>s.Reads</c>; a plain one instantiates <c>NoReads</c>, which costs nothing.
+    /// </summary>
+    static string TokenCall(string matcher) =>
+        $"(s.Tracking ? {matcher}(s.Input, s.Position, ref s.Reads) : {matcher}(s.Input, s.Position, ref s.Untracked))";
 
     static string? LeadingLiteral(Expr element) =>
         (element is LabeledExpr labeled ? labeled.Inner : element) is LiteralExpr literal ? literal.Value : null;
@@ -132,7 +151,7 @@ internal sealed class SyntaxCodeWriter
                 {
                     TokenRule token =>
                         $"s.MatchToken({target.TypeRef(_info, target.KindsName)}.{CSharpText.Identifier(token.Name)}, "
-                        + $"{prefix}Match{token.Name}(s.Text, s.Position), {CSharpText.Literal(token.Name)})",
+                        + $"{TokenCall(prefix + "Match" + token.Name)}, {CSharpText.Literal(token.Name)})",
                     SyntaxRule syntax => $"{prefix}Parse{syntax.Name}(ref s)",
                     ExtensibleRule extensible =>
                         $"s.ParseExtensible({prefix}Instance.{CSharpText.Identifier(extensible.Name)}, {minPrecedence}{CallFlagsArgument(reference)})",
@@ -141,7 +160,7 @@ internal sealed class SyntaxCodeWriter
             }
             case CharClassExpr:
             case AnyCharExpr:
-                return $"s.MatchToken(SyntaxKinds.Literal, {_tokens.MatcherMethod(expr, module, implicitModule)}(s.Text, s.Position), \"character\")";
+                return $"s.MatchToken(SyntaxKinds.Literal, {TokenCall(_tokens.MatcherMethod(expr, module, implicitModule))}, \"character\")";
             default:
                 return Helper(expr, module, implicitModule, listRepair) + "(ref s)";
         }
@@ -169,9 +188,41 @@ internal sealed class SyntaxCodeWriter
     }
 
     string ListClose(Expr item, ModuleDecl module, string? implicitModule, int minimum, Expr? separator)
-        => ListCategory(item, module, implicitModule) is { } category && (separator is null or LiteralExpr)
-            ? $"s.CloseTemplateList({CSharpText.Literal(category)}, {minimum}, {(separator is LiteralExpr literal ? CSharpText.Literal(literal.Value) : "null")});"
-            : "s.Close();";
+    {
+        string collapse = MayBeListOrNull(item, module, implicitModule, new()) ? "false" : "true";
+        return ListCategory(item, module, implicitModule) is { } category && (separator is null or LiteralExpr)
+            ? $"s.CloseTemplateList({CSharpText.Literal(category)}, {minimum}, {(separator is LiteralExpr literal ? CSharpText.Literal(literal.Value) : "null")}, {collapse});"
+            : $"s.CloseList({collapse});";
+    }
+
+    /// <summary>
+    /// Whether an item could push a List node or a null slot (or nothing). A one-item list of such an
+    /// item keeps its List node: the slot must never confuse a list with its item.
+    /// </summary>
+    bool MayBeListOrNull(Expr item, ModuleDecl module, string? implicitModule, HashSet<string> aliases)
+    {
+        switch (item)
+        {
+            case LabeledExpr labeled:
+                return MayBeListOrNull(labeled.Inner, module, implicitModule, aliases);
+            case RepeatExpr or SeparatedListExpr or PredicateExpr:
+                return true;
+            case ChoiceExpr choice:
+                return choice.Alternatives.Any(a => MayBeListOrNull(a, module, implicitModule, aliases));
+            case ReferenceExpr reference:
+            {
+                var symbol = _model.Resolve(reference.Name, module, implicitModule);
+                // An alias pushes what one of its alternatives pushes, in the alias's own module. An
+                // extension point pushes one node: a transparent alternative's element must yield
+                // exactly one (NGR0160), never a List node or a null slot.
+                return symbol.Rule is SyntaxRule syntax && EmitModel.IsAlias(syntax) && aliases.Add(symbol.Key) &&
+                    (syntax.Body is ChoiceExpr body ? body.Alternatives.ToList() : new List<Expr> { syntax.Body })
+                        .Any(a => MayBeListOrNull(a, symbol.Module, null, aliases));
+            }
+            default:
+                return false;
+        }
+    }
 
     string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null)
     {
@@ -364,6 +415,9 @@ internal sealed class SyntaxCodeWriter
             case ReferenceExpr reference:
             {
                 var symbol = _model.Resolve(reference.Name, module, implicitModule);
+                if (symbol.Rule is SyntaxRule { } leaf && EmitModel.IsAlias(leaf) && leaf.Body is ChoiceExpr or LiteralExpr &&
+                    EmitModel.AliasAlternatives(leaf).Any(a => a is LiteralExpr) && _model.IsLeafAlias(leaf, symbol.Module))
+                    return "SyntaxKinds.Literal"; // a leaf-choice alias stands in as a literal
                 if (symbol.Rule is TokenRule || (symbol.Rule is SyntaxRule syntax && !EmitModel.IsAlias(syntax)))
                 {
                     var target = _model.Info(symbol.Module);

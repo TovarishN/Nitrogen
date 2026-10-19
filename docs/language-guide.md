@@ -30,6 +30,70 @@ Names emitted by checked lowering can replace authored file-scope templates usin
 
 For staged expansion, clear the template index before lowering the relevant subtrees, collect declarations from successful typed projection, then publish the complete index and validate the whole file again. Do not publish a partial result after projection fails. Updating an index invalidates binding resolution and project semantic caches; replacing or removing the document discards its derived indexes. Invalid node/span metadata is rejected before any project change. This API does not run domain expansion itself or automatically connect a language's editor service to its projector.
 
+## Alias rules
+
+A syntax rule whose body is one reference or literal, or a choice of references and literals, is an
+alias: `syntax Mod = "public" / "static";`, `syntax TypeName = "int" / Name;`,
+`syntax Statement = Assign / Call;`. An alias produces no node of its own. It parses whichever
+alternative matches and leaves that alternative's node (a `Literal` leaf for a literal) where the alias
+was used, so a tree has no wrapper around a choice of single tokens.
+
+- The typed view of an alias is a `Token` when every alternative is a literal or a token rule, and a
+  `SyntaxNode` otherwise. A rule that references an alias reads it through that view, and a view of the
+  alias's own name does not exist.
+- An alias is a category for templates and quotation holes: a hole of a leaf alias such as
+  `Shapes.Mod` takes a `Literal` leaf whose text is one of its literals.
+- A rule with `declares`, `lowers` or another binding clause, or with semantics, stays a node even when
+  its body is a single literal (`syntax Terminator = ";" lowers Grammar.Terminator();`), because the
+  clause needs a node to bind. An alias of references only with a clause is an error (NGR0117).
+- A missing alternative in a recovered tree is a `Missing` `Literal` leaf for a leaf alias that lists a
+  literal, and a `Missing` error node for other aliases.
+
+## Transparent alternatives
+
+An alternative of an extensible rule marked `transparent` produces no node of its own, the way an alias
+does: `extensible syntax Stmt { | transparent Plain = Body:(Var / ";") }`. The node its element yields
+(the `Var` node, or a `Literal` leaf for `";"`) stands in for it where the extension point was parsed.
+The alternative still competes with the others as usual: longest match first, then precedence, and a tie
+is an `Ambiguous` node whose children are the candidates' nodes, standing-in ones included.
+
+- The body must yield exactly one node on every path: one literal, character class or rule reference,
+  labeled or not, or a choice of them (NGR0160). A sequence, a repetition, a separated list, an optional
+  or a predicate cannot be transparent, because it would leave a group, a `List` node, a null slot or
+  nothing in the point's place.
+- It must be a prefix alternative (NGR0161), and it cannot have a precedence, binding clauses or
+  semantics (NGR0162), which all need a node.
+- `transparent` is read as the marker only when a name (`Name =`) or an element follows it; otherwise it
+  is a reference to a rule named `transparent`. Without a name, a single reference gives the alternative
+  its name, as for other alternatives (`| transparent Var`).
+- The alternative has no typed view and no visitor method. The extension point's union view reaches the
+  standing-in node, so `SyntaxView.TryCast<VarNode>` on it works and a cast to another alternative's view
+  fails. The standing-in node is also a member of the point's quotation category, so a hole of the point
+  accepts it.
+
+## Tree shapes
+
+What a `SyntaxTree` holds for the grammar, for code that walks it without typed views:
+
+- **Null slots.** An absent optional (`Type:(":" TypeName)?`) and an empty list (`Items:Name*`) have no
+  node, but keep their child slot, so positional child indices are the same in every parse.
+  `SyntaxTree.Child` returns `SyntaxTree.NoNode` (-1) there, and `ChildCount` counts the slot. Check for
+  `NoNode` before passing a child to `Kind`, `Span` or `Flags` (they throw on it); the generated views'
+  `Is`, `SyntaxView.TryCast` and `Optional<T>` already do. Dumps (`SyntaxDumper`) write a null slot as `_`.
+- **One-item lists.** A list slot with one item holds the item itself, not a `List` node around it. Any
+  node in a list slot that is not a `List` is a one-item list. Read list slots with `ListSlot.Count` and
+  `ListSlot.Child` (or the typed `SyntaxList<T>`), and use `Language.IsListSlot(kind, slot)` to tell a
+  list slot from a plain one. The generator keeps the `List` node when an item could itself be a list,
+  as in `Lines:(Name+; ";")*`.
+- **No wrappers.** Alias rules and transparent alternatives produce no node: the node of whichever
+  alternative matched (a `Literal` leaf for a literal) sits where the alias or the extension point was
+  parsed. Code that tests kinds must test the standing-in kinds, not the alias's or alternative's name,
+  which has no kind.
+
+A transparent alternative compiled in a separate module does not add its extension point's quotation
+category to the rules it references when they belong to modules that were already generated: a hole of
+the point then does not accept a node of such a rule standing in through that alternative.
+
 ## Typed repetition
 
 `lowers repeat ElementType CountField IteratorField TemplateListField` lowers a checked count and a typed template list into `HirRepeat`. For example:

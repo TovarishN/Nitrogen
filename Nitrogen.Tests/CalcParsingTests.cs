@@ -7,14 +7,46 @@ public class CalcParsingTests
 {
     static readonly Language Calc = new LanguageBuilder().Add(CalcModule.Instance).Build();
 
-    /// <summary>Parses <c>expr;</c> and dumps the expression under Program/List/ExprStatement.</summary>
+    /// <summary>Parses <c>expr;</c> and dumps the expression under Program/ExprStatement (a one-item list is its item).</summary>
     internal static string DumpExpr(Language language, string expr)
     {
         using var result = language.Parse(expr + ";", CalcModule.Program);
         Assert.True(result.Success, result.Success ? "" : result.FormatMessage(result.Diagnostics[0]));
         var tree = result.Tree;
-        int statement = tree.Child(tree.Child(0, 0), 0);
+        int statement = tree.Child(0, 0);
         return SyntaxDumper.Dump(tree, tree.Child(statement, 0));
+    }
+
+    [Fact]
+    public void Tree_text_can_differ_from_parsed_text()
+    {
+        string treeText = new string("x = 1;");
+        using var result = Calc.Parse("x = 1;", CalcModule.Program, treeText);
+        Assert.True(result.Success);
+        Assert.True(ReferenceEquals(result.Tree.Text, treeText));
+        Assert.Throws<ArgumentException>(() => Calc.Parse("x = 1;", CalcModule.Program, "x = 1"));
+
+        // The failure paths keep the tree text too.
+        string bad = new string("1+;");
+        using var failed = Calc.Parse("1+;", CalcModule.Program, bad);
+        Assert.True(ReferenceEquals(failed.Tree.Text, bad));
+    }
+
+    [Fact]
+    public void Parsing_reads_the_text_and_the_tree_reads_the_tree_text()
+    {
+        // The gap differs: '#' does not lex in Calc, so success shows the parse read the blanked text.
+        const string text = "x = 1;   y;", treeText = "x = 1; # y;";
+        using var result = Calc.Parse(text, CalcModule.Program, treeText);
+        Assert.True(result.Success);
+        var tree = result.Tree;
+        Assert.Equal(treeText, tree.GetText(0).ToString());
+        using (var raw = Calc.Parse(treeText, CalcModule.Program)) Assert.False(raw.Success);
+        var tokens = Enumerable.Range(0, tree.NodeCount).Where(n => tree.ChildCount(n) == 0 && tree.Span(n).Length > 0)
+            .Select(n => tree.GetText(n).ToString());
+        Assert.Equal(["x", "=", "1", ";", "y", ";"], tokens);
+        Assert.Equal("# ", tree.GetText(0)[7..9].ToString());
+        Assert.Contains(new TextSpan(6, 3), tree.Trivia.ToArray());
     }
 
     [Theory]
@@ -24,7 +56,7 @@ public class CalcParsingTests
     [InlineData("(1+2)*3", "(Mul (Paren \"(\" (Add (Num Number:\"1\") \"+\" (Num Number:\"2\")) \")\") \"*\" (Num Number:\"3\"))")]
     [InlineData("f(1, x)", "(Call Identifier:\"f\" \"(\" (List (Num Number:\"1\") \",\" (Ref Identifier:\"x\")) \")\")")]
     [InlineData("f( 1 , x )", "(Call Identifier:\"f\" \"(\" (List (Num Number:\"1\") \",\" (Ref Identifier:\"x\")) \")\")")]
-    [InlineData("f()", "(Call Identifier:\"f\" \"(\" (List) \")\")")]
+    [InlineData("f()", "(Call Identifier:\"f\" \"(\" _ \")\")")]
     [InlineData("2.5", "(Num Number:\"2.5\")")]
     public void Precedence_associativity_and_longest_match(string expr, string expected)
     {
@@ -51,14 +83,15 @@ public class CalcParsingTests
     public void Memoized_subtree_survives_the_rollback_of_Assign()
     {
         // Assign parses Expr at 0, fails at ';' and rolls back; ExprStatement reuses the memo.
-        // Hits: Expr@0 in ExprStatement, and the failed Expr@4 at end of input.
-        // Misses: Expr@0, Expr(min 10)@2, Expr@4.
+        // Hits: Expr@0 in ExprStatement. (The failed Expr@4 at end of input ran no candidate, so it
+        // is not memoized, so it is a miss each time it is reached, at the cost of only a bucket lookup.)
+        // Misses: Expr@0, Expr(min 10)@2, and Expr@4 twice.
         using var result = Calc.Parse("a+b;", CalcModule.Program);
         Assert.Equal(
-            "(Program (List (ExprStatement (Add (Ref Identifier:\"a\") \"+\" (Ref Identifier:\"b\")) \";\")))",
+            "(Program (ExprStatement (Add (Ref Identifier:\"a\") \"+\" (Ref Identifier:\"b\")) \";\"))",
             SyntaxDumper.Dump(result.Tree));
-        Assert.Equal(2, result.Stats.MemoHits);
-        Assert.Equal(3, result.Stats.MemoMisses);
+        Assert.Equal(1, result.Stats.MemoHits);
+        Assert.Equal(4, result.Stats.MemoMisses);
     }
 
     [Fact]

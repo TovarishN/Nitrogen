@@ -6,7 +6,8 @@ namespace Nitrogen;
 /// <summary>Constructs syntax structurally; supplied operands are never reparsed.</summary>
 internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary<string, QuoteArgument> arguments, bool proxies, SourceOrigin? templateOrigin = null)
 {
-    sealed record Built(int Kind, int Start, int Length, NodeFlags Flags, IReadOnlyList<Built> Children,
+    // A null child is a null slot (absent optional, empty list).
+    sealed record Built(int Kind, int Start, int Length, NodeFlags Flags, IReadOnlyList<Built?> Children,
         SourceOrigin? Origin = null, QuoteNode? Proxy = null);
     sealed class Failure(QuoteDiagnostic diagnostic) : Exception
     {
@@ -19,7 +20,7 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
     {
         try
         {
-            var root = Copy(template, template.Root, true, templateOrigin);
+            var root = Copy(template, template.Root, true, templateOrigin)!;
             var arena = new BuildArena();
             int oldRoot = Store(root, arena);
             var tree = TreeFreezer.Freeze(arena, oldRoot, _text.ToString(), template.Language);
@@ -30,8 +31,9 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             Visit(root);
             return new(tree, [], origins, children) { ProxyNodes = sources };
 
-            void Visit(Built node)
+            void Visit(Built? node)
             {
+                if (node is null) return;
                 int n = index++;
                 if (node.Origin is { } origin) origins[n] = origin;
                 if (node.Proxy is { } child)
@@ -45,8 +47,9 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
         catch (Failure failure) { return new(null, [failure.Diagnostic], new Dictionary<int, SourceOrigin>(), new Dictionary<int, int>()); }
     }
 
-    static int Store(Built node, BuildArena arena)
+    static int Store(Built? node, BuildArena arena)
     {
+        if (node is null) return SyntaxTree.NoNode;
         var children = node.Children.Select(child => Store(child, arena)).ToArray();
         int from = arena.ChildStackCount;
         foreach (int child in children) arena.PushChild(child);
@@ -57,14 +60,16 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
 
     Built Insert(QuoteNode source, string name)
     {
-        if (!proxies) return Copy(source.Tree, source.Node, false, source.Origin);
+        if (!proxies) return Copy(source.Tree, source.Node, false, source.Origin)!;
         int start = _text.Length;
         _text.Append('$').Append(name);
         return new(SyntaxKinds.Hole, start, _text.Length - start, NodeFlags.None, [], source.Origin, source);
     }
 
-    Built Copy(SyntaxTree source, int node, bool holes, SourceOrigin? origin)
+    /// <summary>The copy of <paramref name="node"/>; null for a null slot, or a list hole expanded to no items.</summary>
+    Built? Copy(SyntaxTree source, int node, bool holes, SourceOrigin? origin)
     {
+        if (node == SyntaxTree.NoNode) return null;
         int kind = source.Kind(node), start = _text.Length;
         var span = source.Span(node);
         if (holes && kind == SyntaxKinds.Hole)
@@ -73,19 +78,20 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             return arguments.TryGetValue(name, out var value) && value is QuoteArgument.Scalar scalar
                 ? Insert(scalar.Value, name) : throw new Failure(new("NQ0002", span, "A scalar input is required.", name));
         }
-        if (holes && kind == SyntaxKinds.ListHole)
+        // A list hole standing alone is its own collapsed one-item list; any other must be an item of one.
+        if (holes && kind == SyntaxKinds.ListHole && !source.TemplateLists.ContainsKey(node))
             throw new Failure(new("NQ0001", span, "A list marker must occupy a supported list item site."));
-        var children = new List<Built>();
-        bool expand = holes && kind == SyntaxKinds.List && Enumerable.Range(0, source.ChildCount(node))
-            .Any(i => source.Kind(source.Child(node, i)) == SyntaxKinds.ListHole);
+        var children = new List<Built?>();
+        bool expand = holes && (kind == SyntaxKinds.ListHole || kind == SyntaxKinds.List && Enumerable.Range(0, source.ChildCount(node))
+            .Any(i => source.Child(node, i) is var child && child != SyntaxTree.NoNode && source.Kind(child) == SyntaxKinds.ListHole));
         if (expand)
         {
             if (!source.TemplateLists.TryGetValue(node, out var shape))
                 throw new Failure(new("NQ0001", span, "Unsupported destination list shape."));
             int stride = shape.Separator is null ? 1 : 2;
-            for (int i = 0; i < source.ChildCount(node); i += stride)
+            for (int i = 0; i < ListSlot.Count(source, node); i += stride)
             {
-                int child = source.Child(node, i);
+                int child = ListSlot.Child(source, node, i);
                 if (source.Kind(child) == SyntaxKinds.ListHole)
                 {
                     string name = source.GetText(child)[3..].ToString();
@@ -106,6 +112,10 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             int itemCount = stride == 1 ? children.Count : (children.Count + 1) / 2;
             if (itemCount < shape.MinimumCount)
                 throw new Failure(new("NQ0005", span, "The instantiated list requires at least one item."));
+            // As a parse makes them: an empty list is a null slot, and a one-item list is its item.
+            if (children.Count == 0) return null;
+            if (children.Count == 1) return children[0];
+            kind = SyntaxKinds.List;
 
             void Separator()
             {
@@ -125,6 +135,11 @@ internal sealed class QuoteInstantiator(SyntaxTree template, IReadOnlyDictionary
             for (int i = 0; i < source.ChildCount(node); i++)
             {
                 int child = source.Child(node, i);
+                if (child == SyntaxTree.NoNode)
+                {
+                    children.Add(null);
+                    continue;
+                }
                 var childSpan = source.Span(child);
                 if (childSpan.Start > cursor) _text.Append(source.Text, cursor, childSpan.Start - cursor);
                 // With only an explicit subtree origin, descendants conservatively retain that

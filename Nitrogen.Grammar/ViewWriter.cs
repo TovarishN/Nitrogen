@@ -23,7 +23,7 @@ internal sealed class ViewWriter
         foreach (var kind in _info.Kinds)
         {
             if (kind.Rule is SyntaxRule syntax) WriteNode(b, kind, SyntaxCodeWriter.Elements(syntax.Body), null);
-            else if (kind.Alternative is { } alternative) WriteNode(b, kind, SyntaxCodeWriter.Elements(alternative.Body), kind.ImplicitModule);
+            else if (kind.Alternative is { IsTransparent: false } alternative) WriteNode(b, kind, SyntaxCodeWriter.Elements(alternative.Body), kind.ImplicitModule);
         }
         WriteVisitor(b);
     }
@@ -44,7 +44,7 @@ internal sealed class ViewWriter
         WriteHeader(b, name);
         b.Append("\n    public int Kind => Tree.Kind(Index);\n")
             .Append("\n    public T As<T>() where T : struct, ISyntaxView<T> => SyntaxView.Cast<T>(Tree, Index);\n")
-            .Append("\n    public static bool Is(SyntaxTree tree, int index) => true;\n")
+            .Append("\n    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode;\n")
             .Append($"\n    public static {name} Create(SyntaxTree tree, int index) => new(tree, index);\n}}\n\n");
     }
 
@@ -54,7 +54,7 @@ internal sealed class ViewWriter
         WriteHeader(b, name);
         foreach (var (property, type, child) in Properties(elements, implicitModule, name))
             b.Append($"\n    public {type} {property} => new(Tree, Tree.Child(Index, {child}));\n");
-        b.Append($"\n    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == {_info.KindsName}.{CSharpText.Identifier(kind.Name)};\n")
+        b.Append($"\n    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == {_info.KindsName}.{CSharpText.Identifier(kind.Name)};\n")
             .Append($"\n    public static {name} Create(SyntaxTree tree, int index) => new(tree, index);\n}}\n\n");
     }
 
@@ -127,7 +127,8 @@ internal sealed class ViewWriter
                 return symbol.Rule switch
                 {
                     TokenRule => "Token",
-                    SyntaxRule syntax when EmitModel.IsAlias(syntax) => "SyntaxNode",
+                    SyntaxRule syntax when EmitModel.IsAlias(syntax) =>
+                        _model.IsLeafAlias(syntax, symbol.Module) ? "Token" : "SyntaxNode",
                     _ => target.TypeRef(_info, symbol.Rule.Name + "Node"),
                 };
             }
@@ -150,7 +151,7 @@ internal sealed class ViewWriter
 
     void WriteVisitor(StringBuilder b)
     {
-        var visited = _info.Kinds.Where(k => k.Rule is not TokenRule).ToList();
+        var visited = _info.Kinds.Where(k => k.Rule is not TokenRule && !k.IsTransparent).ToList();
         if (visited.Count == 0) return;
         string cls = _info.ClassName;
         b.Append($"public abstract class {_info.VisitorName}<TResult>\n{{\n")

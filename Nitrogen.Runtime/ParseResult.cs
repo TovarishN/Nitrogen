@@ -4,7 +4,8 @@ namespace Nitrogen;
 
 /// <param name="ArenaNodes">Nodes created during the parse, including discarded ones.</param>
 /// <param name="TreeNodes">Nodes in the final tree.</param>
-public readonly record struct ParseStats(int ArenaNodes, int TreeNodes, int MemoHits, int MemoMisses);
+/// <param name="ReusedNodes">Tree nodes an incremental reparse copied from the previous tree.</param>
+public readonly record struct ParseStats(int ArenaNodes, int TreeNodes, int MemoHits, int MemoMisses, int ReusedNodes = 0);
 
 /// <summary>Where the fast pass failed and what it expected there: diagnostic 0 of a failed parse.</summary>
 internal readonly record struct FirstFailure(int Position, string[]? Expected, bool[]? IsLiteral, int Count)
@@ -44,7 +45,25 @@ public sealed class ParseResult : IDisposable
     /// <summary>True when the input parsed without repairs; the tree may still contain ambiguities.</summary>
     public bool Success { get; }
 
-    public ParseStats Stats { get; }
+    public ParseStats Stats { get; internal set; }
+
+    /// <summary>The rule results an incremental reparse may reuse; null for a plain parse.</summary>
+    internal ReuseTable? Reuse { get; set; }
+
+    /// <summary>
+    /// The tree <see cref="Reuse"/> indexes, when it is not this result's own: a result whose text had errors keeps a
+    /// private copy of the last successful tree, so typing through an error still reuses. Disposed with this result.
+    /// </summary>
+    internal SyntaxTree? ReuseTree { get; set; }
+
+    /// <summary>The parsed text of the reuse base (<see cref="ReuseTree"/>, or this result's own parse).</summary>
+    internal string? ReuseText { get; set; }
+
+    /// <summary>The start rule this result was parsed from (incremental results only).</summary>
+    internal Rule StartRule { get; set; }
+
+    /// <summary>True for a result of <see cref="Language.ParseIncremental"/> or <see cref="Language.Reparse"/>, which keeps the data a reparse needs.</summary>
+    public bool IsIncremental => Reuse is not null;
 
     public ReadOnlySpan<Diagnostic> Diagnostics => _diagnostics.AsSpan(0, _diagnosticCount);
 
@@ -158,6 +177,7 @@ public sealed class ParseResult : IDisposable
     public void Dispose()
     {
         Tree.Dispose();
+        ReuseTree?.Dispose();
         if (_diagnostics is not null) ArrayPool<Diagnostic>.Shared.Return(_diagnostics);
         if (_expected is not null) ArrayPool<string>.Shared.Return(_expected, clearArray: true);
         if (_expectedIsLiteral is not null) ArrayPool<bool>.Shared.Return(_expectedIsLiteral);

@@ -1,0 +1,24 @@
+// Tree shapes (compact trees): absent optionals and empty lists are null child slots, and a
+// one-item list is its item. Anon and Want bind through an optional name, which may be a null
+// slot. Nest's items are lists themselves, so its one-item list keeps its List node. Stmt's
+// transparent alternative leaves its Var or ";" where the Stmt was parsed; Tie's transparent Word
+// ties with Wrapped on the same name. Stmt has its own Var rather than Decl: a rule an extension point
+// calls commits only as composed, which would take Decl's recovery away from File.
+syntax module Shapes
+{
+  symbols { value }
+
+  token Name = ['a'..'z']+ except "decl" "int" "public" "static" "anon" "want" "nest";
+  syntax File = Decls:Decl*;
+  syntax Decl = Mods:Mod* "decl" Name:Name Type:(":" TypeName)? "{" Items:(Name; ",")* "}";
+  syntax Mod = "public" / "static";
+  syntax TypeName = "int" / Name;
+  syntax Anon = "anon" Name:Name? ";" declares value Name;
+  syntax Want = "want" Target:Name? ";" references value Target;
+  syntax Nest = "nest" Lines:(Name+; ";")* ".";
+  syntax Var = "var" Name:Name;
+  extensible syntax Stmt { | transparent Plain = Body:(Var / ";") }
+  syntax Block = "{" Stmts:Stmt* "}";
+  extensible syntax Tie { | transparent Word = Name | Wrapped = Inner:Name }
+  syntax Ties = "tie" Tie;
+}

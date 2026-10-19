@@ -88,7 +88,7 @@ public sealed class QuoteTemplate
                         continue;
                     }
                     if (!ReferenceEquals(value.Tree.Language, _parsed.Tree.Language) ||
-                        !_parsed.Tree.Language!.AcceptsQuoteNode(hole.Category, value.Tree.Kind(value.Node)))
+                        !_parsed.Tree.Language!.AcceptsQuoteNode(hole.Category, value.Tree, value.Node))
                         diagnostics.Add(new("NQ0004", value.Tree.Span(value.Node), "Source node category or language snapshot does not match.", name));
                     else if (!ValidSource(value.Tree, value.Node))
                         diagnostics.Add(new("NQ0003", value.Tree.Span(value.Node), "Recovered, ambiguous, or template syntax cannot be inserted.", name));
@@ -109,7 +109,8 @@ public sealed class QuoteTemplate
             if (tree.Flags(current) != NodeFlags.None || tree.Kind(current) is
                 SyntaxKinds.Hole or SyntaxKinds.ListHole or SyntaxKinds.Error or SyntaxKinds.Ambiguous ||
                 !tree.SkippedTrivia(current).IsEmpty) return false;
-            for (int i = 0; i < tree.ChildCount(current); i++) stack.Push(tree.Child(current, i));
+            for (int i = 0; i < tree.ChildCount(current); i++)
+                if (tree.Child(current, i) is var child && child != SyntaxTree.NoNode) stack.Push(child);
         }
         return true;
     }

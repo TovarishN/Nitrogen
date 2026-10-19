@@ -31,9 +31,10 @@ public sealed class DeclarativeTypes
         _checkedNodes = new bool[file.Tree.NodeCount];
     }
 
-    /// <summary>The node's type; null when untyped, <see cref="SemanticTypes.Error"/> when invalid.</summary>
+    /// <summary>The node's type; null when untyped (a null slot too), <see cref="SemanticTypes.Error"/> when invalid.</summary>
     public SemanticType? TypeOf(int node)
     {
+        if (node == SyntaxTree.NoNode) return null;
         if (_types.TryGetValue(node, out var cached)) return cached;
         if (!_typing.Add(node)) return SemanticTypes.Error; // a cyclic expansion: lowering reports it
         SemanticType? type;
@@ -168,9 +169,9 @@ public sealed class DeclarativeTypes
             int iterator = tree.Child(node, rule.Rule.Arguments[1]);
             var symbol = _file.Binding.Declarations.FirstOrDefault(declaration => declaration.Node == iterator);
             if (TypeOf(count)?.Equals(SemanticTypes.Scalar) != true)
-                Report("NT0001", count, "repeat count needs Core.Scalar");
+                Report("NT0001", SlotSpan(node, rule.Rule.Arguments[0]), "repeat count needs Core.Scalar");
             if (symbol is null || TypeOfSymbol(symbol)?.Equals(SemanticTypes.Scalar) != true)
-                Report("NT0004", iterator, "repeat iterator needs a declared Core.Scalar symbol");
+                Report("NT0004", SlotSpan(node, rule.Rule.Arguments[1]), "repeat iterator needs a declared Core.Scalar symbol");
             foreach (var item in SequenceItems(tree.Child(node, rule.Rule.Arguments[2]), rule.Rule.SequenceStride))
                 if (TypeOf(item)?.Equals(rule.LiteralType) != true)
                     Report("NT0001", item, $"repeat template needs {rule.LiteralType}");
@@ -187,32 +188,33 @@ public sealed class DeclarativeTypes
             for (int i = 0; i < rule.Rule.Arguments.Count; i++)
             {
                 int argument = tree.Child(node, rule.Rule.Arguments[i]);
+                var at = SlotSpan(node, rule.Rule.Arguments[i]);
                 var expected = operation.Inputs[i];
                 if (rule.Rule.ArgumentOptionalTexts[i])
                 {
-                    if (tree.Kind(argument) != SyntaxKinds.Empty && Spelled(argument) is null)
-                        Report("NT0005", argument, "text argument has no complete source text");
+                    if (argument != SyntaxTree.NoNode && Spelled(argument) is null)
+                        Report("NT0005", at, "text argument has no complete source text");
                     continue;
                 }
                 if (rule.Rule.ArgumentTexts[i])
                 {
                     if (Spelled(argument) is null)
-                        Report("NT0005", argument, "text argument has no complete source text");
+                        Report("NT0005", at, "text argument has no complete source text");
                     else if (!expected.Equals(SemanticTypes.Text))
-                        Report("NT0001", argument, $"'{operation.Id}' needs {expected}, not {SemanticTypes.Text}");
+                        Report("NT0001", at, $"'{operation.Id}' needs {expected}, not {SemanticTypes.Text}");
                     continue;
                 }
                 if (rule.ArgumentOptionalTypes[i] is { } optionalType)
                 {
                     if (!expected.Equals(SemanticTypes.OptionalOf(optionalType)))
-                        Report("NT0001", argument, $"'{operation.Id}' needs {expected}, not an optional of {optionalType}");
-                    if (tree.Kind(argument) != SyntaxKinds.Empty)
+                        Report("NT0001", at, $"'{operation.Id}' needs {expected}, not an optional of {optionalType}");
+                    if (argument != SyntaxTree.NoNode)
                     {
                         var itemActual = TypeOf(argument);
                         if (itemActual is null)
-                            Report("NT0004", argument, $"'{Text(argument)}' has no declared type; optional needs {optionalType}");
+                            Report("NT0004", at, $"'{Text(argument)}' has no declared type; optional needs {optionalType}");
                         else if (!itemActual.Equals(SemanticTypes.Error) && !itemActual.Equals(optionalType))
-                            Report("NT0001", argument, $"optional needs {optionalType}, not {itemActual}");
+                            Report("NT0001", at, $"optional needs {optionalType}, not {itemActual}");
                     }
                     continue;
                 }
@@ -220,13 +222,13 @@ public sealed class DeclarativeTypes
                     ? DeclarativeLowering.SequenceElement(expected) : rule.ArgumentSequenceTypes[i];
                 if (rule.Rule.ArgumentInferredSequences[i] && sequenceType is null)
                 {
-                    Report("NT0001", argument, $"'{operation.Id}' needs {expected}, which is not a sequence");
+                    Report("NT0001", at, $"'{operation.Id}' needs {expected}, which is not a sequence");
                     continue;
                 }
                 if (sequenceType is { } itemType)
                 {
                     if (!expected.Equals(SemanticTypes.SequenceOf(itemType)))
-                        Report("NT0001", argument, $"'{operation.Id}' needs {expected}, not a sequence of {itemType}");
+                        Report("NT0001", at, $"'{operation.Id}' needs {expected}, not a sequence of {itemType}");
                     foreach (var item in SequenceItems(argument, rule.Rule.ArgumentSequenceStrides[i]))
                     {
                         var itemActual = TypeOf(item);
@@ -241,10 +243,10 @@ public sealed class DeclarativeTypes
                 if (actual is null)
                 {
                     if (!UncoveredOperation(argument))
-                        Report("NT0004", argument, $"'{Text(argument)}' has no declared type; '{operation.Id}' needs {expected}");
+                        Report("NT0004", at, $"'{Text(argument)}' has no declared type; '{operation.Id}' needs {expected}");
                 }
                 else if (!actual.Equals(SemanticTypes.Error) && !actual.Equals(expected))
-                    Report("NT0001", argument, $"'{operation.Id}' needs {expected}, not {actual}");
+                    Report("NT0001", at, $"'{operation.Id}' needs {expected}, not {actual}");
             }
         }
         else if (rule.Rule.Form == DeclarativeForm.Expand)
@@ -305,6 +307,7 @@ public sealed class DeclarativeTypes
 
     HirNode? Lower(LoweringContext context, int node)
     {
+        if (node == SyntaxTree.NoNode) return null;
         if (_file.Tree.Kind(node) == SyntaxKinds.Hole)
         {
             if (context.Holes is { } holes && holes.TryGetValue(node, out var lowered)) return lowered;
@@ -337,7 +340,7 @@ public sealed class DeclarativeTypes
                     items.Add(lowered);
                 }
                 return new HirRepeat(count, SemanticSymbol.From(symbol, ModuleOf(symbol, iterator), SemanticTypes.Scalar),
-                    new HirSequence(rule.LiteralType!, items, context.Origin(template)), context.Origin(node));
+                    new HirSequence(rule.LiteralType!, items, context.SlotOrigin(node, rule.Rule.Arguments[2])), context.Origin(node));
             }
             if (rule.Rule.Form == DeclarativeForm.Literal)
                 return TryLiteral(node, rule.Rule, out var value) ? new HirConstant(value, type, context.Origin(node)) : null;
@@ -398,24 +401,24 @@ public sealed class DeclarativeTypes
                 if (rule.Rule.ArgumentOptionalTexts[i])
                 {
                     HirText? text = null;
-                    if (tree.Kind(source) != SyntaxKinds.Empty)
+                    if (source != SyntaxTree.NoNode)
                     {
                         if (Spelled(source) is not { } spelled) return null;
                         text = new HirText(spelled, context.Origin(source));
                     }
-                    argument = new HirOptional(SemanticTypes.Text, text, context.Origin(source));
+                    argument = new HirOptional(SemanticTypes.Text, text, context.SlotOrigin(node, rule.Rule.Arguments[i]));
                 }
                 else if (rule.Rule.ArgumentTexts[i])
                     argument = Spelled(source) is { } text ? new HirText(text, context.Origin(source)) : null;
                 else if (rule.ArgumentOptionalTypes[i] is { } optionalType)
                 {
                     HirNode? item = null;
-                    if (tree.Kind(source) != SyntaxKinds.Empty)
+                    if (source != SyntaxTree.NoNode)
                     {
                         item = Lower(context, source);
                         if (item is null || !item.Type.Equals(optionalType)) return null;
                     }
-                    argument = new HirOptional(optionalType, item, context.Origin(source));
+                    argument = new HirOptional(optionalType, item, context.SlotOrigin(node, rule.Rule.Arguments[i]));
                 }
                 else if ((rule.Rule.ArgumentInferredSequences[i]
                     ? DeclarativeLowering.SequenceElement(operation.Inputs[i]) : rule.ArgumentSequenceTypes[i]) is { } itemType)
@@ -427,7 +430,7 @@ public sealed class DeclarativeTypes
                         if (lowered is null || !lowered.Type.Equals(itemType)) return null;
                         items.Add(lowered);
                     }
-                    argument = new HirSequence(itemType, items, context.Origin(source));
+                    argument = new HirSequence(itemType, items, context.SlotOrigin(node, rule.Rule.Arguments[i]));
                 }
                 else argument = Lower(context, source);
                 if (argument is null || !argument.Type.Equals(operation.Inputs[i])) return null;
@@ -664,6 +667,7 @@ public sealed class DeclarativeTypes
     bool UncoveredOperation(int node)
     {
         var tree = _file.Tree;
+        if (node == SyntaxTree.NoNode) return false;
         if (_lowering.RuleFor(tree.Kind(node)) is { } rule && rule.Rule.Form != DeclarativeForm.None)
             return rule.Rule.Form == DeclarativeForm.Operation && MissingOptionalOperation(node, rule);
         if (_file.HasReference(node)) return false;
@@ -677,19 +681,26 @@ public sealed class DeclarativeTypes
 
     IEnumerable<int> SequenceItems(int node, DeclarativeRule rule)
     {
-        var tree = _file.Tree;
-        int list = FieldNode(node, rule);
-        return SequenceItems(list, rule.SequenceStride);
+        if (rule.Arguments[0] < 0) return Children(node, rule.SequenceStride); // "this": the node's own children
+        return SequenceItems(_file.Tree.Child(node, rule.Arguments[0]), rule.SequenceStride);
     }
 
+    /// <summary>The items of a list slot: none for a null slot, the slot itself for a one-item list.</summary>
     IEnumerable<int> SequenceItems(int list, int stride)
     {
         var tree = _file.Tree;
-        for (int i = 0; i < tree.ChildCount(list); i += stride)
-            yield return tree.Child(list, i);
+        for (int i = 0; i < ListSlot.Count(tree, list); i += stride)
+            yield return ListSlot.Child(tree, list, i);
     }
 
-    /// <summary>The node's tokens without trivia; null when empty or any part is Missing.</summary>
+    IEnumerable<int> Children(int node, int stride)
+    {
+        var tree = _file.Tree;
+        for (int i = 0; i < tree.ChildCount(node); i += stride)
+            yield return tree.Child(node, i);
+    }
+
+    /// <summary>The node's tokens without trivia; null when empty (a null slot too) or any part is Missing.</summary>
     string? Spelled(int node)
     {
         var text = new StringBuilder();
@@ -699,6 +710,7 @@ public sealed class DeclarativeTypes
     bool Append(int node, StringBuilder text)
     {
         var tree = _file.Tree;
+        if (node == SyntaxTree.NoNode) return true;
         if ((tree.Flags(node) & NodeFlags.Missing) != 0) return false;
         int count = tree.ChildCount(node);
         if (count == 0)
@@ -713,6 +725,10 @@ public sealed class DeclarativeTypes
     }
 
     string Text(int node) => Spelled(node) ?? "";
+
+    /// <summary>The span of <paramref name="node"/>'s child in <paramref name="slot"/>; a null slot's is empty, where the element would be.</summary>
+    TextSpan SlotSpan(int node, int slot) => _file.Tree.Child(node, slot) is var child && child != SyntaxTree.NoNode
+        ? _file.Tree.Span(child) : _file.Tree.NullSlotSpan(node, slot);
 
     void Report(string code, int node, string message) => Report(code, _file.Tree.Span(node), message);
 

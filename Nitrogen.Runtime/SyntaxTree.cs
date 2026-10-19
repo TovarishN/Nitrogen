@@ -3,39 +3,56 @@ using System.Buffers;
 namespace Nitrogen;
 
 /// <summary>
-/// Immutable concrete syntax tree in preorder struct-of-arrays form over pooled arrays. Node 0 is
-/// the root. The arrays go back to the pool on <see cref="Dispose"/>; any access after that
-/// throws <see cref="ObjectDisposedException"/>.
+/// Immutable concrete syntax tree in preorder struct-of-arrays form. Node 0 is the root. Trees up
+/// to <see cref="TreeFreezer.PooledTreeNodes"/> nodes use pooled arrays that go back to the pool on
+/// <see cref="Dispose"/>; larger trees own exact-size arrays. Any access after disposal throws
+/// <see cref="ObjectDisposedException"/>.
 /// </summary>
 public sealed class SyntaxTree : IDisposable
 {
-    int[]? _kind, _start, _length, _childStart, _childCount, _children, _parent;
-    NodeFlags[]? _flags;
+    /// <summary>
+    /// What <see cref="Child"/> returns for a null slot: an absent optional or an empty list has no
+    /// node, but keeps its slot so positional child indices stay stable.
+    /// </summary>
+    public const int NoNode = -1;
+
+    // _kind holds a dense id (DenseKindTable) in its low 12 bits and the node's NodeFlags in the top 4
+    // (DenseKindTable.Pack); _kindOf maps dense ids back to full kinds and is shared, not owned.
+    // _childStart has NodeCount + 1 entries: node n's children are _children[_childStart[n].._childStart[n + 1]).
+    ushort[]? _kind;
+    readonly int[] _kindOf;
+    int[]? _start, _length, _childStart, _children, _parent;
+    // _trivia is built on first access (Trivia); _triviaCount is written before _trivia is published.
     TextSpan[]? _trivia, _skipped;
     int _triviaCount, _skippedCount;
+    readonly bool _pooled;
 
     internal SyntaxTree(string text, Language? language, int nodeCount,
-        int[] kind, int[] start, int[] length, NodeFlags[] flags,
-        int[] childStart, int[] childCount, int[] children,
-        TextSpan[] trivia, int triviaCount, TextSpan[] skipped, int skippedCount)
+        ushort[] kind, int[] kindOf, int[] start, int[] length,
+        int[] childStart, int[] children,
+        TextSpan[] skipped, int skippedCount, bool pooled)
     {
+        _pooled = pooled;
         Text = text;
         Language = language;
         NodeCount = nodeCount;
         _kind = kind;
+        _kindOf = kindOf;
         _start = start;
         _length = length;
-        _flags = flags;
         _childStart = childStart;
-        _childCount = childCount;
         _children = children;
-        _trivia = trivia;
-        _triviaCount = triviaCount;
         _skipped = skipped;
         _skippedCount = skippedCount;
     }
 
     internal IReadOnlyDictionary<int, TemplateListShape> TemplateLists { get; init; } = new Dictionary<int, TemplateListShape>();
+
+    /// <summary>
+    /// The template list a list hole is an item of: the hole itself when it stands alone in a list
+    /// collapsed to one item, otherwise its parent.
+    /// </summary>
+    internal int TemplateList(int listHole) => TemplateLists.ContainsKey(listHole) ? listHole : Parent(listHole);
 
     internal Guid? QuotationIdentity { get; set; }
 
@@ -49,10 +66,68 @@ public sealed class SyntaxTree : IDisposable
 
     public bool IsDisposed => _kind is null;
 
+    /// <summary>The arrays are rented from the pool (a small tree) rather than owned at exact size.</summary>
+    internal bool IsPooled => _pooled;
+
+    /// <summary>An exact-size copy owning its arrays, independent of this tree's disposal (a reuse base kept past an error).</summary>
+    internal SyntaxTree Copy()
+    {
+        if (_kind is null) throw new ObjectDisposedException(nameof(SyntaxTree));
+        int slots = _childStart![NodeCount];
+        return new SyntaxTree(Text, Language, NodeCount, _kind.AsSpan(0, NodeCount).ToArray(), _kindOf,
+            _start!.AsSpan(0, NodeCount).ToArray(), _length!.AsSpan(0, NodeCount).ToArray(),
+            _childStart.AsSpan(0, NodeCount + 1).ToArray(), _children!.AsSpan(0, slots).ToArray(),
+            _skipped!.AsSpan(0, _skippedCount).ToArray(), _skippedCount, pooled: false) { TemplateLists = TemplateLists };
+    }
+
+    /// <summary>One past the last node of <paramref name="node"/>'s subtree, which is contiguous in preorder.</summary>
+    internal int SubtreeEnd(int node)
+    {
+        Check(node);
+        while (true)
+        {
+            int last = SyntaxTree.NoNode;
+            for (int k = _childStart![node + 1] - 1; k >= _childStart[node]; k--)
+                if (_children![k] != NoNode)
+                {
+                    last = _children[k];
+                    break;
+                }
+            if (last == NoNode) return node + 1;
+            node = last;
+        }
+    }
+
+    /// <summary>The first child slot of <paramref name="node"/> (<paramref name="node"/> may be <see cref="NodeCount"/>, the end sentinel).</summary>
+    internal int ChildStart(int node) => _childStart![node];
+
+    /// <summary>
+    /// Copies the preorder block <paramref name="graft"/> into a tree being frozen at node <paramref name="to"/> and
+    /// slot <paramref name="toSlot"/>: rows keep their packed kinds (the same Language's dense ids), positions move
+    /// by its delta, and child indices move with the block, except null slots.
+    /// </summary>
+    internal void CopyBlock(in Graft graft, int to, int toSlot, ushort[] kind, int[] start, int[] length, int[] childStart, int[] children)
+    {
+        int root = graft.Root, size = graft.Size;
+        Array.Copy(_kind!, root, kind, to, size);
+        Array.Copy(_length!, root, length, to, size);
+        int posDelta = graft.PosDelta, slotDelta = toSlot - graft.SlotStart, indexDelta = to - root;
+        for (int j = 0; j < size; j++)
+        {
+            start[to + j] = _start![root + j] + posDelta;
+            childStart[to + j] = _childStart![root + j] + slotDelta;
+        }
+        for (int k = graft.SlotStart; k < graft.SlotEnd; k++)
+        {
+            int child = _children![k];
+            children[k + slotDelta] = child == NoNode ? NoNode : child + indexDelta;
+        }
+    }
+
     public int Kind(int node)
     {
         Check(node);
-        return _kind![node];
+        return _kindOf[_kind![node] & DenseKindTable.MaxDense];
     }
 
     public TextSpan Span(int node)
@@ -64,20 +139,34 @@ public sealed class SyntaxTree : IDisposable
     public NodeFlags Flags(int node)
     {
         Check(node);
-        return _flags![node];
+        return (NodeFlags)(_kind![node] >> DenseKindTable.IdBits);
     }
 
+    /// <summary>The node's child slots, null slots included.</summary>
     public int ChildCount(int node)
     {
         Check(node);
-        return _childCount![node];
+        return _childStart![node + 1] - _childStart[node];
     }
 
+    /// <summary>The child in slot <paramref name="index"/>, or <see cref="NoNode"/> for a null slot.</summary>
     public int Child(int node, int index)
     {
         Check(node);
-        if ((uint)index >= (uint)_childCount![node]) throw new ArgumentOutOfRangeException(nameof(index));
-        return _children![_childStart![node] + index];
+        int first = _childStart![node];
+        if ((uint)index >= (uint)(_childStart[node + 1] - first)) throw new ArgumentOutOfRangeException(nameof(index));
+        return _children![first + index];
+    }
+
+    /// <summary>
+    /// Where a null slot of <paramref name="node"/> sits: an empty span at the start of the next child
+    /// that has a node, else at the node's end. Diagnostics and origins about an absent element use it.
+    /// </summary>
+    internal TextSpan NullSlotSpan(int node, int slot)
+    {
+        for (int k = slot + 1, count = ChildCount(node); k < count; k++)
+            if (Child(node, k) is var next && next != NoNode) return new TextSpan(Span(next).Start, 0);
+        return new TextSpan(Span(node).End, 0);
     }
 
     /// <summary>The parent's index, or -1 for the root. The parent table is built on first use.</summary>
@@ -94,8 +183,17 @@ public sealed class SyntaxTree : IDisposable
         return Text.AsSpan(span.Start, span.Length);
     }
 
-    /// <summary>Gaps between tokens (whitespace and comments), in text order.</summary>
-    public ReadOnlySpan<TextSpan> Trivia => (_trivia ?? throw Disposed()).AsSpan(0, _triviaCount);
+    /// <summary>Gaps between tokens (whitespace and comments), in text order. Built on first access.</summary>
+    public ReadOnlySpan<TextSpan> Trivia
+    {
+        get
+        {
+            if (_kind is null) throw Disposed();
+            // Racing builders compute the same gaps; one array wins (a pooled loser is left to the GC).
+            var trivia = Volatile.Read(ref _trivia) ?? BuildTrivia();
+            return trivia.AsSpan(0, _triviaCount);
+        }
+    }
 
     /// <summary>Input the recovery pass skipped (issue 235), in text order. It is part of <see cref="Trivia"/> too.</summary>
     public ReadOnlySpan<TextSpan> SkippedSpans => (_skipped ?? throw Disposed()).AsSpan(0, _skippedCount);
@@ -115,20 +213,23 @@ public sealed class SyntaxTree : IDisposable
     public void Dispose()
     {
         if (_kind is null) return;
-        ArrayPool<int>.Shared.Return(_kind);
+        if (_pooled) ReturnToPool();
+        _kind = null;
+        _start = _length = _childStart = _children = _parent = null;
+        _trivia = _skipped = null;
+        _triviaCount = _skippedCount = 0;
+    }
+
+    void ReturnToPool()
+    {
+        ArrayPool<ushort>.Shared.Return(_kind!);
         ArrayPool<int>.Shared.Return(_start!);
         ArrayPool<int>.Shared.Return(_length!);
         ArrayPool<int>.Shared.Return(_childStart!);
-        ArrayPool<int>.Shared.Return(_childCount!);
         ArrayPool<int>.Shared.Return(_children!);
         if (_parent is not null) ArrayPool<int>.Shared.Return(_parent);
-        ArrayPool<NodeFlags>.Shared.Return(_flags!);
-        ArrayPool<TextSpan>.Shared.Return(_trivia!);
+        if (_trivia is not null) ArrayPool<TextSpan>.Shared.Return(_trivia);
         if (_skipped!.Length > 0) ArrayPool<TextSpan>.Shared.Return(_skipped);
-        _kind = _start = _length = _childStart = _childCount = _children = _parent = null;
-        _flags = null;
-        _trivia = _skipped = null;
-        _triviaCount = _skippedCount = 0;
     }
 
     void Check(int node)
@@ -139,14 +240,54 @@ public sealed class SyntaxTree : IDisposable
 
     int[] BuildParents()
     {
-        var parent = ArrayPool<int>.Shared.Rent(NodeCount);
+        var parent = _pooled ? ArrayPool<int>.Shared.Rent(NodeCount) : GC.AllocateUninitializedArray<int>(NodeCount);
         parent[0] = -1;
         for (int n = 0; n < NodeCount; n++)
         {
-            int first = _childStart![n];
-            for (int k = 0; k < _childCount![n]; k++) parent[_children![first + k]] = n;
+            for (int k = _childStart![n], end = _childStart[n + 1]; k < end; k++)
+            {
+                int child = _children![k];
+                if (child != NoNode) parent[child] = n;
+            }
         }
         return parent;
+    }
+
+    /// <summary>
+    /// Trivia: gaps between consecutive non-empty leaves (preorder is text order). Skipped text is a
+    /// gap too. The gaps are counted first; a pooled tree rents the array, a larger one owns it at exact size.
+    /// </summary>
+    TextSpan[] BuildTrivia()
+    {
+        int count = CollectTrivia(null);
+        var trivia = _pooled ? ArrayPool<TextSpan>.Shared.Rent(Math.Max(count, 1)) : count == 0 ? [] : GC.AllocateUninitializedArray<TextSpan>(count);
+        CollectTrivia(trivia);
+        _triviaCount = count;
+        Volatile.Write(ref _trivia, trivia);
+        return trivia;
+    }
+
+    /// <summary>Writes the trivia gaps into <paramref name="trivia"/> (when given) and returns their count.</summary>
+    int CollectTrivia(TextSpan[]? trivia)
+    {
+        int[] start = _start!, length = _length!, childStart = _childStart!;
+        int count = 0, previousEnd = 0;
+        for (int n = 0; n < NodeCount; n++)
+        {
+            if (childStart[n + 1] != childStart[n] || length[n] == 0) continue;
+            if (start[n] > previousEnd)
+            {
+                if (trivia is not null) trivia[count] = new TextSpan(previousEnd, start[n] - previousEnd);
+                count++;
+            }
+            previousEnd = Math.Max(previousEnd, start[n] + length[n]);
+        }
+        if (Text.Length > previousEnd)
+        {
+            if (trivia is not null) trivia[count] = new TextSpan(previousEnd, Text.Length - previousEnd);
+            count++;
+        }
+        return count;
     }
 
     static ObjectDisposedException Disposed() => new(nameof(SyntaxTree));
