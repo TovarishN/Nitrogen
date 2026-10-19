@@ -286,4 +286,21 @@ public class IncrementalTests
     {
         Assert.Equal(new TextChange(start, oldLength, newLength), TextChange.Between(before, after));
     }
+
+    [Fact]
+    public void A_rolled_back_graft_carries_nothing_over()
+    {
+        // A graft whose arena slot backtracking reclaimed and gave to another node must not carry its block's entries.
+        using var previous = Calc.ParseIncremental(CalcProgram(5), CalcModule.Program);
+        var a = new BuildArena { GraftSource = previous.Tree };
+        var root = previous.Reuse![0];
+        int graft = a.NewGraft(root.Node, 0, root.Start, root.End);
+        a.NodeCount = graft; // rolled back
+        int other = a.NewNode(SyntaxKinds.Literal, 0, 1, NodeFlags.None, 0, 0);
+        Assert.Equal(graft, other);
+
+        var table = ReuseTable.From(a, [0], previous.Reuse);
+
+        Assert.Equal(0, table.Count);
+    }
 }

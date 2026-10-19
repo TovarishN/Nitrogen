@@ -42,6 +42,8 @@ internal sealed class ReuseTable
         {
             foreach (var (arenaNode, graft) in arena.Grafts)
             {
+                // A graft rolled back by backtracking may have had its arena slot reused by another node.
+                if (arenaNode >= arena.NodeCount || arena.Kind[arenaNode] != SyntaxKinds.Graft || arena.ChildStart[arenaNode] != graft.Root) continue;
                 int to = arenaToTree[arenaNode];
                 if (to < 0) continue;
                 int indexDelta = to - graft.Root, posDelta = graft.PosDelta;
