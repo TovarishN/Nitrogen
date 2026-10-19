@@ -1416,7 +1416,7 @@ public readonly struct ExprNode : ISyntaxView<ExprNode>
 
     public T As<T>() where T : struct, ISyntaxView<T> => SyntaxView.Cast<T>(Tree, Index);
 
-    public static bool Is(SyntaxTree tree, int index) => true;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode;
 
     public static ExprNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1441,7 +1441,7 @@ public readonly struct FileNode : ISyntaxView<FileNode>
 
     public SyntaxList<UnitNode> Units => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.File;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.File;
 
     public static FileNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1468,7 +1468,7 @@ public readonly struct UnitNode : ISyntaxView<UnitNode>
 
     public SyntaxList<SyntaxNode> Items => new(Tree, Tree.Child(Index, 3));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Unit;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Unit;
 
     public static UnitNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1495,7 +1495,7 @@ public readonly struct SequentialNode : ISyntaxView<SequentialNode>
 
     public ExprNode Value => new(Tree, Tree.Child(Index, 3));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Sequential;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Sequential;
 
     public static SequentialNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1522,7 +1522,7 @@ public readonly struct SequentialExportNode : ISyntaxView<SequentialExportNode>
 
     public ExprNode Value => new(Tree, Tree.Child(Index, 3));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.SequentialExport;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.SequentialExport;
 
     public static SequentialExportNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1547,7 +1547,7 @@ public readonly struct GlobalNode : ISyntaxView<GlobalNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Global;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Global;
 
     public static GlobalNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1572,7 +1572,7 @@ public readonly struct GlobalGenNode : ISyntaxView<GlobalGenNode>
 
     public GenNameNode Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.GlobalGen;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.GlobalGen;
 
     public static GlobalGenNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1599,7 +1599,7 @@ public readonly struct LetNode : ISyntaxView<LetNode>
 
     public ExprNode Value => new(Tree, Tree.Child(Index, 3));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Let;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Let;
 
     public static LetNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1624,7 +1624,7 @@ public readonly struct UseNode : ISyntaxView<UseNode>
 
     public Token Target => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Use;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Use;
 
     public static UseNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1649,7 +1649,7 @@ public readonly struct BlockNode : ISyntaxView<BlockNode>
 
     public SyntaxList<SyntaxNode> Items => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Block;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Block;
 
     public static BlockNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1674,7 +1674,7 @@ public readonly struct GenNode : ISyntaxView<GenNode>
 
     public GenNameNode Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Gen;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Gen;
 
     public static GenNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1701,7 +1701,7 @@ public readonly struct GenNameNode : ISyntaxView<GenNameNode>
 
     public Token Seq => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.GenName;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.GenName;
 
     public static GenNameNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1726,7 +1726,7 @@ public readonly struct NumExpr : ISyntaxView<NumExpr>
 
     public Token Number => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Num;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Num;
 
     public static NumExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1751,7 +1751,7 @@ public readonly struct RefExpr : ISyntaxView<RefExpr>
 
     public Token Identifier => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Ref;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Ref;
 
     public static RefExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1778,7 +1778,7 @@ public readonly struct CallExpr : ISyntaxView<CallExpr>
 
     public SeparatedList<ExprNode> Args => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Call;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Call;
 
     public static CallExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1805,7 +1805,7 @@ public readonly struct MemberExpr : ISyntaxView<MemberExpr>
 
     public Token Property => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Member;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Member;
 
     public static MemberExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1832,7 +1832,7 @@ public readonly struct AddExpr : ISyntaxView<AddExpr>
 
     public ExprNode Expr2 => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == ScopesKinds.Add;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == ScopesKinds.Add;
 
     public static AddExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }

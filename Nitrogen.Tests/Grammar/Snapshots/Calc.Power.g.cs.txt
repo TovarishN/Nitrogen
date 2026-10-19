@@ -107,7 +107,7 @@ public readonly struct PowExpr : ISyntaxView<PowExpr>
 
     public ExprNode Expr2 => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == PowerKinds.Pow;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == PowerKinds.Pow;
 
     public static PowExpr Create(SyntaxTree tree, int index) => new(tree, index);
 }

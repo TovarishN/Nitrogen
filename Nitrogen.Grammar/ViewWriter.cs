@@ -44,7 +44,7 @@ internal sealed class ViewWriter
         WriteHeader(b, name);
         b.Append("\n    public int Kind => Tree.Kind(Index);\n")
             .Append("\n    public T As<T>() where T : struct, ISyntaxView<T> => SyntaxView.Cast<T>(Tree, Index);\n")
-            .Append("\n    public static bool Is(SyntaxTree tree, int index) => true;\n")
+            .Append("\n    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode;\n")
             .Append($"\n    public static {name} Create(SyntaxTree tree, int index) => new(tree, index);\n}}\n\n");
     }
 
@@ -54,7 +54,7 @@ internal sealed class ViewWriter
         WriteHeader(b, name);
         foreach (var (property, type, child) in Properties(elements, implicitModule, name))
             b.Append($"\n    public {type} {property} => new(Tree, Tree.Child(Index, {child}));\n");
-        b.Append($"\n    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == {_info.KindsName}.{CSharpText.Identifier(kind.Name)};\n")
+        b.Append($"\n    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == {_info.KindsName}.{CSharpText.Identifier(kind.Name)};\n")
             .Append($"\n    public static {name} Create(SyntaxTree tree, int index) => new(tree, index);\n}}\n\n");
     }
 

@@ -104,6 +104,17 @@ public class ViewTests
     }
 
     [Fact]
+    public void Generated_views_reject_a_null_slot()
+    {
+        using var result = Calc.Parse("f(1);", CalcModule.Program);
+        var tree = result.Tree;
+        Assert.False(NumExpr.Is(tree, SyntaxTree.NoNode));
+        Assert.False(ExprNode.Is(tree, SyntaxTree.NoNode));
+        Assert.False(SyntaxView.TryCast<ExprNode>(tree, SyntaxTree.NoNode, out _));
+        Assert.True(ExprNode.Is(tree, tree.Child(CallNode(tree), 2)));
+    }
+
+    [Fact]
     public void Token_view_rejects_interior_nodes()
     {
         using var result = Calc.Parse("f(1);", CalcModule.Program);

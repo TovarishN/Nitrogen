@@ -667,7 +667,7 @@ public readonly struct DocumentNode : ISyntaxView<DocumentNode>
 
     public SeparatedList<SyntaxNode> Items => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Document;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Document;
 
     public static DocumentNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -692,7 +692,7 @@ public readonly struct BlockNode : ISyntaxView<BlockNode>
 
     public SyntaxList<SyntaxNode> Body => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Block;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Block;
 
     public static BlockNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -719,7 +719,7 @@ public readonly struct PickNode : ISyntaxView<PickNode>
 
     public Optional<Token> Mark => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Pick;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Pick;
 
     public static PickNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -744,7 +744,7 @@ public readonly struct TaggedNode : ISyntaxView<TaggedNode>
 
     public Token Word => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LexicalKinds.Tagged;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LexicalKinds.Tagged;
 
     public static TaggedNode Create(SyntaxTree tree, int index) => new(tree, index);
 }

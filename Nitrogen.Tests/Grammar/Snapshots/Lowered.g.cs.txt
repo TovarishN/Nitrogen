@@ -1034,7 +1034,7 @@ public readonly struct FileNode : ISyntaxView<FileNode>
 
     public SyntaxList<SyntaxNode> Items => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.File;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.File;
 
     public static FileNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1061,7 +1061,7 @@ public readonly struct InputNode : ISyntaxView<InputNode>
 
     public Token Annotation => new(Tree, Tree.Child(Index, 3));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Input;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Input;
 
     public static InputNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1086,7 +1086,7 @@ public readonly struct FixedNode : ISyntaxView<FixedNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Fixed;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Fixed;
 
     public static FixedNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1111,7 +1111,7 @@ public readonly struct PlainNode : ISyntaxView<PlainNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 1));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Plain;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Plain;
 
     public static PlainNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1136,7 +1136,7 @@ public readonly struct StatementNode : ISyntaxView<StatementNode>
 
     public SyntaxNode Body => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Statement;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Statement;
 
     public static StatementNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1163,7 +1163,7 @@ public readonly struct AddNode : ISyntaxView<AddNode>
 
     public SyntaxNode Right => new(Tree, Tree.Child(Index, 4));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Add;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Add;
 
     public static AddNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1188,7 +1188,7 @@ public readonly struct TurnNode : ISyntaxView<TurnNode>
 
     public SyntaxNode Amount => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Turn;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Turn;
 
     public static TurnNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1213,7 +1213,7 @@ public readonly struct WrapNode : ISyntaxView<WrapNode>
 
     public SyntaxNode Inner => new(Tree, Tree.Child(Index, 2));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Wrap;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Wrap;
 
     public static WrapNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1238,7 +1238,7 @@ public readonly struct NumNode : ISyntaxView<NumNode>
 
     public Token Text => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Num;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Num;
 
     public static NumNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
@@ -1263,7 +1263,7 @@ public readonly struct RefNode : ISyntaxView<RefNode>
 
     public Token Name => new(Tree, Tree.Child(Index, 0));
 
-    public static bool Is(SyntaxTree tree, int index) => tree.Kind(index) == LoweredKinds.Ref;
+    public static bool Is(SyntaxTree tree, int index) => index != SyntaxTree.NoNode && tree.Kind(index) == LoweredKinds.Ref;
 
     public static RefNode Create(SyntaxTree tree, int index) => new(tree, index);
 }
