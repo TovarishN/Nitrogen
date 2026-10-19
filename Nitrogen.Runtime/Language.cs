@@ -191,7 +191,7 @@ public sealed unsafe partial class Language
         // it to the new text by their common prefix and suffix, which is exact about what text is unchanged.
         var baseTree = previous.ReuseTree ?? previous.Tree;
         string baseText = previous.ReuseText!;
-        var baseChanges = previous.ReuseTree is null ? changes.ToArray() : [Difference(baseText, text)];
+        var baseChanges = previous.ReuseTree is null ? changes.ToArray() : [TextChange.Between(baseText, text)];
         var reuse = new ReuseContext(baseTree, previous.Reuse, baseChanges);
         var result = Parse(text, previous.StartRule, recoverOnly: false, treeText, incremental: true, reuse);
         result.StartRule = previous.StartRule;
@@ -209,14 +209,6 @@ public sealed unsafe partial class Language
         return result;
     }
 
-    /// <summary>The single change turning <paramref name="before"/> into <paramref name="after"/> between their common prefix and suffix.</summary>
-    static TextChange Difference(string before, string after)
-    {
-        int prefix = before.AsSpan().CommonPrefixLength(after);
-        int max = Math.Min(before.Length, after.Length) - prefix, suffix = 0;
-        while (suffix < max && before[before.Length - 1 - suffix] == after[after.Length - 1 - suffix]) suffix++;
-        return new TextChange(prefix, before.Length - prefix - suffix, after.Length - prefix - suffix);
-    }
 
     ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false, ReuseContext? reuse = null)
     {

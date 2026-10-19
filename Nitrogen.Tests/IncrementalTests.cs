@@ -275,4 +275,15 @@ public class IncrementalTests
         TreeAssert.Same(full, again);
         Assert.True(again.Stats.ReusedNodes > 0);
     }
+
+    [Theory]
+    [InlineData("abcdef", "abXdef", 2, 1, 1)]
+    [InlineData("abc", "abc", 3, 0, 0)]
+    [InlineData("aaa", "aaaa", 3, 0, 1)]
+    [InlineData("abc", "", 0, 3, 0)]
+    [InlineData("", "xy", 0, 0, 2)]
+    public void Between_is_the_change_between_common_prefix_and_suffix(string before, string after, int start, int oldLength, int newLength)
+    {
+        Assert.Equal(new TextChange(start, oldLength, newLength), TextChange.Between(before, after));
+    }
 }
