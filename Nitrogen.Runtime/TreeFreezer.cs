@@ -56,7 +56,6 @@ internal static class TreeFreezer
         var kind = Allocate<ushort>(nodes, pooled);
         var start = Allocate<int>(nodes, pooled);
         var length = Allocate<int>(nodes, pooled);
-        var flags = Allocate<NodeFlags>(nodes, pooled);
         // childStart has a sentinel: node n's children are slots childStart[n]..childStart[n + 1).
         var childStart = Allocate<int>(nodes + 1, pooled);
         var children = Allocate<int>(slots, pooled);
@@ -74,10 +73,9 @@ internal static class TreeFreezer
             int old = a.ScratchNode[sp], slot = a.ScratchSlot[sp];
             int n = next++;
             if (a.TemplateLists?.TryGetValue(old, out var shape) == true) listShapes[n] = shape;
-            kind[n] = kinds.DenseKind(a.Kind[old]);
+            kind[n] = DenseKindTable.Pack(kinds.DenseKind(a.Kind[old]), a.Flags[old]);
             start[n] = a.Start[old];
             length[n] = a.Length[old];
-            flags[n] = a.Flags[old];
             if (slot >= 0) children[slot] = n;
             int count = a.ChildCount[old], first = a.ChildStart[old];
             int kept = count;
@@ -90,7 +88,7 @@ internal static class TreeFreezer
                     int child = a.ChildLog[first + k];
                     if (child == SyntaxTree.NoNode || a.Kind[child] != SyntaxKinds.Skipped) continue;
                     kept--;
-                    flags[n] |= NodeFlags.Skipped;
+                    kind[n] |= DenseKindTable.Pack(0, NodeFlags.Skipped);
                     a.AddRepairEntry(new TextSpan(a.Start[child], a.Length[child]), DiagnosticCode.Skipped, a.ChildStart[child]);
                 }
             }
@@ -133,7 +131,7 @@ internal static class TreeFreezer
         }
 
         // The snapshot is read after every DenseKind call above, so it maps all of this tree's ids.
-        return new SyntaxTree(text, language, next, kind, kinds.Snapshot, start, length, flags,
+        return new SyntaxTree(text, language, next, kind, kinds.Snapshot, start, length,
             childStart, children, skipped, skippedCount, pooled) { TemplateLists = listShapes };
     }
 
@@ -142,14 +140,12 @@ internal static class TreeFreezer
         var kind = Rent<ushort>(1);
         var start = Rent<int>(1);
         var length = Rent<int>(1);
-        var flags = Rent<NodeFlags>(1);
         var childStart = Rent<int>(2);
-        kind[0] = SyntaxKinds.Error; // a built-in: its dense id is the kind itself
+        kind[0] = DenseKindTable.Pack(SyntaxKinds.Error, NodeFlags.Error); // a built-in: its dense id is the kind itself
         start[0] = 0;
         length[0] = text.Length;
-        flags[0] = NodeFlags.Error;
         childStart[0] = childStart[1] = 0;
-        return new SyntaxTree(text, language, 1, kind, (language?.Kinds ?? DenseKindTable.Shared).Snapshot, start, length, flags,
+        return new SyntaxTree(text, language, 1, kind, (language?.Kinds ?? DenseKindTable.Shared).Snapshot, start, length,
             childStart, Rent<int>(1), Array.Empty<TextSpan>(), 0, pooled: true);
     }
 

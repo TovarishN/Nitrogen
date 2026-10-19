@@ -60,6 +60,14 @@ public class LargeTreeTests
         Assert.Equal(new[] { new TextSpan((Items - 1) * Good.Length + 15, 2) }, tree.SkippedSpans.ToArray());
         Assert.Equal("(File (List " + string.Join(" ", Enumerable.Repeat(ItemDump(Good), Items - 1).Append(ItemDump(Bad))) + "))",
             SyntaxDumper.Dump(tree));
+
+        // Flags live in the top bits of the exact-size kind array: the bad item's flags survive there.
+        NodeFlags[] FlagsOf(SyntaxTree t, int from) => Enumerable.Range(from, t.NodeCount - from).Select(t.Flags).ToArray();
+        using var bad = Recovery.Parse(Bad, RecoveryModule.File);
+        var badFlags = FlagsOf(bad.Tree, 1);
+        Assert.Contains(badFlags, f => (f & NodeFlags.Skipped) != 0);
+        Assert.Equal(badFlags, FlagsOf(tree, tree.NodeCount - badFlags.Length));
+        Assert.All(FlagsOf(tree, 0)[..^badFlags.Length], f => Assert.Equal(NodeFlags.None, f));
     }
 
     [Fact]

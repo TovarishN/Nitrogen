@@ -28,7 +28,7 @@ public sealed unsafe partial class Language
     /// <summary>This language's dense kind ids: what its trees store per node in place of the full kind.</summary>
     internal DenseKindTable Kinds { get; } = new();
 
-    /// <summary>The 16-bit id a tree of this language stores for <paramref name="kind"/>, assigned on first sight.</summary>
+    /// <summary>The 12-bit id a tree of this language stores for <paramref name="kind"/>, assigned on first sight.</summary>
     internal ushort DenseKind(int kind) => Kinds.DenseKind(kind);
 
     /// <summary>The full kind of a dense id that <see cref="DenseKind"/> returned.</summary>
@@ -272,8 +272,8 @@ public sealed unsafe partial class Language
 }
 
 /// <summary>
-/// Maps full kinds (<c>(moduleId &lt;&lt; 16) | localKind</c>) to dense 16-bit ids, so a tree stores a
-/// <see cref="ushort"/> per node. Ids are assigned on first sight; the built-in kinds are pre-assigned
+/// Maps full kinds (<c>(moduleId &lt;&lt; 16) | localKind</c>) to dense 12-bit ids, so a tree stores a
+/// <see cref="ushort"/> per node: the id and the node's flags (<see cref="Pack"/>). Ids are assigned on first sight; the built-in kinds are pre-assigned
 /// (dense id = local kind). Safe for concurrent use: lookups are lock-free, a miss assigns under a lock.
 /// Writers fill an entry, then publish it with a release write; arrays are only appended to in place
 /// or replaced by a grown copy, so a reader sees an entry either unassigned (then takes the lock) or
@@ -285,6 +285,19 @@ internal sealed class DenseKindTable
     public static readonly DenseKindTable Shared = new();
 
     const int Builtins = SyntaxKinds.ListHole + 1;
+
+    /// <summary>
+    /// A tree stores a node's dense id in the low <see cref="IdBits"/> bits of a <see cref="ushort"/> and
+    /// its <see cref="NodeFlags"/> in the top four, so a language has at most <see cref="MaxDense"/> kinds
+    /// besides <see cref="SyntaxKinds.None"/>.
+    /// </summary>
+    public const int IdBits = 12;
+
+    /// <summary>The largest dense id, also the mask that takes the id out of a packed entry.</summary>
+    public const int MaxDense = (1 << IdBits) - 1;
+
+    /// <summary>A packed tree entry: <paramref name="dense"/> with <paramref name="flags"/> above it.</summary>
+    public static ushort Pack(ushort dense, NodeFlags flags) => (ushort)(dense | (int)flags << IdBits);
 
     readonly object _gate = new();
     // [module][local] -> dense id; 0 means unassigned, except for kind None (0), which is dense 0.
@@ -344,13 +357,13 @@ internal sealed class DenseKindTable
             var modules = _byModule;
             var locals = module < modules.Length ? modules[module] : null;
             if (locals is not null && local < locals.Length && locals[local] != 0) return locals[local];
-            if (_count > ushort.MaxValue)
-                throw new InvalidOperationException($"More than {ushort.MaxValue} distinct syntax kinds in one language.");
+            if (_count > MaxDense)
+                throw new InvalidOperationException($"More than {MaxDense} distinct syntax kinds in one language.");
 
             ushort dense = (ushort)_count;
             if (dense == _kinds.Length)
             {
-                var grown = new int[Math.Min(_kinds.Length * 2, ushort.MaxValue + 1)];
+                var grown = new int[Math.Min(_kinds.Length * 2, MaxDense + 1)];
                 Array.Copy(_kinds, grown, _count);
                 Volatile.Write(ref _kinds, grown);
             }

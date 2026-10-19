@@ -177,14 +177,37 @@ public unsafe class TreeFreezerTests
     }
 
     [Fact]
-    public void The_dense_kind_table_throws_past_65535_kinds()
+    public void The_dense_kind_table_throws_past_4095_kinds()
     {
+        // Dense ids share a tree's ushort with the four NodeFlags bits, so they are 12-bit.
         var table = new DenseKindTable();
         int assigned = SyntaxKinds.ListHole + 1, local = 0;
-        for (; assigned <= ushort.MaxValue; assigned++, local++)
-            Assert.Equal(assigned, table.DenseKind((1 + local / 0x10000) << 16 | local % 0x10000));
+        for (; assigned <= DenseKindTable.MaxDense; assigned++, local++)
+            Assert.Equal(assigned, table.DenseKind((1 << 16) | local));
         Assert.Throws<InvalidOperationException>(() => { table.DenseKind((5 << 16) | 1); });
-        Assert.Equal(ushort.MaxValue, table.DenseKind((1 + (local - 1) / 0x10000) << 16 | (local - 1) % 0x10000));
+        Assert.Equal(DenseKindTable.MaxDense, table.DenseKind((1 << 16) | (local - 1)));
+        Assert.Equal((1 << 16) | (local - 1), table.KindOf(DenseKindTable.MaxDense));
+    }
+
+    [Theory]
+    [InlineData(TreeFreezer.PooledTreeNodes)]
+    [InlineData(0)] // forces exact-size arrays
+    public void Flags_are_packed_above_the_dense_kind(int pooledTreeNodes)
+    {
+        var a = new BuildArena();
+        var s = State("x", a);
+        s.Open(K1);
+        s.MatchLiteral("x");
+        int root = s.Close();
+        a.Flags[root] = NodeFlags.Missing | NodeFlags.Skipped | NodeFlags.Ambiguous | NodeFlags.Error;
+
+        using var tree = TreeFreezer.Freeze(a, root, "x", language: null, pooledTreeNodes);
+
+        Assert.Equal(K1, tree.Kind(0));
+        Assert.Equal(NodeFlags.Missing | NodeFlags.Skipped | NodeFlags.Ambiguous | NodeFlags.Error, tree.Flags(0));
+        Assert.Equal(SyntaxKinds.Literal, tree.Kind(1));
+        Assert.Equal(NodeFlags.None, tree.Flags(1));
+        Assert.Null(typeof(SyntaxTree).GetField("_flags", BindingFlags.NonPublic | BindingFlags.Instance));
     }
 
     [Fact]

@@ -16,19 +16,19 @@ public sealed class SyntaxTree : IDisposable
     /// </summary>
     public const int NoNode = -1;
 
-    // _kind holds dense ids (DenseKindTable); _kindOf maps them back to full kinds and is shared, not owned.
+    // _kind holds a dense id (DenseKindTable) in its low 12 bits and the node's NodeFlags in the top 4
+    // (DenseKindTable.Pack); _kindOf maps dense ids back to full kinds and is shared, not owned.
     // _childStart has NodeCount + 1 entries: node n's children are _children[_childStart[n].._childStart[n + 1]).
     ushort[]? _kind;
     readonly int[] _kindOf;
     int[]? _start, _length, _childStart, _children, _parent;
-    NodeFlags[]? _flags;
     // _trivia is built on first access (Trivia); _triviaCount is written before _trivia is published.
     TextSpan[]? _trivia, _skipped;
     int _triviaCount, _skippedCount;
     readonly bool _pooled;
 
     internal SyntaxTree(string text, Language? language, int nodeCount,
-        ushort[] kind, int[] kindOf, int[] start, int[] length, NodeFlags[] flags,
+        ushort[] kind, int[] kindOf, int[] start, int[] length,
         int[] childStart, int[] children,
         TextSpan[] skipped, int skippedCount, bool pooled)
     {
@@ -40,7 +40,6 @@ public sealed class SyntaxTree : IDisposable
         _kindOf = kindOf;
         _start = start;
         _length = length;
-        _flags = flags;
         _childStart = childStart;
         _children = children;
         _skipped = skipped;
@@ -73,7 +72,7 @@ public sealed class SyntaxTree : IDisposable
     public int Kind(int node)
     {
         Check(node);
-        return _kindOf[_kind![node]];
+        return _kindOf[_kind![node] & DenseKindTable.MaxDense];
     }
 
     public TextSpan Span(int node)
@@ -85,7 +84,7 @@ public sealed class SyntaxTree : IDisposable
     public NodeFlags Flags(int node)
     {
         Check(node);
-        return _flags![node];
+        return (NodeFlags)(_kind![node] >> DenseKindTable.IdBits);
     }
 
     /// <summary>The node's child slots, null slots included.</summary>
@@ -162,7 +161,6 @@ public sealed class SyntaxTree : IDisposable
         if (_pooled) ReturnToPool();
         _kind = null;
         _start = _length = _childStart = _children = _parent = null;
-        _flags = null;
         _trivia = _skipped = null;
         _triviaCount = _skippedCount = 0;
     }
@@ -175,7 +173,6 @@ public sealed class SyntaxTree : IDisposable
         ArrayPool<int>.Shared.Return(_childStart!);
         ArrayPool<int>.Shared.Return(_children!);
         if (_parent is not null) ArrayPool<int>.Shared.Return(_parent);
-        ArrayPool<NodeFlags>.Shared.Return(_flags!);
         if (_trivia is not null) ArrayPool<TextSpan>.Shared.Return(_trivia);
         if (_skipped!.Length > 0) ArrayPool<TextSpan>.Shared.Return(_skipped);
     }
