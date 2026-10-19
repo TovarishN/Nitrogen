@@ -243,14 +243,14 @@ Add to the module-level theory (the one with the `symbols`/`builtin` rows):
 
 - [ ] **Step 3: Extend `Nitrogen.ngr`.** Change these rules:
 
-```
+```ngr
   syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;
   syntax Declares       = "declares" SymbolKind:Identifier Field:Identifier Export:"export"? Type:("type" QualifiedName)?;
 ```
 
 Add after `DynamicClause`:
 
-```
+```ngr
   // Declarative typing and lowering (issue 251).
   syntax Lowers         = "lowers" Form:(LowersLiteral / LowersCall);
   syntax LowersLiteral  = "literal" Type:QualifiedName Field:Identifier;
@@ -259,7 +259,7 @@ Add after `DynamicClause`:
 
 Add `!"lowers"` to `Reference`:
 
-```
+```ngr
   syntax Reference      = !"precedence" !"except" !"declares" !"references" !"scope" !"dynamic" !"lowers" Name:QualifiedName  references? rule Name;
 ```
 
@@ -461,7 +461,7 @@ git commit -m "Validate declarative clause fields (issue 251)"
 
 - [ ] **Step 1: Add the test language.** Create `Nitrogen.Tests/Grammars/Lowered.ngr`:
 
-```
+```ngr
 // Declarative typing and lowering (issue 251). Test.Add takes two Core.Scalar values and
 // Test.Turn one Units.Angle; inputs are typed by annotation, 'fixed' by a qualified type,
 // and 'plain' not at all. 'wrap' passes its one typed child through.
@@ -1569,18 +1569,18 @@ Run `--filter "FullyQualifiedName~Geometry_types_and_lowers_through_declarative_
 
 - [ ] **Step 3: Migrate the grammar.** In `Nitrogen.Geometry/Geometry.ngr`, delete the `symbol property Type for parameter …` line and replace the `Parameter`, `ParameterRef`, `Num`, and `Box` rules with:
 
-```
+```ngr
   syntax Parameter = Name:Identifier ":" Annotation:("Scalar" / "Mesh") declares parameter Name type Annotation
   {
     check GD0001 Annotation.Text == "Scalar" : "box parameters must be Scalar" at Annotation;
   }
 ```
 
-```
+```ngr
   syntax ParameterRef = Name:Identifier references parameter Name;
 ```
 
-```
+```ngr
   syntax Num = Sign:("+" / "-")? Value:Number lowers literal Core.Scalar this
   {
     out Amount : float? = null;

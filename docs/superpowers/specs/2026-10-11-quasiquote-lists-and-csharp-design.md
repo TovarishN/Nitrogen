@@ -45,7 +45,7 @@ category checks, list/separator behavior, and parser rules. Neither alternative 
 
 Example for a language with a `Call` expression:
 
-```text
+```ngr
 | Forward = "forward" "(" Args:(Expr; ",")* ")"
     rewrites <[ target(..$Args) ]>
 ```

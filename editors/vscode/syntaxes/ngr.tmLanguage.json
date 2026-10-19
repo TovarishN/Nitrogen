@@ -7,6 +7,9 @@
   ],
   "patterns": [
     {
+      "include": "#signature"
+    },
+    {
       "include": "#comments"
     },
     {
@@ -17,6 +20,18 @@
     },
     {
       "include": "#members"
+    },
+    {
+      "include": "#property-decl"
+    },
+    {
+      "include": "#alternative-head"
+    },
+    {
+      "include": "#semantics"
+    },
+    {
+      "include": "#expression"
     }
   ],
   "repository": {
@@ -1030,6 +1045,32 @@
         }
       ]
     },
+    "alternative-head": {
+      "match": "(\\|)\\s*(?:([A-Za-z_][A-Za-z0-9_]*)\\s*(=)(?![=>]))?",
+      "captures": {
+        "1": {
+          "name": "keyword.operator.alternative.ngr"
+        },
+        "2": {
+          "name": "entity.name.function.alternative.ngr"
+        },
+        "3": {
+          "name": "keyword.operator.assignment.ngr"
+        }
+      }
+    },
+    "signature": {
+      "name": "meta.preprocessor.signature.ngr",
+      "match": "^\\s*(#!)(nitrogen)\\b.*$",
+      "captures": {
+        "1": {
+          "name": "punctuation.definition.directive.ngr"
+        },
+        "2": {
+          "name": "keyword.other.directive.ngr"
+        }
+      }
+    },
     "alternatives": {
       "begin": "\\{",
       "end": "\\}",
@@ -1051,18 +1092,7 @@
           "include": "#property-decl"
         },
         {
-          "match": "(\\|)\\s*(?:([A-Za-z_][A-Za-z0-9_]*)\\s*(=)(?![=>]))?",
-          "captures": {
-            "1": {
-              "name": "keyword.operator.alternative.ngr"
-            },
-            "2": {
-              "name": "entity.name.function.alternative.ngr"
-            },
-            "3": {
-              "name": "keyword.operator.assignment.ngr"
-            }
-          }
+          "include": "#alternative-head"
         },
         {
           "include": "#semantics"

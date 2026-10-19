@@ -83,7 +83,7 @@ A Nitrogen-looking string literal must not be treated as a file signature. An in
 
 A defining grammar contains at most one language declaration and any number of syntax modules:
 
-```text
+```ngr
 #!nitrogen grammar
 
 language DateCalc
