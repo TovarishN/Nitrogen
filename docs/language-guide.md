@@ -71,6 +71,29 @@ is an `Ambiguous` node whose children are the candidates' nodes, standing-in one
   fails. The standing-in node is also a member of the point's quotation category, so a hole of the point
   accepts it.
 
+## Tree shapes
+
+What a `SyntaxTree` holds for the grammar, for code that walks it without typed views:
+
+- **Null slots.** An absent optional (`Type:(":" TypeName)?`) and an empty list (`Items:Name*`) have no
+  node, but keep their child slot, so positional child indices are the same in every parse.
+  `SyntaxTree.Child` returns `SyntaxTree.NoNode` (-1) there, and `ChildCount` counts the slot. Check for
+  `NoNode` before passing a child to `Kind`, `Span` or `Flags` (they throw on it); the generated views'
+  `Is`, `SyntaxView.TryCast` and `Optional<T>` already do. Dumps (`SyntaxDumper`) write a null slot as `_`.
+- **One-item lists.** A list slot with one item holds the item itself, not a `List` node around it. Any
+  node in a list slot that is not a `List` is a one-item list. Read list slots with `ListSlot.Count` and
+  `ListSlot.Child` (or the typed `SyntaxList<T>`), and use `Language.IsListSlot(kind, slot)` to tell a
+  list slot from a plain one. The generator keeps the `List` node when an item could itself be a list,
+  as in `Lines:(Name+; ";")*`.
+- **No wrappers.** Alias rules and transparent alternatives produce no node: the node of whichever
+  alternative matched (a `Literal` leaf for a literal) sits where the alias or the extension point was
+  parsed. Code that tests kinds must test the standing-in kinds, not the alias's or alternative's name,
+  which has no kind.
+
+A transparent alternative compiled in a separate module does not add its extension point's quotation
+category to the rules it references when they belong to modules that were already generated: a hole of
+the point then does not accept a node of such a rule standing in through that alternative.
+
 ## Typed repetition
 
 `lowers repeat ElementType CountField IteratorField TemplateListField` lowers a checked count and a typed template list into `HirRepeat`. For example:
