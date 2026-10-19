@@ -52,6 +52,13 @@
         ]
       }
     ],
+    "grammars": [
+      {
+        "language": "ngr",
+        "scopeName": "source.ngr",
+        "path": "./syntaxes/ngr.tmLanguage.json"
+      }
+    ],
     "configuration": {
       "title": "Nitrogen",
       "properties": {
