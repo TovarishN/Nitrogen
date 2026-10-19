@@ -7,7 +7,7 @@ the language-workbench idea of [JetBrains' Nitra](https://github.com/JetBrains/N
 
 Signed files can define and select a language without a generated editor extension or `nitrogen.json`:
 
-```text
+```ngr
 #!nitrogen grammar
 language Greeting { start Greeting.Hello; }
 syntax module Greeting { syntax Hello = "hello"; }
@@ -24,7 +24,7 @@ Save that as `Greeting.syntax`, then put `#!nitrogen language "./Greeting.syntax
 [DateCalc.ngr](examples/DateCalc/DateCalc.ngr) gives the syntax. Each rule says what it
 lowers to, and `check` rules report source errors:
 
-```text
+```ngr
 token Date = Digit Digit Digit Digit "-" Digit Digit "-" Digit Digit;
 
 | Day = Value:Date  lowers DateCalc.Date(text Value)
@@ -37,7 +37,7 @@ token Date = Digit Digit Digit Digit "-" Digit Digit "-" Digit Digit;
 
 Quasiquotation defines derived syntax through existing operations:
 
-```text
+```ngr
 | Fortnights = Count:Expr "fortnights" precedence 30 rewrites <[ $Count * 2 weeks ]>
 ```
 
@@ -48,7 +48,7 @@ and date arithmetic. In the grammar quote, navigate from `$Count` to its field o
 
 Typed patterns recognize syntax and reuse captured nodes in return quotes:
 
-```text
+```ngr
 syntax function SwapAddition(Value: Expr) : Expr = match Value
 {
   | (Left: Expr, Right: Expr) <[ $Left + $Right ]> => <[ $Right + $Left ]>;

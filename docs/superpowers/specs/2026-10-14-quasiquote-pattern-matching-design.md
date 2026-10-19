@@ -151,7 +151,7 @@ claim is made until measured.
 
 Extend typed syntax functions with an explicitly selected scalar input and ordered arms:
 
-```text
+```ngr
 syntax function SwapAddition(Value: Expr) : Expr = match Value
 {
   | (Left: Expr, Right: Expr) <[ $Left + $Right ]> => <[ $Right + $Left ]>;

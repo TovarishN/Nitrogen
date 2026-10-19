@@ -6,7 +6,7 @@ How `.ngr` grammars declare scopes, pass typed arguments to operations, repeat a
 
 A `scope` clause opens a local scope for a rule's children. A declaration normally belongs to its enclosing scope. Use `in file` to place selected declarations in the file scope:
 
-```text
+```ngr
 syntax Body = "body" Name:Identifier "{" Items:Item* "}" declares body Name scope;
 syntax Let = "let" Name:Identifier "=" Value:Expr declares value Name;
 syntax Part = "part" Name:Identifier declares part Name in file;
@@ -98,7 +98,7 @@ the point then does not accept a node of such a rule standing in through that al
 
 `lowers repeat ElementType CountField IteratorField TemplateListField` lowers a checked count and a typed template list into `HirRepeat`. For example:
 
-```text
+```ngr
 syntax Repeat = Count:Expr "as" Iterator:Iterator "{" Items:(Expr; ",")* "}" scope
                 lowers repeat Core.Scalar Count Iterator Items;
 syntax Iterator = Name:Identifier declares value Name sequential type Core.Scalar;
@@ -129,7 +129,7 @@ Whole-tree preflight still checks all branches, including unselected ones, befor
 A declaring rule with `lowers template Body(Params)` is a template, and a referencing rule with
 `lowers expand Name(Args)` expands the template its `Name` resolves to, in any file of the project:
 
-```text
+```ngr
 syntax Definition = "def" Name:Identifier "(" Params:(Parameter; ",")* ")" "=" Body:Shape
                     declares shape Name export scope lowers template Body(Params);
 syntax Parameter  = Name:Identifier ":" Type:Identifier declares parameter Name type Type;
@@ -150,7 +150,7 @@ Geometry's `def`/`make` use these clauses; see the [design](superpowers/specs/20
 A rule can mean code the language already has, written in the language itself: `rewrites <[ … ]>`
 replaces a `lowers` clause, and each `$Field` in the template is filled by that field of the use.
 
-```text
+```ngr
 extensible syntax Expr
 {
   | Fortnights = Count:Expr "fortnights" precedence 30  rewrites <[ $Count * 2 weeks ]>
@@ -180,7 +180,7 @@ Limits of this version:
 
 Declare reusable syntax with a typed helper, then call it from `rewrites`:
 
-```text
+```ngr
 syntax function FortnightDuration(Count: Expr) : Expr = <[ $Count * 2 weeks ]>;
 
 | Fortnights = Count:Expr "fortnights" precedence 30
@@ -193,7 +193,7 @@ are separate from parsing rules and introduce no new parser kinds or evaluator h
 
 A list parameter uses `*` and its body uses `..$`:
 
-```text
+```ngr
 syntax function Twice(Args: Expr*) : Expr = <[ f(..$Args, ..$Args) ]>;
 | Forward = "twice" "(" Args:(Expr; ";")* ")" rewrites Twice(Args)
 ```
@@ -224,7 +224,7 @@ Choose the current module, an existing module, or a new module; review and apply
 A list-valued field is inserted with `..$Args`. For example, in a language whose `Expr` category has
 `f(...)` calls:
 
-```text
+```ngr
 | Forward = "forward" "(" Args:(Expr; ";")* ")"
     rewrites <[ f(1, ..$Args, 2) ]>
 ```

@@ -28,7 +28,7 @@ Out of scope (later steps):
 
 ## 1. Grammar syntax
 
-```
+```ngr
 extensible syntax Expr
 {
   | Fortnights = Count:Expr "fortnights" precedence 30

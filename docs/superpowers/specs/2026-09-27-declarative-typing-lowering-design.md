@@ -16,7 +16,7 @@ This milestone adds declarative clauses that type grammar nodes by `SemanticType
 
 Two clause forms join the existing `declares` and `references` clauses on syntax rules and alternatives. The grammar below is illustrative; section 6 gives the actual Geometry migration.
 
-```
+```ngr
 syntax Box          = "box" Width:Dimension Height:Dimension Depth:Dimension ";"
                       lowers Geometry.BoxMesh(Width, Height, Depth);
 syntax Dimension    = Num / ParameterRef;

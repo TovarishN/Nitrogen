@@ -295,7 +295,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 Create `Nitrogen.Tests/Grammars/Rewrites.ngr`:
 
-```
+```ngr
 // Rewrite rules for the tests of quasiquoted rewrites: a statement form and an operator form.
 syntax module Rewrites
 {
@@ -553,13 +553,13 @@ In `Nitrogen.Ngr/Nitrogen.ngr`:
 
 1. With the tokens (after `CsCode`):
 
-```
+```ngr
   token Template  = "<[" (!"]>" .)* "]>";
 ```
 
 2. Replace `syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers;` with:
 
-```
+```ngr
   syntax Clause         = Declares / References / ScopeClause / DynamicClause / Lowers / Rewrites;
   syntax Rewrites       = "rewrites" Text:Template  lowers Grammar.Rewrites(text Text);
 ```

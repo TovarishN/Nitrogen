@@ -95,7 +95,7 @@ Use NGR0139 for scalar/list shape mismatch and NGR0140 for unsupported splice sh
 
 - [x] Write the generated test grammar with `Expr`, numeric expressions, `Call`, and comma/semicolon/repeated/required lists. Add its AdditionalFiles entry to the test project.
 
-```text
+```ngr
 syntax module QuoteLists
 {
   token Number = ['0'..'9']+;
