@@ -12,8 +12,11 @@ internal static class TreeFreezer
     /// </summary>
     public const int PooledTreeNodes = 1 << 17;
 
-    public static SyntaxTree Freeze(BuildArena a, int root, string text, Language? language, int pooledTreeNodes = PooledTreeNodes)
+    /// <param name="arenaToTree">When given (an incremental parse), filled with each arena node's tree index, -1 for nodes the tree dropped.</param>
+    public static SyntaxTree Freeze(BuildArena a, int root, string text, Language? language, int pooledTreeNodes = PooledTreeNodes,
+        int[]? arenaToTree = null)
     {
+        if (arenaToTree is not null) Array.Fill(arenaToTree, -1);
         // Without ambiguity or recovery every reachable node occurs once and is kept, so the arena's
         // counts bound the tree and the counting pass is skipped. Candidates under an Ambiguous node
         // can share subtrees (copied once per occurrence), and recovery's Skipped markers are dropped
@@ -72,6 +75,7 @@ internal static class TreeFreezer
             sp--;
             int old = a.ScratchNode[sp], slot = a.ScratchSlot[sp];
             int n = next++;
+            if (arenaToTree is not null && arenaToTree[old] < 0) arenaToTree[old] = n;
             if (a.TemplateLists?.TryGetValue(old, out var shape) == true) listShapes[n] = shape;
             kind[n] = DenseKindTable.Pack(kinds.DenseKind(a.Kind[old]), a.Flags[old]);
             start[n] = a.Start[old];

@@ -139,7 +139,23 @@ public sealed unsafe partial class Language
     /// The fast pass; when it fails, the recovery pass, which yields a whole-input tree unless even
     /// the start rule's first element cannot start (then a single Error root).
     /// </summary>
-    ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null)
+    /// <summary>
+    /// Parses like <see cref="Parse(string, Rule)"/> and keeps the data <see cref="Reparse"/> needs to reuse this
+    /// result after an edit: how far each rule result examined the text. An editor parses once with this and then
+    /// reparses; a one-shot parse should use <see cref="Parse(string, Rule)"/>, which keeps nothing extra.
+    /// <paramref name="treeText"/>, when given, is the tree's text, as for <see cref="Parse(string, Rule, string)"/>.
+    /// </summary>
+    public ParseResult ParseIncremental(string text, Rule start, string? treeText = null)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        if (treeText is not null && treeText.Length != text.Length)
+            throw new ArgumentException("The tree text must be as long as the parsed text.", nameof(treeText));
+        var result = Parse(text, start, recoverOnly: false, treeText, incremental: true);
+        result.StartRule = start;
+        return result;
+    }
+
+    ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false)
     {
         ArgumentNullException.ThrowIfNull(text);
         treeText ??= text;
@@ -150,21 +166,42 @@ public sealed unsafe partial class Language
             var failure = FirstFailure.None;
             if (!recoverOnly)
             {
-                if (Run(text, start, context, recovering: false))
-                    return ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this), arena);
+                if (Run(text, start, context, recovering: false, tracking: incremental))
+                {
+                    if (!incremental)
+                        return ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this), arena);
+                    var map = new int[arena.NodeCount];
+                    var frozen = ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this, arenaToTree: map), arena);
+                    frozen.Reuse = ReuseTable.From(arena, map);
+                    return frozen;
+                }
                 failure = ParseResult.CaptureFailure(arena);
             }
-            if (!Run(text, start, context, recovering: true))
-                return ParseResult.Failed(TreeFreezer.ErrorTree(treeText, this), arena, failure);
-            var tree = TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this);
-            return arena.HasRecovery || !recoverOnly
-                ? ParseResult.Recovered(tree, arena, failure)
-                : ParseResult.Succeeded(tree, arena);
+            if (incremental)
+            {
+                // A text with errors keeps nothing to reuse: the next reparse parses it whole.
+                var recovered = Parse(text, start, failure, context, treeText);
+                recovered.Reuse = ReuseTable.Empty;
+                return recovered;
+            }
+            return Parse(text, start, failure, context, treeText, recoverOnly);
         }
         finally
         {
             ParseContext.Release(context);
         }
+    }
+
+    /// <summary>The recovery pass after the fast pass failed with <paramref name="failure"/> (or alone, for <paramref name="recoverOnly"/>).</summary>
+    ParseResult Parse(string text, Rule start, FirstFailure failure, ParseContext context, string treeText, bool recoverOnly = false)
+    {
+        var arena = context.Arena;
+        if (!Run(text, start, context, recovering: true))
+            return ParseResult.Failed(TreeFreezer.ErrorTree(treeText, this), arena, failure);
+        var tree = TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this);
+        return arena.HasRecovery || !recoverOnly
+            ? ParseResult.Recovered(tree, arena, failure)
+            : ParseResult.Succeeded(tree, arena);
     }
 
     /// <summary>
