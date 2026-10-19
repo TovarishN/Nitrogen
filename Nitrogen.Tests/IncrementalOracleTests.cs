@@ -1,5 +1,6 @@
 using System.Text;
 using Nitrogen.Tests.Calc;
+using Nitrogen.Tests.Divide;
 using Nitrogen.Tests.Lexical;
 using Nitrogen.Tests.Lists;
 using Nitrogen.Tests.Recovery;
@@ -23,6 +24,7 @@ public class IncrementalOracleTests
     static readonly Language Shapes = new LanguageBuilder().Add(ShapesModule.Instance).Build();
     static readonly Language Lists = new LanguageBuilder().Add(ListsModule.Instance).Build();
     static readonly Language Lexical = new LanguageBuilder().Add(LexicalModule.Instance).Build();
+    static readonly Language Divide = new LanguageBuilder().Add(DivideModule.Instance).Build();
 
     static string Repeat(int count, Func<int, string> item) => string.Concat(Enumerable.Range(0, count).Select(item));
 
@@ -43,6 +45,9 @@ public class IncrementalOracleTests
         new("lists", Lists, ListsModule.File,
             Repeat(25, i => $"set n{(char)('a' + i % 26)} ({i}, {i + 1}, 3);\n"),
             ["set", "a", "(", ")", ",", "1", ";", " ", "\n"]),
+        new("divide", Divide, DivideModule.Program,
+            string.Join("/", Enumerable.Range(1, 40).Select(i => i % 4 == 0 ? $"{i}*{i + 1}\n!" : i % 4 == 1 ? $"{i}!*{i}" : $"{i}\n!")) + ";",
+            ["/", "//", "/*", "*/", "!", "*", "1", "\n", " ", "7"]),
         new("lexical", Lexical, LexicalModule.Document,
             Repeat(15, i => $"(* c{i} *), \"s{i}\\\"q\", 0x1F, 12_34, word, pick a!, pick b c, tag w, -5, {{ a = 1 b = 2 }}, ") + "end;",
             ["(*", "*)", "\"", "\\", "0x", "_", "1", "a", "pick", "tag", "x", "!", ",", ";", "{", "}", "=", " ", "-"]),

@@ -1,4 +1,5 @@
 using Nitrogen.Tests.Calc;
+using Nitrogen.Tests.Divide;
 using Nitrogen.Tests.Recovery;
 using Nitrogen.Tests.Shapes;
 using Xunit;
@@ -294,7 +295,7 @@ public class IncrementalTests
         using var previous = Calc.ParseIncremental(CalcProgram(5), CalcModule.Program);
         var a = new BuildArena { GraftSource = previous.Tree };
         var root = previous.Reuse![0];
-        int graft = a.NewGraft(root.Node, 0, root.Start, root.End);
+        int graft = a.NewGraft(root.Node, 0, root.Start, root.End, root.Key);
         a.NodeCount = graft; // rolled back
         int other = a.NewNode(SyntaxKinds.Literal, 0, 1, NodeFlags.None, 0, 0);
         Assert.Equal(graft, other);
@@ -302,5 +303,50 @@ public class IncrementalTests
         var table = ReuseTable.From(a, [0], previous.Reuse);
 
         Assert.Equal(0, table.Count);
+    }
+
+    [Fact]
+    public void A_peek_at_a_slash_examines_the_character_after_it()
+    {
+        // "1" ends before "/3"; its postfix loop peeks past trivia at "/", and the trivia function reads the "3" to
+        // see that "/" starts no comment. Turning "/3" into "//" makes the rest of the line a comment, so "!" binds
+        // to "1": reusing the old "1" would be wrong.
+        var divide = new LanguageBuilder().Add(DivideModule.Instance).Build();
+        const string old = "2*1/3\n!;";
+        using var previous = divide.ParseIncremental(old, DivideModule.Program);
+        var (text, changes) = Edit(old, (4, 1, "/"));
+
+        using var reparsed = divide.Reparse(previous, text, changes);
+
+        using var full = divide.Parse(text, DivideModule.Program);
+        Assert.True(full.Success);
+        TreeAssert.Same(full, reparsed);
+    }
+
+    [Fact]
+    public void The_reuse_table_stays_flat_over_a_long_editing_session()
+    {
+        string text = CalcProgram(100);
+        var result = Calc.ParseIncremental(text, CalcModule.Program);
+        int initial = result.Reuse!.Count;
+        try
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                int at = text.IndexOf("x99 = a*(b+", StringComparison.Ordinal) + "x99 = a*(b+".Length;
+                var (next, changes) = Edit(text, (at, 0, "1"));
+                var reparsed = Calc.Reparse(result, next, changes);
+                result.Dispose();
+                result = reparsed;
+                text = next;
+            }
+            using var full = Calc.Parse(text, CalcModule.Program);
+            TreeAssert.Same(full, result);
+            Assert.True(result.Reuse!.Count <= initial + 20, $"{initial} entries grew to {result.Reuse.Count}");
+        }
+        finally
+        {
+            result.Dispose();
+        }
     }
 }

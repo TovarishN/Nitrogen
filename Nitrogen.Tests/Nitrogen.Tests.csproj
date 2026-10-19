@@ -64,6 +64,7 @@
     <AdditionalFiles Include="Grammars\Lexical.ngr" Namespace="Nitrogen.Tests.Lexical" />
     <AdditionalFiles Include="Grammars\Recovery.ngr" Namespace="Nitrogen.Tests.Recovery" />
     <AdditionalFiles Include="Grammars\Lists.ngr" Namespace="Nitrogen.Tests.Lists" />
+    <AdditionalFiles Include="Grammars\Divide.ngr" Namespace="Nitrogen.Tests.Divide" />
     <AdditionalFiles Include="Grammars\Base.ngr" Namespace="Nitrogen.Tests.Base" />
     <AdditionalFiles Include="Grammars\Uses.ngr" Namespace="Nitrogen.Tests.Uses" />
     <AdditionalFiles Include="Grammars\Scopes.ngr" Namespace="Nitrogen.Tests.Scopes" />

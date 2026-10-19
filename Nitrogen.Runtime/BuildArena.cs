@@ -147,14 +147,14 @@ internal sealed class BuildArena
     /// Pushes a graft for the previous tree's node <paramref name="oldNode"/>, moved by <paramref name="posDelta"/>,
     /// and returns its arena node. <paramref name="entryStart"/>..<paramref name="entryEnd"/> is the old call's range.
     /// </summary>
-    public int NewGraft(int oldNode, int posDelta, int entryStart, int entryEnd)
+    public int NewGraft(int oldNode, int posDelta, int entryStart, int entryEnd, long rule)
     {
         var tree = GraftSource!;
         var span = tree.Span(oldNode);
         int end = tree.SubtreeEnd(oldNode);
         int slotStart = tree.ChildStart(oldNode), slotEnd = tree.ChildStart(end);
         int node = NewNode(SyntaxKinds.Graft, span.Start + posDelta, span.Length, NodeFlags.None, oldNode, 0);
-        Grafts[node] = new Graft(oldNode, end - oldNode, slotStart, slotEnd, posDelta, entryStart, entryEnd);
+        Grafts[node] = new Graft(oldNode, end - oldNode, slotStart, slotEnd, posDelta, entryStart, entryEnd, rule);
         GraftExtraNodes += end - oldNode - 1;
         GraftExtraSlots += slotEnd - slotStart;
         return node;
@@ -251,7 +251,7 @@ internal sealed class BuildArena
 
 /// <summary>
 /// A grafted block of the previous tree: <c>[Root, Root + Size)</c> in preorder, its child slots
-/// <c>[SlotStart, SlotEnd)</c>, how far positions move, and the old call's range (for carrying its inner
-/// reuse entries over).
+/// <c>[SlotStart, SlotEnd)</c>, how far positions move, and the old call (range and rule) it reuses, for carrying
+/// the block's inner reuse entries over.
 /// </summary>
-internal readonly record struct Graft(int Root, int Size, int SlotStart, int SlotEnd, int PosDelta, int EntryStart, int EntryEnd);
+internal readonly record struct Graft(int Root, int Size, int SlotStart, int SlotEnd, int PosDelta, int EntryStart, int EntryEnd, long Rule);

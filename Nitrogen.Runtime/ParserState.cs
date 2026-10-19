@@ -138,7 +138,7 @@ public unsafe ref partial struct ParserState
         if (reuse.Touches(entry.Start, entry.ExaminedEnd)) return false;
         int delta = position - old;
         var a = Arena;
-        int graft = a.NewGraft(entry.Node, delta, entry.Start, entry.End);
+        int graft = a.NewGraft(entry.Node, delta, entry.Start, entry.End, rule);
         a.PushChild(graft);
         Position = entry.End + delta;
         examined = entry.ExaminedEnd + delta;
@@ -632,8 +632,11 @@ public unsafe ref partial struct ParserState
 
     internal int PeekPastTrivia()
     {
-        int at = Position < _text.Length && _triviaStart.Matches(_text[Position]) ? _trivia(_text, Position) : Position;
-        MarkRead(at == Position ? at : at + 1);
+        // Like SkipTrivia: a trivia function that ran read up to two characters past where it stopped, even when it
+        // skipped nothing (a "/" that starts no comment).
+        bool called = Position < _text.Length && _triviaStart.Matches(_text[Position]);
+        int at = called ? _trivia(_text, Position) : Position;
+        MarkRead(called ? at + 1 : at);
         return at;
     }
 

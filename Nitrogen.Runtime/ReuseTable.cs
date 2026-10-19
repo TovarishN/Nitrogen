@@ -86,6 +86,9 @@ internal sealed class ReuseTable
             {
                 ref readonly var e = ref old[i];
                 if (e.Node < root || e.Node >= rootEnd) continue;
+                // The reparse recorded the graft's own call afresh; carrying the old entry too would add a duplicate
+                // per reuse, and the table would grow with every keystroke.
+                if (e.Node == root && e.Start == graft.EntryStart && e.Key == graft.Rule) continue;
                 int start = e.Start + posDelta;
                 while (next < recordedCount && recorded[next].Start <= start) entries[count++] = recorded[next++];
                 sorted &= start >= lastStart;

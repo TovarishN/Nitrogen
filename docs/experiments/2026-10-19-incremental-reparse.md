@@ -61,6 +61,13 @@ Incremental mode keeps about 7.5 MB more for this file (about 18 B per tree node
 of 24 bytes, about 4.8 MB) and the preprocessed text the result keeps for the next reparse (2.15 MB). The plain-parse
 memory target does not apply to it; it is opt-in for editors.
 
+### After the final review's fixes
+
+Re-measured after fixing the review's findings (trivia peek reads, duplicate carried entries, CR LF splicing):
+`NitrogenIncremental` 1.873 / 1.862 / 1.846 ms against `RoslynIncremental` 1.099 / 1.079 / 1.078 ms (1.70–1.73×), with
+the same reuse. Over a session the reuse table no longer grows: 50 consecutive reparses of a 100-statement Calc
+program keep it within 20 entries of its first size (it grew from 901 to 5,951 before the fix).
+
 ## Correctness checks
 
 - Nitrogen's randomized oracle (`IncrementalOracleTests`): six grammar cases, 200 seeds by default, 5,000 passed in
@@ -69,6 +76,10 @@ memory target does not apply to it; it is opt-in for editors.
 - CSNitrogen's `Reparse_equals_full_parse_on_csharp_corpus`: 100 seeds over the Mono corpus and a generated C# 1 file
   with directives, comments and strings, including directive, comment-opening and string edits. It found rolled-back
   grafts corrupting carried-over reuse entries (fixed in `ReuseTable`).
+- The final whole-branch review found a peek past trivia that under-reported what the trivia function read (a `/` that
+  starts no comment), so a reparse could reuse an operand whose continuation an edit changed; it is fixed, pinned by a
+  `Divide` test grammar and an oracle case (which fails without the fix). It also found the table growth above and a
+  CR LF case in CSNitrogen's splice, both fixed with tests.
 
 ## Commands
 
