@@ -156,6 +156,8 @@ public class RecoveryParsingTests
     [InlineData("decl a { }")]
     [InlineData("public static decl a : int { b, c } decl d { }")]
     [InlineData("public decl a { b }")]
+    [InlineData("")] // File's one slot is null: a node with only null slots
+    [InlineData("  // c\n ")]
     public void Valid_input_with_null_slots_parses_the_same_in_the_recovery_pass(string text)
     {
         using var clean = Shapes.Parse(text, ShapesModule.File);
@@ -163,5 +165,8 @@ public class RecoveryParsingTests
         Assert.True(recovering.Success);
         Assert.Equal(SyntaxDumper.Dump(clean.Tree), SyntaxDumper.Dump(recovering.Tree));
         Assert.Equal(clean.Tree.NodeCount, recovering.Tree.NodeCount);
+        // Spans too, including a node whose children are all null slots (it has no child to take a span from).
+        Assert.Equal(Enumerable.Range(0, clean.Tree.NodeCount).Select(clean.Tree.Span),
+            Enumerable.Range(0, recovering.Tree.NodeCount).Select(recovering.Tree.Span));
     }
 }

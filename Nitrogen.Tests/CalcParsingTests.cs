@@ -32,6 +32,23 @@ public class CalcParsingTests
         Assert.True(ReferenceEquals(failed.Tree.Text, bad));
     }
 
+    [Fact]
+    public void Parsing_reads_the_text_and_the_tree_reads_the_tree_text()
+    {
+        // The gap differs: '#' does not lex in Calc, so success shows the parse read the blanked text.
+        const string text = "x = 1;   y;", treeText = "x = 1; # y;";
+        using var result = Calc.Parse(text, CalcModule.Program, treeText);
+        Assert.True(result.Success);
+        var tree = result.Tree;
+        Assert.Equal(treeText, tree.GetText(0).ToString());
+        using (var raw = Calc.Parse(treeText, CalcModule.Program)) Assert.False(raw.Success);
+        var tokens = Enumerable.Range(0, tree.NodeCount).Where(n => tree.ChildCount(n) == 0 && tree.Span(n).Length > 0)
+            .Select(n => tree.GetText(n).ToString());
+        Assert.Equal(["x", "=", "1", ";", "y", ";"], tokens);
+        Assert.Equal("# ", tree.GetText(0)[7..9].ToString());
+        Assert.Contains(new TextSpan(6, 3), tree.Trivia.ToArray());
+    }
+
     [Theory]
     [InlineData("1+2*3", "(Add (Num Number:\"1\") \"+\" (Mul (Num Number:\"2\") \"*\" (Num Number:\"3\")))")]
     [InlineData("1-2-3", "(Sub (Sub (Num Number:\"1\") \"-\" (Num Number:\"2\")) \"-\" (Num Number:\"3\"))")]
