@@ -239,6 +239,9 @@ public sealed unsafe partial class Language
                     frozen.Stats = frozen.Stats with { ReusedNodes = arena.ReusedNodes };
                     return frozen;
                 }
+                // A reused subtree skips the attempts made inside it, and with them what they expected at the
+                // furthest failure: retry the fast pass without reuse so the first diagnostic is a full parse's.
+                if (reuse is not null) Run(text, start, context, recovering: false);
                 failure = ParseResult.CaptureFailure(arena);
             }
             if (incremental)
