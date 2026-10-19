@@ -2,9 +2,9 @@ namespace Nitrogen;
 
 /// <summary>
 /// Packrat memo for extensible rules, keyed by <c>(ruleKey, position)</c> and storing
-/// <c>(node, end)</c>, where a negative node means "failed here". Open addressing with linear
-/// probing over one array of 24-byte entries (20 bytes of fields, padded to the <c>long</c> key's
-/// 8-byte alignment), grown at three-quarters load. A slot is live only
+/// <c>(node, end, examined)</c>, where a negative node means "failed here" and examined is one past
+/// the furthest index the computation read (a tracked parse replays it on a hit; 0 otherwise). Open
+/// addressing with linear probing over one array of 24-byte entries, grown at three-quarters load. A slot is live only
 /// if its stamp equals the current generation, so <see cref="Clear"/> is O(1) however large the
 /// table has grown and one table serves every parse on a thread without reallocating.
 /// </summary>
@@ -19,6 +19,7 @@ internal sealed class MemoTable
         public int Node;
         public int End;
         public int Stamp;
+        public int Examined;
     }
 
     Entry[] _entries = new Entry[InitialCapacity];
@@ -47,7 +48,9 @@ internal sealed class MemoTable
         }
     }
 
-    public bool TryGet(int ruleKey, int position, out int node, out int end)
+    public bool TryGet(int ruleKey, int position, out int node, out int end) => TryGet(ruleKey, position, out node, out end, out _);
+
+    public bool TryGet(int ruleKey, int position, out int node, out int end, out int examined)
     {
         long key = Key(ruleKey, position);
         var entries = _entries;
@@ -57,13 +60,14 @@ internal sealed class MemoTable
             ref Entry e = ref entries[i];
             if (e.Stamp != _generation)
             {
-                node = end = 0;
+                node = end = examined = 0;
                 return false;
             }
             if (e.Key == key)
             {
                 node = e.Node;
                 end = e.End;
+                examined = e.Examined;
                 return true;
             }
         }
@@ -71,19 +75,19 @@ internal sealed class MemoTable
 
     internal bool Contains(int ruleKey, int position) => TryGet(ruleKey, position, out _, out _);
 
-    public void Set(int ruleKey, int position, int node, int end)
+    public void Set(int ruleKey, int position, int node, int end, int examined = 0)
     {
         if (_count + 1 > _limit) Grow();
-        Insert(_entries, Key(ruleKey, position), node, end);
+        Insert(_entries, Key(ruleKey, position), node, end, examined);
     }
 
-    void Insert(Entry[] entries, long key, int node, int end)
+    void Insert(Entry[] entries, long key, int node, int end, int examined)
     {
         int mask = entries.Length - 1;
         int i = Hash(key) & mask;
         while (entries[i].Stamp == _generation && entries[i].Key != key) i = (i + 1) & mask;
         if (entries[i].Stamp != _generation) _count++;
-        entries[i] = new Entry { Key = key, Node = node, End = end, Stamp = _generation };
+        entries[i] = new Entry { Key = key, Node = node, End = end, Stamp = _generation, Examined = examined };
     }
 
     void Grow()
@@ -94,7 +98,7 @@ internal sealed class MemoTable
         _generation = 1;
         _count = 0;
         foreach (var e in old)
-            if (e.Stamp == generation) Insert(entries, e.Key, e.Node, e.End);
+            if (e.Stamp == generation) Insert(entries, e.Key, e.Node, e.End, e.Examined);
         _entries = entries;
         _limit = Limit(entries.Length);
     }

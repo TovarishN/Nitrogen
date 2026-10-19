@@ -103,13 +103,34 @@ public sealed unsafe class CalcModule : SyntaxModule
         return false;
     }
 
-    internal static int MatchNumber(ReadOnlySpan<char> text, int position) =>
-        T1(text, position);
+    internal static int MatchNumber(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchNumber(text, position, ref reads);
+    }
 
-    internal static int MatchIdentifier(ReadOnlySpan<char> text, int position) =>
-        T8(text, position);
+    internal static int MatchNumber<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T1(text, position, ref reads);
+
+    internal static int MatchIdentifier(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchIdentifier(text, position, ref reads);
+    }
+
+    internal static int MatchIdentifier<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T8(text, position, ref reads);
 
     internal static bool ParseProgram(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseProgram__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseProgram__(ref s);
+        s.EndRule(CalcKinds.Program, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseProgram__(ref ParserState s)
     {
         if (s.TryHole("Calc.Program")) return true;
         var start = s.Mark();
@@ -127,6 +148,15 @@ public sealed unsafe class CalcModule : SyntaxModule
 
     internal static bool ParseAssign(ref ParserState s)
     {
+        if (!s.Tracking) return ParseAssign__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseAssign__(ref s);
+        s.EndRule(CalcKinds.Assign, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseAssign__(ref ParserState s)
+    {
         if (s.TryHole("Calc.Assign")) return true;
         var start = s.Mark();
         s.Open(CalcKinds.Assign);
@@ -143,6 +173,15 @@ public sealed unsafe class CalcModule : SyntaxModule
     }
 
     internal static bool ParseExprStatement(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseExprStatement__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseExprStatement__(ref s);
+        s.EndRule(CalcKinds.ExprStatement, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseExprStatement__(ref ParserState s)
     {
         if (s.TryHole("Calc.ExprStatement")) return true;
         var start = s.Mark();
@@ -172,14 +211,14 @@ public sealed unsafe class CalcModule : SyntaxModule
     static bool ParseExpr_Num(ref ParserState s)
     {
         s.SkipTrivia();
-        if (!s.MatchToken(CalcKinds.Number, MatchNumber(s.Text, s.Position), "Number")) return false;
+        if (!s.MatchToken(CalcKinds.Number, (s.Tracking ? MatchNumber(s.Input, s.Position, ref s.Reads) : MatchNumber(s.Input, s.Position, ref s.Untracked)), "Number")) return false;
         return true;
     }
 
     static bool ParseExpr_Ref(ref ParserState s)
     {
         s.SkipTrivia();
-        if (!s.MatchToken(CalcKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier")) return false;
+        if (!s.MatchToken(CalcKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return false;
         return true;
     }
 
@@ -187,7 +226,7 @@ public sealed unsafe class CalcModule : SyntaxModule
     {
     e0:
         s.SkipTrivia();
-        if (!s.MatchToken(CalcKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier")) return false;
+        if (!s.MatchToken(CalcKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return false;
     e1:
         s.SkipTrivia();
         if (!s.MatchLiteral("("))
@@ -365,78 +404,78 @@ public sealed unsafe class CalcModule : SyntaxModule
         return true;
     }
 
-    static int T3(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
+    static int T3<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
 
-    static int T2(ReadOnlySpan<char> text, int p)
+    static int T2<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T3(text, p);
+        p = T3(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T3(text, p);
+            int r = T3(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T7(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
+    static int T7<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
 
-    static int T6(ReadOnlySpan<char> text, int p)
+    static int T6<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T7(text, p);
+        p = T7(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T7(text, p);
+            int r = T7(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T5(ReadOnlySpan<char> text, int p)
+    static int T5<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && text[p] == '.' ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && text[p] == '.' ? p + 1 : -1);
         if (p < 0) return -1;
-        p = T6(text, p);
+        p = T6(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T4(ReadOnlySpan<char> text, int p)
+    static int T4<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        int r = T5(text, p);
+        int r = T5(text, p, ref reads);
         return r >= 0 ? r : p;
     }
 
-    static int T1(ReadOnlySpan<char> text, int p)
+    static int T1<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T2(text, p);
+        p = T2(text, p, ref reads);
         if (p < 0) return -1;
-        p = T4(text, p);
+        p = T4(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T10(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '_') ? p + 1 : -1);
+    static int T10<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || (text[p] >= '0' && text[p] <= '9') || text[p] == '_') ? p + 1 : -1);
 
-    static int T9(ReadOnlySpan<char> text, int p)
+    static int T9<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         while (true)
         {
-            int r = T10(text, p);
+            int r = T10(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T8(ReadOnlySpan<char> text, int p)
+    static int T8<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = (p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || text[p] == '_') ? p + 1 : -1);
+        p = (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= 'a' && text[p] <= 'z') || (text[p] >= 'A' && text[p] <= 'Z') || text[p] == '_') ? p + 1 : -1);
         if (p < 0) return -1;
-        p = T9(text, p);
+        p = T9(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }

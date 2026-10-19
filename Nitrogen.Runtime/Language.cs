@@ -103,6 +103,27 @@ public sealed unsafe partial class Language
     }
 
     /// <summary>
+    /// Test hook: the fast pass with tracking on, returning the rule results it recorded (nodes are arena
+    /// indices) whether or not the parse succeeded.
+    /// </summary>
+    internal IReadOnlyList<ReuseRecord> ParseTracked(string text, Rule start)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        var context = ParseContext.Acquire();
+        try
+        {
+            Run(text, start, context, recovering: false, tracking: true);
+            var arena = context.Arena;
+            arena.Tracking = false;
+            return arena.Records.AsSpan(0, arena.RecordCount).ToArray();
+        }
+        finally
+        {
+            ParseContext.Release(context);
+        }
+    }
+
+    /// <summary>
     /// What the fast pass expected where it failed on <paramref name="text"/> (issue 238): literals
     /// (keywords, punctuation) and token names, and the position. (-1, empty) when the text parses.
     /// Completion appends a character no grammar accepts, so the failure lands where the user types.
@@ -243,12 +264,14 @@ public sealed unsafe partial class Language
     static bool ParseTemplateStart(ref ParserState s) => s.ParseExtensible(s.TemplateStart!, 0);
 
     bool Run(string text, Rule start, ParseContext context, bool recovering,
-        IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null)
+        IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null, bool tracking = false)
     {
         var arena = context.Arena;
         arena.Clear();
         context.Memo.Clear();
         arena.Recovering = recovering;
+        // Only a plain fast pass records reuse data: recovery repairs and template holes depend on more than the text.
+        arena.Tracking = tracking && !recovering && holes is null;
         arena.CallFlagMask = recovering ? 3 : 0;
         var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart };
         if (holes is not null) state.SkipTrivia();

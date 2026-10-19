@@ -59,7 +59,7 @@ public sealed unsafe class ClashModule : SyntaxModule
     {
     e0:
         s.SkipTrivia();
-        if (!s.MatchToken(CalcKinds.Identifier, CalcModule.MatchIdentifier(s.Text, s.Position), "Identifier")) return false;
+        if (!s.MatchToken(CalcKinds.Identifier, (s.Tracking ? CalcModule.MatchIdentifier(s.Input, s.Position, ref s.Reads) : CalcModule.MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return false;
     e1:
         s.SkipTrivia();
         if (!s.MatchLiteral("("))

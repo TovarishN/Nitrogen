@@ -177,15 +177,33 @@ public sealed unsafe class ScopesModule : SyntaxModule
         return false;
     }
 
-    internal static int MatchIdStart(ReadOnlySpan<char> text, int position) =>
-        (position < text.Length && ((text[position] >= 'a' && text[position] <= 'z') || (text[position] >= 'A' && text[position] <= 'Z') || text[position] == '_') ? position + 1 : -1);
+    internal static int MatchIdStart(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchIdStart(text, position, ref reads);
+    }
 
-    internal static int MatchIdPart(ReadOnlySpan<char> text, int position) =>
-        (position < text.Length && ((text[position] >= 'a' && text[position] <= 'z') || (text[position] >= 'A' && text[position] <= 'Z') || (text[position] >= '0' && text[position] <= '9') || text[position] == '_') ? position + 1 : -1);
+    internal static int MatchIdStart<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, position) && position < text.Length && ((text[position] >= 'a' && text[position] <= 'z') || (text[position] >= 'A' && text[position] <= 'Z') || text[position] == '_') ? position + 1 : -1);
+
+    internal static int MatchIdPart(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchIdPart(text, position, ref reads);
+    }
+
+    internal static int MatchIdPart<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, position) && position < text.Length && ((text[position] >= 'a' && text[position] <= 'z') || (text[position] >= 'A' && text[position] <= 'Z') || (text[position] >= '0' && text[position] <= '9') || text[position] == '_') ? position + 1 : -1);
 
     internal static int MatchIdentifier(ReadOnlySpan<char> text, int position)
     {
-        int end = T1(text, position);
+        var reads = default(NoReads);
+        return MatchIdentifier(text, position, ref reads);
+    }
+
+    internal static int MatchIdentifier<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads
+    {
+        int end = T1(text, position, ref reads);
         return end < 0 || IsReservedIdentifier(text.Slice(position, end - position)) ? -1 : end;
     }
 
@@ -195,10 +213,25 @@ public sealed unsafe class ScopesModule : SyntaxModule
         _ => false,
     };
 
-    internal static int MatchNumber(ReadOnlySpan<char> text, int position) =>
-        T4(text, position);
+    internal static int MatchNumber(ReadOnlySpan<char> text, int position)
+    {
+        var reads = default(NoReads);
+        return MatchNumber(text, position, ref reads);
+    }
+
+    internal static int MatchNumber<TReads>(ReadOnlySpan<char> text, int position, ref TReads reads) where TReads : struct, ITextReads =>
+        T4(text, position, ref reads);
 
     internal static bool ParseFile(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseFile__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseFile__(ref s);
+        s.EndRule(ScopesKinds.File, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseFile__(ref ParserState s)
     {
         if (s.TryHole("Scopes.File")) return true;
         var start = s.Mark();
@@ -211,6 +244,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseUnit(ref ParserState s)
     {
+        if (!s.Tracking) return ParseUnit__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseUnit__(ref s);
+        s.EndRule(ScopesKinds.Unit, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseUnit__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.Unit")) return true;
         s.SkipTrivia();
         if (s.Current != 'u') return s.ExpectLiteral("unit");
@@ -221,7 +263,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchKeyword("unit")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair0))
@@ -306,6 +348,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseSequential(ref ParserState s)
     {
+        if (!s.Tracking) return ParseSequential__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseSequential__(ref s);
+        s.EndRule(ScopesKinds.Sequential, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseSequential__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.Sequential")) return true;
         s.SkipTrivia();
         if (s.Current != 's') return s.ExpectLiteral("seq");
@@ -316,7 +367,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchKeyword("seq")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair3))
@@ -405,6 +456,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseSequentialExport(ref ParserState s)
     {
+        if (!s.Tracking) return ParseSequentialExport__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseSequentialExport__(ref s);
+        s.EndRule(ScopesKinds.SequentialExport, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseSequentialExport__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.SequentialExport")) return true;
         s.SkipTrivia();
         if (s.Current != 's') return s.ExpectLiteral("seqexport");
@@ -415,7 +475,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchKeyword("seqexport")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair7))
@@ -504,6 +564,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGlobal(ref ParserState s)
     {
+        if (!s.Tracking) return ParseGlobal__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseGlobal__(ref s);
+        s.EndRule(ScopesKinds.Global, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseGlobal__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.Global")) return true;
         s.SkipTrivia();
         if (s.Current != 'g') return s.ExpectLiteral("global");
@@ -514,7 +583,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchKeyword("global")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair11))
@@ -550,6 +619,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
     }
 
     internal static bool ParseGlobalGen(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseGlobalGen__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseGlobalGen__(ref s);
+        s.EndRule(ScopesKinds.GlobalGen, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseGlobalGen__(ref ParserState s)
     {
         if (s.TryHole("Scopes.GlobalGen")) return true;
         s.SkipTrivia();
@@ -598,6 +676,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseLet(ref ParserState s)
     {
+        if (!s.Tracking) return ParseLet__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseLet__(ref s);
+        s.EndRule(ScopesKinds.Let, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseLet__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.Let")) return true;
         s.SkipTrivia();
         if (s.Current != 'l') return s.ExpectLiteral("let");
@@ -608,7 +695,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchKeyword("let")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair15))
@@ -697,6 +784,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseUse(ref ParserState s)
     {
+        if (!s.Tracking) return ParseUse__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseUse__(ref s);
+        s.EndRule(ScopesKinds.Use, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseUse__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.Use")) return true;
         s.SkipTrivia();
         if (s.Current != 'u') return s.ExpectLiteral("use");
@@ -707,7 +803,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchKeyword("use")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair19))
@@ -743,6 +839,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
     }
 
     internal static bool ParseBlock(ref ParserState s)
+    {
+        if (!s.Tracking) return ParseBlock__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseBlock__(ref s);
+        s.EndRule(ScopesKinds.Block, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseBlock__(ref ParserState s)
     {
         if (s.TryHole("Scopes.Block")) return true;
         s.SkipTrivia();
@@ -799,6 +904,15 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGen(ref ParserState s)
     {
+        if (!s.Tracking) return ParseGen__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseGen__(ref s);
+        s.EndRule(ScopesKinds.Gen, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseGen__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.Gen")) return true;
         s.SkipTrivia();
         if (s.Current != 'g') return s.ExpectLiteral("gen");
@@ -846,12 +960,21 @@ public sealed unsafe class ScopesModule : SyntaxModule
 
     internal static bool ParseGenName(ref ParserState s)
     {
+        if (!s.Tracking) return ParseGenName__(ref s);
+        int at = s.Position, outer = s.BeginExamined();
+        bool parsed = ParseGenName__(ref s);
+        s.EndRule(ScopesKinds.GenName, at, outer, parsed);
+        return parsed;
+    }
+
+    static bool ParseGenName__(ref ParserState s)
+    {
         if (s.TryHole("Scopes.GenName")) return true;
         var start = s.Mark();
         s.Open(ScopesKinds.GenName);
     e0:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier")) return Fail(ref s, start);
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return Fail(ref s, start);
     e1:
         s.SkipTrivia();
         if (!s.MatchLiteral("$"))
@@ -872,7 +995,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         }
     e2:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Number, MatchNumber(s.Text, s.Position), "Number"))
+        if (!s.MatchToken(ScopesKinds.Number, (s.Tracking ? MatchNumber(s.Input, s.Position, ref s.Reads) : MatchNumber(s.Input, s.Position, ref s.Untracked)), "Number"))
         {
             if (!s.Recovering) return Fail(ref s, start);
             switch (s.Recover(s_repair26))
@@ -892,14 +1015,14 @@ public sealed unsafe class ScopesModule : SyntaxModule
     static bool ParseExpr_Num(ref ParserState s)
     {
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Number, MatchNumber(s.Text, s.Position), "Number")) return false;
+        if (!s.MatchToken(ScopesKinds.Number, (s.Tracking ? MatchNumber(s.Input, s.Position, ref s.Reads) : MatchNumber(s.Input, s.Position, ref s.Untracked)), "Number")) return false;
         return true;
     }
 
     static bool ParseExpr_Ref(ref ParserState s)
     {
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier")) return false;
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return false;
         return true;
     }
 
@@ -907,7 +1030,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
     {
     e0:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier")) return false;
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier")) return false;
     e1:
         s.SkipTrivia();
         if (!s.MatchLiteral("("))
@@ -959,7 +1082,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         if (!s.MatchLiteral(".")) return false;
     e2:
         s.SkipTrivia();
-        if (!s.MatchToken(ScopesKinds.Identifier, MatchIdentifier(s.Text, s.Position), "Identifier"))
+        if (!s.MatchToken(ScopesKinds.Identifier, (s.Tracking ? MatchIdentifier(s.Input, s.Position, ref s.Reads) : MatchIdentifier(s.Input, s.Position, ref s.Untracked)), "Identifier"))
         {
             if (!s.Recovering || !s.AlternativeCommitted(ScopesKinds.Member, true)) return false;
             switch (s.Recover(s_repair29))
@@ -998,38 +1121,38 @@ public sealed unsafe class ScopesModule : SyntaxModule
         return true;
     }
 
-    static int T3(ReadOnlySpan<char> text, int p) =>
-        MatchIdPart(text, p);
+    static int T3<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        MatchIdPart(text, p, ref reads);
 
-    static int T2(ReadOnlySpan<char> text, int p)
+    static int T2<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
         while (true)
         {
-            int r = T3(text, p);
+            int r = T3(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }
     }
 
-    static int T1(ReadOnlySpan<char> text, int p)
+    static int T1<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = MatchIdStart(text, p);
+        p = MatchIdStart(text, p, ref reads);
         if (p < 0) return -1;
-        p = T2(text, p);
+        p = T2(text, p, ref reads);
         if (p < 0) return -1;
         return p;
     }
 
-    static int T5(ReadOnlySpan<char> text, int p) =>
-        (p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
+    static int T5<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads =>
+        (TokenText.Saw(ref reads, p) && p < text.Length && ((text[p] >= '0' && text[p] <= '9')) ? p + 1 : -1);
 
-    static int T4(ReadOnlySpan<char> text, int p)
+    static int T4<TReads>(ReadOnlySpan<char> text, int p, ref TReads reads) where TReads : struct, ITextReads
     {
-        p = T5(text, p);
+        p = T5(text, p, ref reads);
         if (p < 0) return -1;
         while (true)
         {
-            int r = T5(text, p);
+            int r = T5(text, p, ref reads);
             if (r <= p) return p;
             p = r;
         }

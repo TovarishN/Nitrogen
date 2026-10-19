@@ -44,7 +44,15 @@ internal sealed class SyntaxCodeWriter
             return;
         }
         var elements = Elements(rule.Body);
-        b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n");
+        // A tracked parse records each rule result and how far it examined the text, so an incremental
+        // reparse can reuse it; a plain parse goes straight to the body.
+        b.Append($"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n")
+            .Append($"        if (!s.Tracking) return Parse{rule.Name}__(ref s);\n")
+            .Append("        int at = s.Position, outer = s.BeginExamined();\n")
+            .Append($"        bool parsed = Parse{rule.Name}__(ref s);\n")
+            .Append($"        s.EndRule({_info.KindsName}.{CSharpText.Identifier(rule.Name)}, at, outer, parsed);\n")
+            .Append("        return parsed;\n    }\n\n");
+        b.Append($"    static bool Parse{rule.Name}__(ref ParserState s)\n    {{\n");
         b.Append($"        if (s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})) return true;\n");
         if (LeadingLiteral(elements[0]) is { } literal)
         {
@@ -58,6 +66,13 @@ internal sealed class SyntaxCodeWriter
         WriteElements(b, rule.Body as SequenceExpr, elements, module, null);
         b.Append("    }\n\n");
     }
+
+    /// <summary>
+    /// A token matcher call: a tracked parse (incremental reparse) records every character it reads in
+    /// <c>s.Reads</c>; a plain one instantiates <c>NoReads</c>, which costs nothing.
+    /// </summary>
+    static string TokenCall(string matcher) =>
+        $"(s.Tracking ? {matcher}(s.Input, s.Position, ref s.Reads) : {matcher}(s.Input, s.Position, ref s.Untracked))";
 
     static string? LeadingLiteral(Expr element) =>
         (element is LabeledExpr labeled ? labeled.Inner : element) is LiteralExpr literal ? literal.Value : null;
@@ -135,7 +150,7 @@ internal sealed class SyntaxCodeWriter
                 {
                     TokenRule token =>
                         $"s.MatchToken({target.TypeRef(_info, target.KindsName)}.{CSharpText.Identifier(token.Name)}, "
-                        + $"{prefix}Match{token.Name}(s.Text, s.Position), {CSharpText.Literal(token.Name)})",
+                        + $"{TokenCall(prefix + "Match" + token.Name)}, {CSharpText.Literal(token.Name)})",
                     SyntaxRule syntax => $"{prefix}Parse{syntax.Name}(ref s)",
                     ExtensibleRule extensible =>
                         $"s.ParseExtensible({prefix}Instance.{CSharpText.Identifier(extensible.Name)}, {minPrecedence}{CallFlagsArgument(reference)})",
@@ -144,7 +159,7 @@ internal sealed class SyntaxCodeWriter
             }
             case CharClassExpr:
             case AnyCharExpr:
-                return $"s.MatchToken(SyntaxKinds.Literal, {_tokens.MatcherMethod(expr, module, implicitModule)}(s.Text, s.Position), \"character\")";
+                return $"s.MatchToken(SyntaxKinds.Literal, {TokenCall(_tokens.MatcherMethod(expr, module, implicitModule))}, \"character\")";
             default:
                 return Helper(expr, module, implicitModule, listRepair) + "(ref s)";
         }

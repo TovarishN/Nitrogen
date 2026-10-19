@@ -2,7 +2,7 @@ namespace Nitrogen;
 
 /// <summary>A rollback point captured by <see cref="ParserState.Mark"/>.</summary>
 public readonly record struct ParseMark(
-    int Position, int NodeCount, int ChildLogCount, int ChildStackCount, int FrameCount, int MemoWrites);
+    int Position, int NodeCount, int ChildLogCount, int ChildStackCount, int FrameCount, int MemoWrites, int RecordCount = 0);
 
 /// <summary>
 /// The state a generated rule works on. Generated rules have the shape
@@ -15,6 +15,7 @@ public unsafe ref partial struct ParserState
     readonly ReadOnlySpan<char> _text;
     readonly delegate*<ReadOnlySpan<char>, int, int> _trivia;
     readonly AsciiSet _triviaStart;
+    readonly bool _tracking; // the arena's Tracking when the parse started, kept here for the hot paths
     internal readonly BuildArena Arena;
     internal readonly MemoTable Memo;
 
@@ -63,16 +64,85 @@ public unsafe ref partial struct ParserState
         Arena = arena;
         Memo = memo;
         Position = 0;
+        _tracking = arena.Tracking;
     }
 
-    public readonly ReadOnlySpan<char> Text => _text;
+    /// <summary>
+    /// The text, for hand-written parsing code. A tracked parse cannot see what such code reads, so
+    /// asking for it counts as examining all of it: results built from it are never reused. Generated
+    /// code reads through <see cref="Input"/> and reports its reads.
+    /// </summary>
+    public ReadOnlySpan<char> Text
+    {
+        get
+        {
+            if (_tracking) Reads.Read(_text.Length);
+            return _text;
+        }
+    }
 
-    public readonly bool AtEnd => Position >= _text.Length;
+    /// <summary>The text for code that reports every index it reads through <see cref="Reads"/> (generated token matchers).</summary>
+    public readonly ReadOnlySpan<char> Input => _text;
 
-    public readonly char Current => Position < _text.Length ? _text[Position] : '\0';
+    /// <summary>A tracked parse (incremental reparse) reports text reads in <see cref="Reads"/>.</summary>
+    public readonly bool Tracking => _tracking;
+
+    /// <summary>One past the furthest index read since the innermost <see cref="BeginExamined"/>; only maintained when tracking.</summary>
+    public FurthestRead Reads;
+
+    /// <summary>The sink a plain parse's token matchers report to: reports compile away.</summary>
+    public NoReads Untracked;
+
+    /// <summary>Reports that <paramref name="index"/> was read (an index at the end means the end of input was seen).</summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public void MarkRead(int index)
+    {
+        if (_tracking) Reads.Read(Math.Min(index, _text.Length)); // past the end, it only saw the end
+    }
+
+    /// <summary>Starts measuring what one rule call examines; returns the outer measure for <see cref="EndExamined"/>.</summary>
+    public int BeginExamined()
+    {
+        int outer = Reads.End;
+        Reads.End = Position;
+        return outer;
+    }
+
+    /// <summary>Ends a measure: returns one past the furthest index this call read, and folds it into the outer one.</summary>
+    public int EndExamined(int outer)
+    {
+        int examined = Reads.End;
+        if (outer > examined) Reads.End = outer;
+        return examined;
+    }
+
+    /// <summary>Ends a tracked rule call started at <paramref name="start"/>: a success records the rule's result for reuse.</summary>
+    public void EndRule(long rule, int start, int outer, bool parsed)
+    {
+        int examined = EndExamined(outer);
+        if (parsed) Arena.AddRecord(new ReuseRecord(rule, start, Position, examined, Arena.ChildStack[Arena.ChildStackCount - 1]));
+    }
+
+    public bool AtEnd
+    {
+        get
+        {
+            MarkRead(Position);
+            return Position >= _text.Length;
+        }
+    }
+
+    public char Current
+    {
+        get
+        {
+            MarkRead(Position);
+            return Position < _text.Length ? _text[Position] : '\0';
+        }
+    }
 
     public readonly ParseMark Mark() => new(
-        Position, Arena.NodeCount, Arena.ChildLogCount, Arena.ChildStackCount, Arena.FrameCount, Arena.MemoWrites);
+        Position, Arena.NodeCount, Arena.ChildLogCount, Arena.ChildStackCount, Arena.FrameCount, Arena.MemoWrites, Arena.RecordCount);
 
     public void Reset(in ParseMark mark)
     {
@@ -83,6 +153,7 @@ public unsafe ref partial struct ParserState
         {
             Arena.NodeCount = mark.NodeCount;
             Arena.ChildLogCount = mark.ChildLogCount;
+            Arena.RecordCount = mark.RecordCount; // their nodes are gone
         }
     }
 
@@ -197,6 +268,7 @@ public unsafe ref partial struct ParserState
 
     public bool MatchLiteral(string literal)
     {
+        MarkRead(Position + literal.Length - 1);
         if (_text.Slice(Position).StartsWith(literal))
         {
             PushLeaf(SyntaxKinds.Literal, Position + literal.Length);
@@ -210,6 +282,7 @@ public unsafe ref partial struct ParserState
     public bool MatchKeyword(string keyword)
     {
         int end = Position + keyword.Length;
+        MarkRead(end);
         if (_text.Slice(Position).StartsWith(keyword) && (end >= _text.Length || !IsIdentifierPart(_text[end])))
         {
             PushLeaf(SyntaxKinds.Literal, end);
@@ -244,9 +317,21 @@ public unsafe ref partial struct ParserState
         return false;
     }
 
+    /// <summary>
+    /// Skips trivia. A trivia function is assumed to read at most two characters past where it stops
+    /// (a "/" that does not start a comment); a tracked parse counts that much as examined.
+    /// </summary>
     public void SkipTrivia()
     {
-        if (Position < _text.Length && _triviaStart.Matches(_text[Position])) Position = _trivia(_text, Position);
+        if (Position < _text.Length && _triviaStart.Matches(_text[Position]))
+        {
+            Position = _trivia(_text, Position);
+            MarkRead(Position + 1);
+        }
+        else
+        {
+            MarkRead(Position);
+        }
     }
 
     /// <summary>Records that <paramref name="name"/> was expected at the current position.</summary>
@@ -514,8 +599,12 @@ public unsafe ref partial struct ParserState
         return a.BracketDepth > 0 ? a.BracketStack[a.BracketDepth - 1] : '\0';
     }
 
-    internal readonly int PeekPastTrivia() =>
-        Position < _text.Length && _triviaStart.Matches(_text[Position]) ? _trivia(_text, Position) : Position;
+    internal int PeekPastTrivia()
+    {
+        int at = Position < _text.Length && _triviaStart.Matches(_text[Position]) ? _trivia(_text, Position) : Position;
+        MarkRead(at == Position ? at : at + 1);
+        return at;
+    }
 
     internal static bool IsIdentifierPart(char c) => char.IsLetterOrDigit(c) || c == '_';
 }

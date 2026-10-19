@@ -31,15 +31,18 @@ public static unsafe class ExtensibleRules
         int ruleKey = (decl.GlobalId << 10) | ((callFlags & arena.CallFlagMask) << 8) | minPrecedence;
         int start = s.Position;
 
-        if (s.Memo.TryGet(ruleKey, start, out int memoNode, out int memoEnd))
+        if (s.Memo.TryGet(ruleKey, start, out int memoNode, out int memoEnd, out int memoExamined))
         {
             arena.MemoHits++;
+            // The result depends on what its computation read; a tracked caller must count that too.
+            if (memoExamined > 0) s.MarkRead(memoExamined - 1);
             if (memoNode < 0) return false;
             arena.PushChild(memoNode);
             s.Position = memoEnd;
             return true;
         }
         arena.MemoMisses++;
+        int outer = arena.Tracking ? s.BeginExamined() : 0;
 
         var callerPoint = s.CallPoint;
         int callerFlags = s.CallFlags;
@@ -52,18 +55,22 @@ public static unsafe class ExtensibleRules
         s.CallPoint = callerPoint;
         s.CallFlags = callerFlags;
 
+        int examined = arena.Tracking ? s.EndExamined(outer) : 0;
         if (!parsed)
         {
             // A failure that ran no candidate is as cheap to rediscover as to look up.
             if (triedCandidate)
             {
-                s.Memo.Set(ruleKey, start, -1, -1);
+                s.Memo.Set(ruleKey, start, -1, -1, examined);
                 arena.MemoWrites++;
             }
             return false;
         }
-        s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position);
+        int node = arena.ChildStack[arena.ChildStackCount - 1];
+        s.Memo.Set(ruleKey, start, node, s.Position, examined);
         arena.MemoWrites++;
+        if (arena.Tracking)
+            arena.AddRecord(new ReuseRecord(ReuseRecord.ExtensibleTag | (uint)ruleKey, start, s.Position, examined, node));
         return true;
     }
 
@@ -71,7 +78,8 @@ public static unsafe class ExtensibleRules
     {
         triedCandidate = false;
         int start = s.Position;
-        int bucket = ExtensionPoint.Bucket(s.Text, start);
+        s.MarkRead(start);
+        int bucket = ExtensionPoint.Bucket(s.Input, start);
         var candidates = new Candidates { Base = s.Arena.ChildStackCount };
 
         foreach (int index in point.PrefixCandidates(bucket))
@@ -113,7 +121,7 @@ public static unsafe class ExtensibleRules
             int left = arena.ChildStack[arena.ChildStackCount - 1];
             int start = s.Position;
             int peek = s.PeekPastTrivia();
-            int bucket = ExtensionPoint.Bucket(s.Text, peek);
+            int bucket = ExtensionPoint.Bucket(s.Input, peek);
 
             arena.ChildStackCount--; // the left operand becomes each candidate's first child
             var candidates = new Candidates { Base = arena.ChildStackCount };

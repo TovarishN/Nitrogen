@@ -19,6 +19,15 @@ internal sealed class BuildArena
     public int[] ChildCount = new int[256];
     public int NodeCount;
 
+    /// <summary>
+    /// A tracked parse (incremental reparse): text reads are recorded in <see cref="ParserState.Reads"/> and
+    /// each rule result in <see cref="Records"/>. Off for plain, recovery and template parses.
+    /// </summary>
+    public bool Tracking;
+
+    public ReuseRecord[] Records = [];
+    public int RecordCount;
+
     /// <summary>Nodes the arena can hold before it grows.</summary>
     public int NodeCapacity => Kind.Length;
 
@@ -91,7 +100,7 @@ internal sealed class BuildArena
     public void Clear()
     {
         TemplateLists?.Clear();
-        NodeCount = ChildLogCount = ChildStackCount = FrameCount = 0;
+        NodeCount = ChildLogCount = ChildStackCount = FrameCount = RecordCount = 0;
         MemoWrites = MemoHits = MemoMisses = 0;
         FurthestPosition = -1;
         ExpectedCount = 0;
@@ -117,6 +126,12 @@ internal sealed class BuildArena
         ChildStart[n] = childStart;
         ChildCount[n] = childCount;
         return n;
+    }
+
+    public void AddRecord(in ReuseRecord record)
+    {
+        if (RecordCount == Records.Length) Array.Resize(ref Records, Math.Max(64, RecordCount * 2));
+        Records[RecordCount++] = record;
     }
 
     public void PushChild(int node)

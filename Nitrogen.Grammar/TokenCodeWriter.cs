@@ -2,13 +2,21 @@ using System.Text;
 
 namespace Nitrogen.Grammar;
 
-/// <summary>Emits character-level matchers <c>(ReadOnlySpan&lt;char&gt; text, int p) → end or -1</c>.</summary>
+/// <summary>
+/// Emits character-level matchers <c>(ReadOnlySpan&lt;char&gt; text, int p, ref TReads reads) → end or -1</c>. Every
+/// character test reports the index it reads, so a tracked parse knows how far a token looked; a plain
+/// parse instantiates <see cref="T:Nitrogen.NoReads"/>, which compiles the reports away. Each token rule also
+/// gets a two-argument overload for callers that do not track (recovery lookahead, tests).
+/// </summary>
 internal sealed class TokenCodeWriter
 {
     readonly EmitModel _model;
     readonly ModuleInfo _info;
     readonly StringBuilder _helpers;
     int _counter;
+
+    const string Generic = "<TReads>";
+    const string Constraint = " where TReads : struct, ITextReads";
 
     public TokenCodeWriter(EmitModel model, ModuleInfo info, StringBuilder helpers)
     {
@@ -20,15 +28,20 @@ internal sealed class TokenCodeWriter
     public void WriteMatcher(StringBuilder b, TokenRule rule)
     {
         string code = Code(rule.Body, "position", _info.Module, null);
+        b.Append("    internal static int Match").Append(rule.Name).Append("(ReadOnlySpan<char> text, int position)\n    {\n")
+            .Append("        var reads = default(NoReads);\n")
+            .Append("        return Match").Append(rule.Name).Append("(text, position, ref reads);\n    }\n\n");
         if (rule.Except.Count == 0)
         {
-            b.Append("    internal static int Match").Append(rule.Name).Append("(ReadOnlySpan<char> text, int position) =>\n        ")
-                .Append(code).Append(";\n\n");
+            b.Append("    internal static int Match").Append(rule.Name).Append(Generic).Append("(ReadOnlySpan<char> text, int position, ref TReads reads)")
+                .Append(Constraint).Append(" =>\n        ").Append(code).Append(";\n\n");
             return;
         }
         // Reserved words: a C# span switch compiles to a length jump plus comparisons, no allocation.
+        // The word is the matched span, which the matcher has already read.
         var words = rule.Except.Select(e => e.Value).Distinct(StringComparer.Ordinal).Select(CSharpText.Literal);
-        b.Append("    internal static int Match").Append(rule.Name).Append("(ReadOnlySpan<char> text, int position)\n    {\n")
+        b.Append("    internal static int Match").Append(rule.Name).Append(Generic).Append("(ReadOnlySpan<char> text, int position, ref TReads reads)")
+            .Append(Constraint).Append("\n    {\n")
             .Append("        int end = ").Append(code).Append(";\n")
             .Append("        return end < 0 || IsReserved").Append(rule.Name).Append("(text.Slice(position, end - position)) ? -1 : end;\n    }\n\n")
             .Append("    static bool IsReserved").Append(rule.Name).Append("(ReadOnlySpan<char> word) => word switch\n    {\n")
@@ -42,7 +55,7 @@ internal sealed class TokenCodeWriter
         if (expr is SequenceExpr or ChoiceExpr or RepeatExpr or SeparatedListExpr) return Method(expr, module, implicitModule);
         string name = NextName();
         string body = Code(expr, "p", module, implicitModule);
-        _helpers.Append($"    static int {name}(ReadOnlySpan<char> text, int p) =>\n        {body};\n\n");
+        _helpers.Append($"    static int {name}{Generic}(ReadOnlySpan<char> text, int p, ref TReads reads){Constraint} =>\n        {body};\n\n");
         return name;
     }
 
@@ -52,13 +65,15 @@ internal sealed class TokenCodeWriter
         switch (expr)
         {
             case LiteralExpr literal when literal.Value.Length == 1:
-                return $"({pos} < text.Length && text[{pos}] == {CSharpText.CharLiteral(literal.Value[0])} ? {pos} + 1 : -1)";
+                return $"(TokenText.Saw(ref reads, {pos}) && {pos} < text.Length && text[{pos}] == {CSharpText.CharLiteral(literal.Value[0])} ? {pos} + 1 : -1)";
             case LiteralExpr literal:
-                return $"(text.Slice({pos}).StartsWith({CSharpText.Literal(literal.Value)}) ? {pos} + {literal.Value.Length} : -1)";
+                return $"(TokenText.Saw(ref reads, {pos} + {literal.Value.Length - 1}, text.Length) && text.Slice({pos}).StartsWith({CSharpText.Literal(literal.Value)}) ? {pos} + {literal.Value.Length} : -1)";
             case CharClassExpr charClass:
-                return $"({pos} < text.Length && {Condition(charClass, $"text[{pos}]")} ? {pos} + 1 : -1)";
+            {
+                return $"(TokenText.Saw(ref reads, {pos}) && {pos} < text.Length && {Condition(charClass, $"text[{pos}]")} ? {pos} + 1 : -1)";
+            }
             case AnyCharExpr:
-                return $"({pos} < text.Length ? {pos} + 1 : -1)";
+                return $"(TokenText.Saw(ref reads, {pos}) && {pos} < text.Length ? {pos} + 1 : -1)";
             case LabeledExpr labeled:
                 return Code(labeled.Inner, pos, module, implicitModule);
             case PredicateExpr predicate:
@@ -69,10 +84,10 @@ internal sealed class TokenCodeWriter
             case ReferenceExpr reference:
             {
                 var symbol = _model.Resolve(reference.Name, module, implicitModule);
-                return $"{_model.Info(symbol.Module).ClassPrefix(_info)}Match{symbol.Rule.Name}(text, {pos})";
+                return $"{_model.Info(symbol.Module).ClassPrefix(_info)}Match{symbol.Rule.Name}(text, {pos}, ref reads)";
             }
             default:
-                return $"{Method(expr, module, implicitModule)}(text, {pos})";
+                return $"{Method(expr, module, implicitModule)}(text, {pos}, ref reads)";
         }
     }
 
@@ -100,28 +115,28 @@ internal sealed class TokenCodeWriter
             {
                 string inner = MatcherMethod(repeat.Inner, module, implicitModule);
                 if (repeat.Kind == RepeatKind.OneOrMore)
-                    body.Append($"        p = {inner}(text, p);\n        if (p < 0) return -1;\n");
+                    body.Append($"        p = {inner}(text, p, ref reads);\n        if (p < 0) return -1;\n");
                 body.Append("        while (true)\n        {\n")
-                    .Append($"            int r = {inner}(text, p);\n")
+                    .Append($"            int r = {inner}(text, p, ref reads);\n")
                     .Append("            if (r <= p) return p;\n            p = r;\n        }\n");
                 break;
             }
             case SeparatedListExpr list:
             {
                 string item = MatcherMethod(list.Item, module, implicitModule);
-                body.Append($"        int start = p;\n        p = {item}(text, p);\n")
+                body.Append($"        int start = p;\n        p = {item}(text, p, ref reads);\n")
                     .Append($"        if (p < 0) return {(list.AtLeastOne ? "-1" : "start")};\n")
                     .Append("        while (true)\n        {\n")
                     .Append($"            int r = {Code(list.Separator, "p", module, implicitModule)};\n")
                     .Append("            if (r < 0) return p;\n")
-                    .Append($"            r = {item}(text, r);\n")
+                    .Append($"            r = {item}(text, r, ref reads);\n")
                     .Append("            if (r < 0) return p;\n            p = r;\n        }\n");
                 break;
             }
             default:
                 throw new InvalidOperationException("unexpected token expression " + expr.GetType().Name);
         }
-        _helpers.Append($"    static int {name}(ReadOnlySpan<char> text, int p)\n    {{\n{body}    }}\n\n");
+        _helpers.Append($"    static int {name}{Generic}(ReadOnlySpan<char> text, int p, ref TReads reads){Constraint}\n    {{\n{body}    }}\n\n");
         return name;
     }
 
