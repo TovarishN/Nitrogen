@@ -152,6 +152,7 @@ public sealed unsafe partial class Language
             throw new ArgumentException("The tree text must be as long as the parsed text.", nameof(treeText));
         var result = Parse(text, start, recoverOnly: false, treeText, incremental: true);
         result.StartRule = start;
+        result.ReuseText = text;
         return result;
     }
 
@@ -186,10 +187,35 @@ public sealed unsafe partial class Language
         }
         if (length != text.Length)
             throw new ArgumentException($"The changes turn a {oldLength}-character text into {length} characters, not {text.Length}.", nameof(text));
-        var reuse = new ReuseContext(previous.Tree, previous.Reuse, changes.ToArray());
+        // After an error the base is the last successful parse, whose text the given changes do not start from: map
+        // it to the new text by their common prefix and suffix, which is exact about what text is unchanged.
+        var baseTree = previous.ReuseTree ?? previous.Tree;
+        string baseText = previous.ReuseText!;
+        var baseChanges = previous.ReuseTree is null ? changes.ToArray() : [Difference(baseText, text)];
+        var reuse = new ReuseContext(baseTree, previous.Reuse, baseChanges);
         var result = Parse(text, previous.StartRule, recoverOnly: false, treeText, incremental: true, reuse);
         result.StartRule = previous.StartRule;
+        if (result.Success)
+        {
+            result.ReuseText = text;
+        }
+        else
+        {
+            // The text has errors: keep the base to reuse from once it parses again.
+            result.Reuse = previous.Reuse;
+            result.ReuseTree = baseTree.Copy();
+            result.ReuseText = baseText;
+        }
         return result;
+    }
+
+    /// <summary>The single change turning <paramref name="before"/> into <paramref name="after"/> between their common prefix and suffix.</summary>
+    static TextChange Difference(string before, string after)
+    {
+        int prefix = before.AsSpan().CommonPrefixLength(after);
+        int max = Math.Min(before.Length, after.Length) - prefix, suffix = 0;
+        while (suffix < max && before[before.Length - 1 - suffix] == after[after.Length - 1 - suffix]) suffix++;
+        return new TextChange(prefix, before.Length - prefix - suffix, after.Length - prefix - suffix);
     }
 
     ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false, ReuseContext? reuse = null)

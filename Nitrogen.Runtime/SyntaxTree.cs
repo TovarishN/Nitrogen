@@ -69,6 +69,17 @@ public sealed class SyntaxTree : IDisposable
     /// <summary>The arrays are rented from the pool (a small tree) rather than owned at exact size.</summary>
     internal bool IsPooled => _pooled;
 
+    /// <summary>An exact-size copy owning its arrays, independent of this tree's disposal (a reuse base kept past an error).</summary>
+    internal SyntaxTree Copy()
+    {
+        if (_kind is null) throw new ObjectDisposedException(nameof(SyntaxTree));
+        int slots = _childStart![NodeCount];
+        return new SyntaxTree(Text, Language, NodeCount, _kind.AsSpan(0, NodeCount).ToArray(), _kindOf,
+            _start!.AsSpan(0, NodeCount).ToArray(), _length!.AsSpan(0, NodeCount).ToArray(),
+            _childStart.AsSpan(0, NodeCount + 1).ToArray(), _children!.AsSpan(0, slots).ToArray(),
+            _skipped!.AsSpan(0, _skippedCount).ToArray(), _skippedCount, pooled: false) { TemplateLists = TemplateLists };
+    }
+
     /// <summary>One past the last node of <paramref name="node"/>'s subtree, which is contiguous in preorder.</summary>
     internal int SubtreeEnd(int node)
     {

@@ -230,4 +230,49 @@ public class IncrementalTests
         TreeAssert.Same(full, last);
         Assert.True(last.Stats.ReusedNodes >= 0.9 * last.Tree.NodeCount, $"{last.Stats.ReusedNodes} of {last.Tree.NodeCount}");
     }
+
+    [Theory]
+    [InlineData(0, 1, 2)]
+    [InlineData(0, 2, 1)]
+    [InlineData(1, 0, 2)]
+    [InlineData(1, 2, 0)]
+    [InlineData(2, 0, 1)]
+    [InlineData(2, 1, 0)]
+    public void Typing_through_an_error_still_reuses(int first, int second, int third)
+    {
+        string good = CalcProgram(50);
+        int semicolon = good.IndexOf("f(c, 2);\nx26", StringComparison.Ordinal) + "f(c, 2)".Length;
+        var results = new ParseResult[3];
+        results[0] = Calc.ParseIncremental(good, CalcModule.Program);
+        var (broken, c1) = Edit(good, (semicolon, 1, ""));
+        results[1] = Calc.Reparse(results[0], broken, c1);
+        var (fixedText, c2) = Edit(broken, (semicolon, 0, ";"));
+        results[2] = Calc.Reparse(results[1], fixedText, c2);
+
+        Assert.False(results[1].Success);
+        Assert.True(results[1].IsIncremental);
+        using (var full = Calc.Parse(broken, CalcModule.Program)) TreeAssert.Same(full, results[1]);
+        using (var full = Calc.Parse(fixedText, CalcModule.Program)) TreeAssert.Same(full, results[2]);
+        Assert.True(results[2].Stats.ReusedNodes > 0);
+
+        foreach (int i in new[] { first, second, third }) results[i].Dispose();
+    }
+
+    [Fact]
+    public void A_reparse_after_an_error_still_works_when_the_good_result_is_gone()
+    {
+        string good = CalcProgram(20);
+        var start = Calc.ParseIncremental(good, CalcModule.Program);
+        var (broken, c1) = Edit(good, (5, 1, ")"));
+        var bad = Calc.Reparse(start, broken, c1);
+        start.Dispose();
+        var (fixedText, c2) = Edit(broken, (5, 1, good[5].ToString()));
+
+        using var again = Calc.Reparse(bad, fixedText, c2);
+        bad.Dispose();
+
+        using var full = Calc.Parse(fixedText, CalcModule.Program);
+        TreeAssert.Same(full, again);
+        Assert.True(again.Stats.ReusedNodes > 0);
+    }
 }
