@@ -256,6 +256,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   client = new LanguageClient(LANGUAGE, DISPLAY, serverOptions, clientOptions);
   try {
     await client.start();
+    strings.refreshVisible();
     routing.start(context);
   } catch (error) {
     client = undefined;

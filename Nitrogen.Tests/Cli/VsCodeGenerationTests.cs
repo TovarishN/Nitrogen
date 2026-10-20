@@ -108,6 +108,7 @@ public sealed class VsCodeGenerationTests : IDisposable
         VsCodeRenderer.Render(request, CancellationToken.None);
 
         Assert.Contains("...csharpSelector", Read(request, "src/extension.ts"));
+        Assert.Contains("strings.refreshVisible();", Read(request, "src/extension.ts"));
         Assert.Contains("signatureDocuments: signatureOwner", Read(request, "src/extension.ts"));
         Assert.Contains("ownsSignatureDocuments", Read(request, "src/signatureDocuments.ts"));
         Assert.Contains("setTextDocumentLanguage", Read(request, "src/signatureRouting.ts"));

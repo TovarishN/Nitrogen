@@ -40,12 +40,39 @@ const isCSharp = (document: TextDocument): boolean => document.languageId === 'c
 export class CSharpStrings implements Disposable {
   private readonly decorations = new Map<string, TextEditorDecorationType>();
   private readonly painted = new Map<string, Map<string, Range[]>>();
+  private disposed = false;
+  private readonly revisions = new Map<string, number>();
   private readonly listeners = [
-    window.onDidChangeVisibleTextEditors(() => this.repaint()),
+    window.onDidChangeVisibleTextEditors(() => this.refreshVisible()),
+    workspace.onDidChangeTextDocument(event => {
+      if (window.visibleTextEditors.some(editor => editor.document === event.document)) void this.refresh(event.document);
+    }),
     workspace.onDidCloseTextDocument(document => this.painted.delete(document.uri.toString())),
   ];
 
   constructor(private readonly client: () => LanguageClient | undefined) {}
+
+  /** C# may own the editor's token provider, so decorations fetch their tokens independently. */
+  refreshVisible(): void {
+    this.repaint();
+    for (const editor of window.visibleTextEditors) void this.refresh(editor.document);
+  }
+
+  private async refresh(document: TextDocument): Promise<void> {
+    const client = this.client();
+    if (this.disposed || !isCSharp(document) || !client?.initializeResult) return;
+    const key = document.uri.toString();
+    const revision = (this.revisions.get(key) ?? 0) + 1;
+    this.revisions.set(key, revision);
+    const version = document.version;
+    try {
+      const result = await client.sendRequest<{ data: number[] } | null>('textDocument/semanticTokens/full', { textDocument: { uri: key } });
+      if (!this.disposed && !document.isClosed && document.version === version && this.revisions.get(key) === revision)
+        this.paint(document, result ? new SemanticTokens(new Uint32Array(result.data)) : undefined);
+    } catch {
+      // The client can stop while a visible editor is being refreshed.
+    }
+  }
 
   /** Paints C# documents' tokens and keeps them from replacing C#'s; leaves rename and outline to C# outside the strings. */
   readonly middleware: Middleware = {
@@ -111,6 +138,7 @@ export class CSharpStrings implements Disposable {
   }
 
   dispose(): void {
+    this.disposed = true;
     for (const listener of this.listeners) listener.dispose();
     for (const decoration of this.decorations.values()) decoration.dispose();
     this.decorations.clear();
