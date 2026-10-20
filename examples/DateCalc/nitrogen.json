@@ -7,6 +7,7 @@
       "start": "DateCalc.Program",
       "namespace": "DateCalc.Syntax",
       "sources": ["DateCalcLanguage.cs", "MathModule.cs", "DateCalcEvaluator.cs", "DateCalcFixes.cs", "PatternMatching.cs"],
+      "types": { "DateCalc.Date": "number" },
       "tokens": { "value": "variable", "function": "function" }
     }
   ]

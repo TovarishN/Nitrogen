@@ -38,6 +38,14 @@ Configured languages generate `<LanguageName>Composition.CreateBuilder()` and `.
 
 Extracting grammar definitions can change generated C# identities and quotation category names. Validate supported consumers and composition after a move; extraction alone does not create an independently usable package.
 
+## Configure the project for IDE use
+
+Creating a project language definition includes its IDE configuration, including for prototypes. Add or extend `nitrogen.json` at the project/workspace root the IDE will open; preserve other language entries. Use the current Nitrogen configuration schema and a working repository example rather than inventing keys.
+
+Register the language name, DSL file extensions, all participating grammar paths and the actual `Module.StartRule`. Include `namespace` and `sources` when helper C# code supplies syntax-dependent semantics, checks or editor services. Use paths relative to the configuration and verify that helper dependencies also compile through the editor loader; a normal `.csproj` build does not establish that. Keep generator-only `AdditionalFiles` registration consistent with the configuration and grammars.
+
+Verify that the configured language loads through Nitrogen's workspace/LSP path and that a representative DSL file is recognized with useful diagnostics. Where available, check completion and navigation against its real bindings. Document the project folder to open and any required Nitrogen extension/server setup; for a generated VS Code extension using bundled grammar, explain its workspace development-mode setting when editing the language. Do not install or change global IDE extensions/settings unless requested. Report configuration/LSP checks separately from live IDE verification, including any unverified features or blocked setup.
+
 ## Make diagnostics and editing part of acceptance
 
 Preserve source origins through lowering and expansion. Check that an error identifies the useful authored location, including definition and use context. Completion, navigation, hover, and rename should agree with binding and types. For editor changes, reproduce the actual interaction in the consuming language; distinguish automated checks from live UI verification.
