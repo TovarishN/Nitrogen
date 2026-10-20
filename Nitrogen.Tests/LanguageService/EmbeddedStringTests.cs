@@ -192,6 +192,19 @@ public sealed class EmbeddedStringTests : IDisposable
         """";
 
     [Fact]
+    public void Raw_and_line_tagged_DateCalc_strings_both_return_highlighting()
+    {
+        using var service = Service();
+        string host = Snippets.Replace("const string D = /*lang=datecalc*/", "// language=datecalc\n    const string D =", StringComparison.Ordinal);
+        string uri = Uri("Snippets.cs");
+        service.Open(uri, 1, host);
+        var tokens = service.SemanticTokens(uri);
+        Assert.Contains(tokens, t => t.Start == At(host, "let christmas") && t.Type == TokenType.Keyword);
+        Assert.Contains(tokens, t => t.Start == At(host, "weekday(christmas)") && t.Type == TokenType.Function);
+        Assert.Contains(tokens, t => t.Start == At(host, "2026-10-05") && t.Type == TokenType.Number);
+    }
+
+    [Fact]
     public void Values_show_inside_a_multiline_string_and_after_a_one_line_string()
     {
         using var service = Service();

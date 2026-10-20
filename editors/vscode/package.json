@@ -2,7 +2,7 @@
   "name": "nitrogen",
   "displayName": "Nitrogen DSL",
   "description": ".ngr grammars and nitrogen.json workspace languages through nitrogen lsp.",
-  "version": "0.17.1",
+  "version": "0.17.2",
   "publisher": "nitrogen",
   "license": "MIT",
   "engines": {
@@ -92,7 +92,7 @@
   "scripts": {
     "compile": "tsc -p ./ --noEmit && esbuild src/extension.ts --bundle --platform=node --target=node20 --format=cjs --external:vscode --sourcemap --outfile=out/extension.js",
     "package": "vsce package --no-dependencies --allow-missing-repository",
-    "test": "esbuild src/otherExtensions.test.ts src/server.test.ts src/developmentConfig.test.ts src/signatureDocuments.test.ts src/signatureRouting.test.ts src/extractGrammar.test.ts src/extractionReview.test.ts --external:vscode --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/otherExtensions.test.js out/test/server.test.js out/test/developmentConfig.test.js out/test/signatureDocuments.test.js out/test/signatureRouting.test.js out/test/extractGrammar.test.js out/test/extractionReview.test.js"
+    "test": "esbuild src/csharpStrings.test.ts src/otherExtensions.test.ts src/server.test.ts src/developmentConfig.test.ts src/signatureDocuments.test.ts src/signatureRouting.test.ts src/extractGrammar.test.ts src/extractionReview.test.ts --external:vscode --bundle --platform=node --target=node20 --format=cjs --outdir=out/test && node --test out/test/csharpStrings.test.js out/test/otherExtensions.test.js out/test/server.test.js out/test/developmentConfig.test.js out/test/signatureDocuments.test.js out/test/signatureRouting.test.js out/test/extractGrammar.test.js out/test/extractionReview.test.js"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"

@@ -59,6 +59,9 @@ internal static class SemanticTokenBuilder
                 covered = name.End;
                 continue;
             }
+            var lexical = Classify(tree, kind, text, span);
+            // Literal spelling survives incidental AST/list/text wrappers. Explicit type styles and
+            // language assistance remain authoritative; ordinary lowering never guesses a number.
             // An assisted token may colour the start of a leaf, such as the name of a call head `Name(`.
             if (hir.TryGetValue(span.Start, out var meaning) && (meaning.End == span.End || assistedStarts.Contains(span.Start) && meaning.End < span.End))
             {
@@ -66,7 +69,7 @@ internal static class SemanticTokenBuilder
                 covered = meaning.End;
                 continue;
             }
-            if (Classify(tree, kind, text, span) is { } type)
+            if (lexical is { } type)
             {
                 Add(tokens, document.Lines, span.Start, span.End, type, TokenModifiers.None);
                 covered = span.End;
@@ -79,7 +82,8 @@ internal static class SemanticTokenBuilder
 
     /// <summary>
     /// Leaf spans by start → their colour from the lowered HIR. An operation's own words (outside its
-    /// arguments) are functions; a node lowered from one token is a value of its type. Outer nodes win.
+    /// arguments) are functions. Explicit type styles and scalar constants colour a single token;
+    /// structural nodes do not guess a value colour.
     /// </summary>
     static Dictionary<int, (int End, TokenType Type)> Lowered(Document document, IReadOnlyList<HirNode> roots)
     {
@@ -119,7 +123,12 @@ internal static class SemanticTokenBuilder
             {
                 var inside = Within(span).ToList();
                 if (inside.Count == 1 && !inside[0].Literal && node is not HirSymbolRef)
-                    Mark(inside[0].Span, document.Language.Presentation.TypeStyle(node.Type) ?? ValueToken(node.Type));
+                {
+                    var leaf = inside[0].Span;
+                    var type = document.Language.Presentation.TypeStyle(node.Type) ??
+                        (node is HirConstant ? TokenType.Number : node.Type.Equals(SemanticTypes.Bool) ? TokenType.Keyword : (TokenType?)null);
+                    if (type is { } valueType) Mark(leaf, valueType);
+                }
                 else if (node is HirOperation operation)
                 {
                     var arguments = operation.Arguments.SelectMany(Here).ToList();
@@ -149,9 +158,6 @@ internal static class SemanticTokenBuilder
         foreach (var root in roots) Visit(root);
         return meanings;
     }
-
-    static TokenType ValueToken(SemanticType type) =>
-        type.Equals(SemanticTypes.Text) ? TokenType.String : type.Equals(SemanticTypes.Bool) ? TokenType.Keyword : TokenType.Number;
 
     static TokenType? Classify(SyntaxTree tree, int kind, string text, TextSpan span)
     {

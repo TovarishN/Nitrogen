@@ -49,6 +49,46 @@ public sealed class LoweredLanguageTests : IDisposable
         tokens.FirstOrDefault(t => t.Start == position) is { Length: > 0 } token ? token.Type : null;
 
     [Fact]
+    public void Structural_and_AST_wrappers_preserve_literal_tokens()
+    {
+        File.WriteAllText(Path.Combine(_root, "M.ngr"), """
+            syntax module M {
+              token String = "\"" [^'"']* "\"";
+              token Number = ['0'..'9']+;
+              token Identifier = ['a'..'z']+;
+              syntax Doc = Items:Item* lowers Test.Wrap(sequence Core.Text Items);
+              syntax Item = Text / Num / Word;
+              syntax Text = Value:String lowers text Core.Text Value;
+              syntax Num = Value:Number lowers text Core.Text Value;
+              syntax Word = Value:Identifier lowers text Core.Text Value;
+            }
+            """);
+        File.WriteAllText(Path.Combine(_root, "Helpers.cs"), """
+            using Nitrogen.Semantic;
+            public static class Helpers {
+              public static SemanticModule Module => new("Test", [],
+                [SemanticType.Named("Test", "Ast")],
+                [new OperationSignature("Test.Wrap", SemanticType.Named("Test", "Ast"), SemanticTypes.SequenceOf(SemanticTypes.Text))]);
+            }
+            """);
+        File.WriteAllText(Path.Combine(_root, "nitrogen.json"), """
+            { "languages": [{ "name": "M", "extensions": [".m"], "grammars": ["M.ngr"],
+              "sources": ["Helpers.cs"], "start": "M.Doc" }] }
+            """);
+        using var service = new NitrogenLanguageService(LspCommand.Registry());
+        service.ConfigureWorkspace(_root);
+        foreach (string text in new[] { "\"hello\"", "42", "plain", "\"hello\" \"world\"" })
+        {
+            service.Open(Uri("a.m"), 1, text);
+            Assert.DoesNotContain(service.Diagnostics(Uri("a.m")), d => d.Severity == ServiceSeverity.Error);
+            var tokens = service.SemanticTokens(Uri("a.m"));
+            Assert.Equal(text[0] == '"' ? TokenType.String : text[0] == '4' ? TokenType.Number : (TokenType?)null,
+                TokenAt(tokens, new DocumentPosition(0, 0)));
+            service.Close(Uri("a.m"));
+        }
+    }
+
+    [Fact]
     public void Lowering_clauses_colour_operations_types_and_fields()
     {
         using var service = Service();
@@ -117,7 +157,7 @@ public sealed class LoweredLanguageTests : IDisposable
     public void A_language_can_colour_values_by_their_semantic_type()
     {
         string config = Path.Combine(_root, "nitrogen.json");
-        File.WriteAllText(config, File.ReadAllText(config).Replace("\"tokens\":", "\"types\": { \"DateCalc.Date\": \"enumMember\" },\n      \"tokens\":", StringComparison.Ordinal));
+        File.WriteAllText(config, File.ReadAllText(config).Replace("\"DateCalc.Date\": \"number\"", "\"DateCalc.Date\": \"enumMember\"", StringComparison.Ordinal));
         using var service = Service();
         const string text = "2026-10-05 - 3 days;\n";
         service.Open(Uri("a.datecalc"), 1, text);

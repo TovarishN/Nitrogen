@@ -392,8 +392,10 @@ The language server uses what a document lowers to as well as its syntax:
   to. Its colours stay those of the grammar's syntax (`Presentation.ColorFromLowering` is off for `.ngr`).
   `NgrParser.Parse` builds its `GrammarModel` from that HIR (`NgrProjector`), with no separate syntax walk.
 - **In a language's documents**, a word that spells an operation (`weekday`, `days`, `box`) is colored
-  as a function, and a token that lowers to a value is colored by its type: a number, or a string for
-  `Core.Text`. A language's `nitrogen.json` entry can map types to token types, for example
+  as a function. Numeric HIR constants are numbers, and lexical string/number tokens keep their
+  roles through AST, sequence and optional wrappers. An arbitrary semantic type is not assumed to
+  be numeric, and an identifier lowered as `Core.Text` is not assumed to be a string literal.
+  A language's `nitrogen.json` entry can explicitly map types to token types, for example
   `"types": { "DateCalc.Date": "enumMember" }`. Completion details show each name's type, and the names
   whose type the enclosing operation expects come first (`DeclarativeTypes.ExpectedTypeOf`). Hover shows
   what the expression lowers to.

@@ -57,6 +57,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   context.subscriptions.push(strings);
   client = new LanguageClient('nitrogen', 'Nitrogen', serverOptions, clientOptions);
   await client.start();
+  strings.refreshVisible();
   registerGrammarExtraction(context, client);
   routing.start(context);
 }
