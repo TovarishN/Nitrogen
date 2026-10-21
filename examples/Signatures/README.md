@@ -23,13 +23,13 @@ A primary `language` signature overrides extension selection. Augmentations are 
 
 For build integration, reference `Nitrogen.Build` once, as in `Signatures.csproj`. It supplies Runtime, Generator and a bundled checker: no globally installed CLI is needed. The package requires the .NET 10 runtime. It registers project `Compile`, `None`, `Content`, `AdditionalFiles` and explicit `NitrogenInput` items; dependencies outside the project must be registered, as the DateCalc grammar/helpers are here. Files merely present elsewhere on disk are unavailable to the build. Set `NitrogenEnabled=false` to disable this integration. Unconfigured projects do not launch the checker.
 
-Before this package version is published, pack Runtime, Generator and Build into a local feed, then build this example with that feed:
+The solution and this example use local project references and the local build checker by default. To exercise the packaged integration instead, pack Runtime, Generator and Build into a local feed, then opt in with `UseNitrogenPackage=true`:
 
 ```sh
 for project in Nitrogen.Runtime Nitrogen.Generator Nitrogen.Build; do
   dotnet pack "$project" -c Release -o /tmp/nitrogen-feed
 done
-dotnet build examples/Signatures/Signatures.csproj --source /tmp/nitrogen-feed
+dotnet build examples/Signatures/Signatures.csproj -p:UseNitrogenPackage=true --source /tmp/nitrogen-feed
 ```
 
 Grammar, helper and configuration saves recheck without restarting LSP. Unsaved editor text takes precedence over disk. If an edit cannot compile, `NGR0405` identifies last-good analysis while current compilation errors remain visible. Fix those errors to resume current analysis. Removing a signature removes that analysis layer. Workspace scanning excludes hidden directories, `bin`, `obj`, `node_modules`, `artifacts` and `dist`, and is bounded to 2,000 files of at most 1 MiB each. Native build tools may impose further filename restrictions, such as Csc rejecting quotes in `Compile` paths.

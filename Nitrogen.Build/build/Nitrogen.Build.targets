@@ -1,9 +1,10 @@
 <Project>
   <PropertyGroup>
     <_NitrogenPackageRoot>$(MSBuildThisFileDirectory)..</_NitrogenPackageRoot>
-    <_NitrogenChecker>$(_NitrogenPackageRoot)/tools/net10.0/any/nitrogen.dll</_NitrogenChecker>
+    <_NitrogenChecker Condition="'$(_NitrogenChecker)' == ''">$(_NitrogenPackageRoot)/tools/net10.0/any/nitrogen.dll</_NitrogenChecker>
+    <_NitrogenTaskAssembly Condition="'$(_NitrogenTaskAssembly)' == ''">$(_NitrogenPackageRoot)/tasks/net10.0/Nitrogen.Build.dll</_NitrogenTaskAssembly>
   </PropertyGroup>
-  <UsingTask TaskName="Nitrogen.Build.WriteAnalysisManifest" AssemblyFile="$(_NitrogenPackageRoot)/tasks/net10.0/Nitrogen.Build.dll" />
+  <UsingTask TaskName="Nitrogen.Build.WriteAnalysisManifest" AssemblyFile="$(_NitrogenTaskAssembly)" />
   <Target Name="NitrogenPrepareInputs" BeforeTargets="CoreCompile"
           Condition="'$(NitrogenEnabled)' == 'true' and '$(DesignTimeBuild)' != 'true'">
     <PropertyGroup>
