@@ -24,6 +24,60 @@ public sealed class QuoteHelperNavigationTests : IDisposable
     static DocumentPosition At(string text, string marker, int delta = 0) => new LineMap(text).PositionOf(text.IndexOf(marker, StringComparison.Ordinal) + delta);
 
     [Fact]
+    public void Incomplete_opaque_token_in_pattern_has_no_discard_completion()
+    {
+        const string main = "syntax module M { token Dollar=\"@$_\"; syntax Program=E; syntax E=Dollar \"!\"; }";
+        const string shared = "syntax module Shared { syntax function F(V:M.E):M.E=match V { | <[ @$_ ]> => <[ $V ]>; | _ => <[ $V ]>; }; }";
+        var workspace = new Nitrogen.Workspace.GrammarWorkspace { CompositionName = "M", StartRule = "M.Program" };
+        workspace.SetGrammar("m.ngr", main);
+        using var snapshot = workspace.Compile();
+        Assert.True(snapshot.Succeeded);
+        string path = Path.Combine(_root, "shared.ngr");
+        var index = new QuoteHelperSourceIndex(new Dictionary<string, string>
+        {
+            [Path.Combine(_root, "main.ngr")] = main, [path] = shared,
+        }, language: snapshot.Language);
+        var items = index.Completion(path, At(shared, "@$_", 3));
+        Assert.NotNull(items);
+        Assert.DoesNotContain(items, item => item.Label == "_");
+    }
+
+    [Fact]
+    public void Incomplete_pattern_discard_has_completion_without_comment_suggestions()
+    {
+        using var service = Service();
+        string main = Main.Replace("X:E \")\"", "X:(E; \",\")* \")\"");
+        service.Change(Uri("main.ngr"), 2, main);
+        string shared = "syntax module Shared { syntax function F(V:M.E):M.E=match V { | <[ f(..$ ]> => <[ $V ]>; | _ => <[ $V ]>; }; }";
+        service.Change(Uri("shared.ngr"), 2, shared);
+        Assert.Contains(service.Completion(Uri("shared.ngr"), At(shared, "..$", 3)), item => item.Label == "_");
+        shared = shared.Replace("f(..$", "f(x /* ..$ */)");
+        service.Change(Uri("shared.ngr"), 3, shared);
+        Assert.DoesNotContain(service.Completion(Uri("shared.ngr"), At(shared, "..$", 3)), item => item.Label == "_");
+    }
+
+    [Fact]
+    public void Pattern_discards_keep_named_capture_features_and_have_typed_hover()
+    {
+        using var service = Service();
+        string main = Main.Replace("X:E \")\"", "X:(E; \",\")* \")\"");
+        string shared = "syntax module Shared { syntax function F(V:M.E):M.E=match V { | (X:M.E) <[ f(..$_, $X, ..$_) ]> => <[ $X ]>; | _ => <[ $V ]>; }; }";
+        service.Change(Uri("main.ngr"), 2, main);
+        service.Change(Uri("shared.ngr"), 2, shared);
+        Assert.Empty(service.Diagnostics(Uri("shared.ngr")));
+        var hover = service.Hover(Uri("shared.ngr"), At(shared, "..$_", 3));
+        Assert.NotNull(hover);
+        Assert.Contains("M.E", hover.Markdown);
+        Assert.Contains("list", hover.Markdown);
+        Assert.Empty(service.Definition(Uri("shared.ngr"), At(shared, "..$_", 3)));
+        Assert.Empty(service.References(Uri("shared.ngr"), At(shared, "..$_", 3), true));
+        Assert.Equal(At(shared, "X:M.E"), Assert.Single(service.Definition(Uri("shared.ngr"), At(shared, "$X", 1))).Range.Start);
+        var changes = service.Rename(Uri("shared.ngr"), At(shared, "X:M.E"), "Selected");
+        Assert.Equal(3, changes.Values.Sum(edits => edits.Count));
+        Assert.Contains(service.Completion(Uri("shared.ngr"), At(shared, "..$_", 4)), item => item.Label == "_");
+    }
+
+    [Fact]
     public void Calls_parameters_arguments_and_categories_navigate_to_their_own_declarations()
     {
         using var service = Service();

@@ -75,6 +75,7 @@ internal static class TreeFreezer
         // Missing node keeps its diagnostic text index in the arena's ChildStart; a Skipped marker
         // child becomes a repair and flags its parent.
         var listShapes = new Dictionary<int, TemplateListShape>();
+        var patternSites = new Dictionary<int, PatternHoleSite>();
         int next = 0, cursor = 0;
         Push(a, ref sp, root, -1);
         while (sp > 0)
@@ -95,6 +96,7 @@ internal static class TreeFreezer
                 continue;
             }
             if (a.TemplateLists?.TryGetValue(old, out var shape) == true) listShapes[n] = shape;
+            if (a.PatternHoleSites?.TryGetValue(old, out var site) == true) patternSites[n] = site;
             kind[n] = DenseKindTable.Pack(kinds.DenseKind(a.Kind[old]), a.Flags[old]);
             start[n] = a.Start[old];
             length[n] = a.Length[old];
@@ -154,7 +156,7 @@ internal static class TreeFreezer
 
         // The snapshot is read after every DenseKind call above, so it maps all of this tree's ids.
         return new SyntaxTree(text, language, next, kind, kinds.Snapshot, start, length,
-            childStart, children, skipped, skippedCount, pooled) { TemplateLists = listShapes };
+            childStart, children, skipped, skippedCount, pooled) { TemplateLists = listShapes, PatternHoleSites = patternSites };
     }
 
     public static SyntaxTree ErrorTree(string text, Language? language)

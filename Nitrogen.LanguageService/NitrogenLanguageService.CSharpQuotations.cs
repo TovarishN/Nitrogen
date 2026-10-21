@@ -52,12 +52,33 @@ public sealed partial class NitrogenLanguageService
     static Dictionary<string, QuoteHole> Shapes(CSharpQuote context) => context.Quote.Holes.ToDictionary(p => p.Key, p => p.Value.Shape, StringComparer.Ordinal);
     static TextSpan? HostSpan(CSharpQuote context, TextSpan span) => context.Quote.Text.SourceSpan(span);
 
+    static ParseResult ParseCSharpQuote(CSharpQuote context, string text) => context.Quote.IsPattern
+        ? context.Language.ParsePattern(text, context.Quote.Category, Shapes(context))
+        : context.Language.ParseTemplate(text, context.Quote.Category, Shapes(context));
+
+    static (int Position, IReadOnlyList<(string Text, bool IsLiteral)> Items) ExpectedCSharpQuote(CSharpQuote context, string text)
+        => context.Quote.IsPattern ? context.Language.ExpectedPattern(text, context.Quote.Category, Shapes(context))
+            : context.Language.ExpectedTemplate(text, context.Quote.Category, Shapes(context));
+
+    HoverInfo? CSharpDiscardHover(CSharpQuote context, DocumentPosition position)
+    {
+        if (!context.Quote.IsPattern) return null;
+        using var parsed = ParseCSharpQuote(context, context.Quote.Text.Value);
+        if (!parsed.Success || parsed.HasErrors) return null;
+        int offset = context.Host.Lines.OffsetOf(position);
+        foreach (var (node, site) in parsed.Tree.PatternHoleSites)
+            if (HostSpan(context, parsed.Tree.Span(node)) is { } span && span.Start <= offset && offset < span.End)
+                return new($"`{(site.IsList ? "..$_" : "$_")}` — {(site.IsList ? "list" : "scalar")} discard of `{site.Category}`",
+                    context.Host.Lines.RangeOf(span));
+        return null;
+    }
+
     IEnumerable<QuoteName> CSharpQuoteNames(CSharpQuote context)
     {
         string text = context.Quote.Text.Value;
         int leading = text.Length - text.TrimStart().Length;
         ParseResult parsed;
-        try { parsed = context.Language.ParseTemplate(text.Trim(), context.Quote.Category, Shapes(context)); }
+        try { parsed = ParseCSharpQuote(context, text.Trim()); }
         catch (ArgumentException) { yield break; }
         using (parsed)
         {
@@ -116,21 +137,36 @@ public sealed partial class NitrogenLanguageService
         var replace = context.Host.Lines.RangeOf(hostSpan);
         if (start > 0 && text[start - 1] == '$')
         {
-            if (CSharpNameAt(context, position) is { IsSplice: false }) return [];
+            if (CSharpNameAt(context, context.Host.Lines.PositionOf(hostSpan.Start)) is { IsSplice: false }) return [];
             bool list = start >= 3 && text[(start - 3)..start] == "..$";
             int marker = start - (list ? 3 : 1);
             if (!Nitrogen.Grammar.QuotationWriter.Holes(text.Insert(offset, "X")).Any(h => h.Start == marker)) return [];
-            return context.Quote.Holes.Where(p => p.Value.Shape.IsList == list && p.Key.StartsWith(prefix, StringComparison.Ordinal))
-                .Select(p => new CompletionItem(p.Key, CompletionKind.Field, "quotation input", replace)).ToArray();
+            var items = context.Quote.Holes.Where(p => p.Value.Shape.IsList == list && p.Key.StartsWith(prefix, StringComparison.Ordinal))
+                .Select(p => new CompletionItem(p.Key, CompletionKind.Field, "quotation input", replace)).ToList();
+            if (context.Quote.IsPattern && "_".StartsWith(prefix, StringComparison.Ordinal))
+            {
+                int end = offset;
+                while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_')) end++;
+                using var candidate = ParseCSharpQuote(context, text[..start] + "_" + text[end..]);
+                bool accepted = candidate.Success && !candidate.HasErrors && candidate.Tree.PatternHoleSites.Any(site => candidate.Tree.Span(site.Key).Start == marker);
+                if (!candidate.Success)
+                {
+                    string probe = text[..start] + "_";
+                    accepted = context.Language.AcceptsPatternDiscardPrefix(probe, context.Quote.Category, Shapes(context), marker);
+                }
+                if (accepted)
+                    items.Add(new("_", CompletionKind.Field, list ? "discard list items" : "discard one syntax node", replace));
+            }
+            return items;
         }
         string before = text[..start].TrimStart();
         try
         {
-            var (at, _) = context.Language.ExpectedTemplate(before + "\u0001", context.Quote.Category, Shapes(context));
+            var (at, _) = ExpectedCSharpQuote(context, before + "\u0001");
             if (at < before.TrimEnd().Length) return [];
             return context.Rules.SelectMany(r => Literals(r.Body)).Distinct(StringComparer.Ordinal)
                 .Where(word => SemanticTokenBuilder.IsWord(word) && word.StartsWith(prefix, StringComparison.Ordinal) &&
-                    context.Language.ExpectedTemplate(before + word + "\u0001", context.Quote.Category, Shapes(context)).Position >= before.Length + word.Length)
+                    ExpectedCSharpQuote(context, before + word + "\u0001").Position >= before.Length + word.Length)
                 .Select(word => new CompletionItem(word, CompletionKind.Keyword, "template keyword", replace)).ToArray();
         }
         catch (ArgumentException) { return []; }

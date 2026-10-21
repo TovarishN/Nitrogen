@@ -46,6 +46,8 @@ public sealed class SyntaxTree : IDisposable
         _skippedCount = skippedCount;
     }
 
+    internal IReadOnlyDictionary<int, PatternHoleSite> PatternHoleSites { get; init; } = new Dictionary<int, PatternHoleSite>();
+
     internal IReadOnlyDictionary<int, TemplateListShape> TemplateLists { get; init; } = new Dictionary<int, TemplateListShape>();
 
     /// <summary>
@@ -77,7 +79,7 @@ public sealed class SyntaxTree : IDisposable
         return new SyntaxTree(Text, Language, NodeCount, _kind.AsSpan(0, NodeCount).ToArray(), _kindOf,
             _start!.AsSpan(0, NodeCount).ToArray(), _length!.AsSpan(0, NodeCount).ToArray(),
             _childStart.AsSpan(0, NodeCount + 1).ToArray(), _children!.AsSpan(0, slots).ToArray(),
-            _skipped!.AsSpan(0, _skippedCount).ToArray(), _skippedCount, pooled: false) { TemplateLists = TemplateLists };
+            _skipped!.AsSpan(0, _skippedCount).ToArray(), _skippedCount, pooled: false) { TemplateLists = TemplateLists, PatternHoleSites = PatternHoleSites };
     }
 
     /// <summary>One past the last node of <paramref name="node"/>'s subtree, which is contiguous in preorder.</summary>

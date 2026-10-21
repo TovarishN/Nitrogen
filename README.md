@@ -64,6 +64,10 @@ even in an unused helper. Parentheses and wrappers remain part of the syntax.
 
 The same matcher is available from C#; [PatternMatching.cs](examples/DateCalc/PatternMatching.cs) shows
 match → instantiate through `Language.CompilePattern`, `QuotePattern.Match`, and `CompileQuote`.
+List patterns allow several segments, for example `f(..$_, $X, ..$_, $Y, ..$_)` selects two
+ordered elements anywhere. `$_` ignores one node and `..$_` ignores zero or more list items without
+bindings. Matching returns the first complete result, trying shortest spans first. See
+[sequence patterns](docs/language-guide.md#sequence-patterns-and-wildcards) for typing and work limits.
 A normal mismatch has no diagnostics or partial captures. Captures borrow their input tree and carry
 explicit source origins; keep that tree alive until captures have been consumed. Dispose the pattern
 compilation when finished. Instantiation produces independently owned syntax for the destination's

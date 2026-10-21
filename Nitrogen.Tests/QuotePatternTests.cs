@@ -157,9 +157,8 @@ public sealed class QuotePatternTests
     }
 
     [Theory]
-    [InlineData("f(..$Args, ..$Args)")]
     [InlineData("tokenlist(..$Args)")]
-    public void Unsupported_or_multiple_list_capture_sites_fail_compilation(string text)
+    public void Unsupported_list_capture_sites_fail_compilation(string text)
     {
         using var pattern = TemplateListInstantiationTests.CreateLanguage().CompilePattern("QuoteLists.Expr", text,
             new Dictionary<string, QuoteHole> { ["Args"] = QuoteHole.List("QuoteLists.Expr") });

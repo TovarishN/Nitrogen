@@ -10,6 +10,16 @@ public unsafe ref partial struct ParserState
         if (!_text[at..].StartsWith("..$")) return false;
         int end = at + 3;
         while (end < _text.Length && IsIdentifierPart(_text[end])) end++;
+        if (PatternMode && _text[(at + 3)..end].SequenceEqual("_"))
+        {
+            Position = at;
+            PushLeaf(SyntaxKinds.ListHole, end);
+            int node = Arena.ChildStack[Arena.ChildStackCount - 1];
+            var site = new PatternHoleSite(category, true);
+            (Arena.PatternHoleSites ??= new())[node] = site;
+            PatternHoleProbe?.Invoke(new(at, end - at), site);
+            return true;
+        }
         if (end == at + 3 || !Holes.TryGetValue(_text[(at + 3)..end].ToString(), out var hole) ||
             !hole.IsList || hole.Category != category) return false;
         Position = at;

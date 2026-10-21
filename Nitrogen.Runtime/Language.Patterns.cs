@@ -10,12 +10,13 @@ public sealed unsafe partial class Language
         ArgumentNullException.ThrowIfNull(captures);
         var copied = captures.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         var diagnostics = new List<QuoteDiagnostic>();
+        if (copied.ContainsKey("_")) diagnostics.Add(new("NQP0002", default, "The pattern capture name '_' is reserved for discards.", "_"));
         foreach (var name in copied.Values.Select(hole => hole.Category).Append(category).Distinct(StringComparer.Ordinal))
             if (!Modules.Any(module => module.QuoteCategoryNames.Contains(name, StringComparer.Ordinal)))
                 diagnostics.Add(new("NQP0001", default, $"'{name}' has no generated quotation category metadata."));
         if (diagnostics.Count != 0) return new(null, category, copied, diagnostics.ToArray());
         ParseResult parsed;
-        try { parsed = ParseTemplate(text, category, copied); }
+        try { parsed = ParsePattern(text, category, copied); }
         catch (ArgumentException error) { return new(null, category, copied, [new("NQP0001", default, error.Message)]); }
         if (!parsed.Success || parsed.HasErrors)
         {
@@ -32,16 +33,15 @@ public sealed unsafe partial class Language
                 int kind = parsed.Tree.Kind(node);
                 if (kind is not (SyntaxKinds.Hole or SyntaxKinds.ListHole)) continue;
                 string name = parsed.Tree.GetText(node)[(kind == SyntaxKinds.Hole ? 1 : 3)..].ToString();
-                used.Add(name);
+                bool discard = parsed.Tree.PatternHoleSites.TryGetValue(node, out var site);
+                if (!discard) used.Add(name);
                 if (kind == SyntaxKinds.ListHole)
                 {
                     int parent = parsed.Tree.TemplateList(node);
                     if (!parsed.Tree.TemplateLists.TryGetValue(parent, out var shape) ||
-                        shape.Category != copied[name].Category ||
-                        Enumerable.Range(0, ListSlot.Count(parsed.Tree, parent)).Count(index =>
-                            parsed.Tree.Kind(ListSlot.Child(parsed.Tree, parent, index)) == SyntaxKinds.ListHole) != 1)
+                        shape.Category != (discard ? site!.Category : copied[name].Category))
                         if (invalidLists.Add(parent))
-                            diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "A physical list requires one capture at a supported item site.", name));
+                            diagnostics.Add(new("NQP0003", parsed.Tree.Span(node), "A list segment requires a supported item site and matching category.", name));
                 }
             }
             foreach (string name in copied.Keys)
