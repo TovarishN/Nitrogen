@@ -99,6 +99,12 @@ internal sealed class SemanticsWriter
                     yield return new GrammarDiagnostic(GrammarCodes.SemanticsNameCollision, GrammarSeverity.Error,
                         $"'{name}' names two members of {kind.ViewName}Semantics: a child, a property, or one of {string.Join(", ", Reserved)}; rename it",
                         kind.Span, info.Module.Name);
+            foreach (var match in Block(kind)!.Statements.OfType<MatchDiagnosticStatement>())
+                foreach (var capture in match.Captures)
+                    if (names.Contains(capture.Name.Name))
+                        yield return new GrammarDiagnostic(GrammarCodes.QuoteMatchCapture, GrammarSeverity.Error,
+                            $"capture '{capture.Name.Name}' shadows a child, property or reserved semantic view member",
+                            capture.Name.Span, info.Module.Name);
         }
         foreach (var property in info.Module.SymbolProperties)
             if (SymbolReserved.Contains(property.Name.Name))
@@ -210,8 +216,8 @@ internal sealed class SemanticsWriter
         }
         var checks = block.Statements.Where(s => s is CheckStatement or MatchDiagnosticStatement)
             .Select((statement, i) => statement is MatchDiagnosticStatement match
-                ? $"new {Ns}SemanticsCheck({CSharpText.Literal(match.Code.Name)}, static (s, n) => true, "
-                    + $"static (s, n) => new {view}(s, n).Message_{i}(), severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")}, pattern: s_match_{kind.Name}_{i})"
+                ? $"new {Ns}SemanticsCheck({CSharpText.Literal(match.Code.Name)}, s_match_{kind.Name}_{i}, "
+                    + $"static (s, n, c) => new {view}(s, n).Message_{i}({string.Join(", ", match.Captures.Select(capture => "c." + (capture.IsList ? "List" : "Scalar") + "<" + CaptureItemType(capture) + ">(" + CSharpText.Literal(capture.Name.Name) + ")"))}), severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")})"
                 : statement is CheckStatement check ? $"new {Ns}SemanticsCheck({CSharpText.Literal(check.Code?.Name ?? "NS0100")}, "
                 + $"static (s, n) => new {view}(s, n).Check_{i}(), static (s, n) => new {view}(s, n).Message_{i}()"
                 + (check.At is { } at ? $", static (s, n) => new {view}(s, n).{CSharpText.Identifier(at.Name)}.Span" : "")
@@ -302,7 +308,7 @@ internal sealed class SemanticsWriter
             }
             else if (statement is MatchDiagnosticStatement match)
             {
-                b.Append($"    internal string Message_{check}() =>\n");
+                b.Append($"    internal string Message_{check}({string.Join(", ", match.Captures.Select(capture => (capture.IsList ? "global::System.Collections.Generic.IReadOnlyList<" + CaptureItemType(capture) + ">" : CaptureItemType(capture)) + " " + CSharpText.Identifier(capture.Name.Name)))}) =>\n");
                 Fragment(b, match.Message, match.Message.Text.StartsWith("\"", StringComparison.Ordinal) ? "$" : "");
                 b.Append("        ;\n\n");
                 check++;
@@ -387,6 +393,13 @@ internal sealed class SemanticsWriter
         SyntaxRule { Semantics: not null } syntax when !EmitModel.IsAlias(syntax) => rule.Name + "NodeSemantics",
         _ => null,
     };
+
+    string CaptureItemType(QuoteParameter capture)
+    {
+        var symbol = _model.Analysis.Helpers.Category(capture.Category, _info.Module)!;
+        return StructOf(symbol.Rule) is { } name
+            ? _model.Info(symbol.Module).TypeRef(_info, name) : Ns + "SemanticNode";
+    }
 
     static string Accessor(Child child)
     {

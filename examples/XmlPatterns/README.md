@@ -9,9 +9,10 @@ dotnet run --project Nitrogen.Cli -- check examples/XmlPatterns/sample.xml
 `sample.xml` contains an ordinary XML configuration with nested services, attributes, comments, text and self-closing elements. `Xml.ngr` defines both the XML syntax and the warning rule, inside the `Paired` syntax rule's semantics block:
 
 ```ngr
-match
-  <[ <credentials ..$_>..$_<password ..$_>..$_</password>..$_</credentials> ]>
-  => warning XML1001 : "A password is stored directly inside credentials; use a secret-ref instead.";
+match (pass: Text)
+  <[ <credentials ..$_>..$_<password ..$_>$pass</password>..$_</credentials> ]>
+  => warning XML1001 :
+    $"A password is stored directly inside credentials; use a secret-ref instead. {pass}";
 ```
 
 The pattern matches the current syntax node. Each `..$_` ignores zero or more items of the category
@@ -21,10 +22,27 @@ anywhere among the credentials element's direct children. Every paired element i
 automatically, so surrounding structure can vary. Matching does not rewrite the tree or inspect raw
 XML text.
 
+`pass` is a scalar syntax view. Its `.Text` property can be used explicitly in the message:
+
+```ngr
+match (pass: Text)
+  <[ <credentials ..$_>..$_<password ..$_>$pass</password>..$_</credentials> ]>
+  => warning XML1001 :
+    $"A password is stored directly inside credentials; use a secret-ref instead. {pass.Text}";
+```
+
+This variant requires exactly one text node inside password. `pass.Text` is its source text;
+`{pass}` uses the same view's text conversion. For empty or mixed contents, use `(content: Node*)`
+and `..$content`; the message can access `content.Count` and enumerate its typed syntax views.
+Each capture is visible only in its own message, and messages are skipped on mismatch. This scalar
+example does not report empty passwords or passwords containing nested elements; those require a
+list pattern such as `<[ <credentials ..$_>..$_<password ..$_>..$content</password>..$_</credentials> ]>`
+with `(content: Node*)`.
+
 The sample produces one diagnostic:
 
 ```text
-sample.xml(6,5): warning XML1001: A password is stored directly inside credentials; use a secret-ref instead.
+sample.xml(6,5): warning XML1001: A password is stored directly inside credentials; use a secret-ref instead. example-only-password
 ```
 
 The secret reference and the password outside credentials do not match. Warnings leave the CLI exit code at zero. Malformed syntax and mismatched closing names are errors. Change `warning` to `error` to make the matched structure fail validation.

@@ -18,8 +18,25 @@ Use `warning` or `error` after `=>`. A match reports at the current node; a mism
 The capture list is optional for a literal pattern. Captures have syntax categories, with `*` for lists,
 and use the same structural matching rules as syntax-function match arms: exact token spelling and
 nesting, and trivia ignored. Multiple variable-length segments per list are supported. These statements
-do not construct replacements and need no fallback. Their message expression uses the containing
-rule's semantic fields; pattern captures are used for recognition, not introduced as C# message variables.
+do not construct replacements and need no fallback. Message expressions can use the containing rule's
+semantic fields and that match's named captures. Scalar captures are syntax views: `.Text` gives source
+text, and categories with semantic properties expose those properties. List captures are immutable
+`IReadOnlyList<TView>` values with `Count`, indexing and enumeration. Captures are local to their own
+message; names cannot shadow children, properties or reserved semantic view members. Wildcards create
+no variables. Messages run only after a successful match, using the same capture result.
+
+For the XML grammar, a password containing one text node can be reported with its captured text:
+
+```ngr
+match (pass: Text)
+  <[ <credentials ..$_>..$_<password ..$_>$pass</password>..$_</credentials> ]>
+  => warning XML1001 :
+    $"A password is stored directly inside credentials; use a secret-ref instead. {pass.Text}";
+```
+
+`Text` here is a syntax category, not a string type. `{pass}` also uses the view's existing text
+conversion. To accept empty or mixed element/text contents, capture `(content: Node*)` using
+`..$content` and format its items explicitly; a list does not have an implicit combined `.Text` value.
 
 All diagnostic patterns are validated when the language is composed, including ones no input reaches.
 Warnings are preserved by the CLI and language service and do not block lowering; errors do. See the

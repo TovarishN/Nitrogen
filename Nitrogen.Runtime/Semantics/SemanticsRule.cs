@@ -70,17 +70,59 @@ public sealed class SemanticsCheck(string code, Func<FileSemantics, int, bool> c
     public DiagnosticSeverity Severity { get; } = severity;
     public SyntaxDiagnosticPattern? Pattern { get; } = pattern;
 
-    public bool Holds(FileSemantics semantics, int node)
+    readonly Func<FileSemantics, int, SemanticPatternCaptures, string>? _patternMessage;
+
+    /// <summary>A diagnostic whose message receives the successful pattern's typed captures.</summary>
+    public SemanticsCheck(string code, SyntaxDiagnosticPattern pattern,
+        Func<FileSemantics, int, SemanticPatternCaptures, string> message,
+        DiagnosticSeverity severity = DiagnosticSeverity.Error)
+        : this(code, static (_, _) => true, static (_, _) => "", severity: severity, pattern: pattern)
     {
-        if (Pattern is null) return condition(semantics, node);
-        var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern);
+        ArgumentNullException.ThrowIfNull(pattern);
+        ArgumentNullException.ThrowIfNull(message);
+        _patternMessage = message;
+    }
+
+    QuoteMatchResult Match(FileSemantics semantics, int node)
+    {
+        var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern!);
         if (!compiled.Success) throw new InvalidOperationException(string.Join("; ", compiled.Diagnostics));
         var match = compiled.Pattern!.Match(new(semantics.Tree, node));
         if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
-        return !match.Matched;
+        return match;
     }
 
-    public string Message(FileSemantics semantics, int node) => message(semantics, node);
+    public bool Holds(FileSemantics semantics, int node)
+        => Pattern is null ? condition(semantics, node) : !Match(semantics, node).Matched;
+
+    public string Message(FileSemantics semantics, int node)
+    {
+        if (_patternMessage is null) return message(semantics, node);
+        var match = Match(semantics, node);
+        if (!match.Matched) throw new InvalidOperationException("A pattern message requires a successful match.");
+        return _patternMessage(semantics, node, new(semantics, match.Captures));
+    }
+
+    internal SemanticDiagnostic? Evaluate(FileSemantics semantics, int node)
+    {
+        string text;
+        TextSpan span;
+        if (Pattern is null)
+        {
+            if (condition(semantics, node)) return null;
+            span = Span(semantics, node);
+            text = message(semantics, node);
+        }
+        else
+        {
+            var match = Match(semantics, node);
+            if (!match.Matched) return null;
+            span = Span(semantics, node);
+            text = _patternMessage is null ? message(semantics, node)
+                : _patternMessage(semantics, node, new(semantics, match.Captures));
+        }
+        return new SemanticDiagnostic(Code, span, text) { Severity = Severity };
+    }
 
     /// <summary>Where the diagnostic sits: the child <c>at</c> names, else the node (issue 241).</summary>
     public TextSpan Span(FileSemantics semantics, int node) => at is null ? semantics.Tree.Span(node) : at(semantics, node);
