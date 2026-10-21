@@ -106,12 +106,14 @@ internal sealed class BuildArena
     public int[] ScratchSlot = new int[64];
 
     internal Dictionary<int, TemplateListShape>? TemplateLists;
+    internal Dictionary<int, PatternHoleSite>? PatternHoleSites;
 
     public BuildArena() => Clear();
 
     public void Clear()
     {
         TemplateLists?.Clear();
+        PatternHoleSites?.Clear();
         NodeCount = ChildLogCount = ChildStackCount = FrameCount = RecordCount = 0;
         GraftSource = null;
         if (Grafts.Count > 0) Grafts.Clear();
@@ -134,6 +136,7 @@ internal sealed class BuildArena
         if (NodeCount == Kind.Length) GrowNodes();
         int n = NodeCount++;
         TemplateLists?.Remove(n);
+        PatternHoleSites?.Remove(n);
         Kind[n] = kind;
         Start[n] = start;
         Length[n] = length;

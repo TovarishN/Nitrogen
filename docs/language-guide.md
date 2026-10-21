@@ -17,13 +17,49 @@ syntax Paired = "<" Open:Name Attributes:Attribute* ">" Children:Node* "</" Clos
 Use `warning` or `error` after `=>`. A match reports at the current node; a mismatch produces no diagnostic.
 The capture list is optional for a literal pattern. Captures have syntax categories, with `*` for lists,
 and use the same structural matching rules as syntax-function match arms: exact token spelling and
-nesting, trivia ignored, and at most one variable-length capture per physical list. These statements
+nesting, and trivia ignored. Multiple variable-length segments per list are supported. These statements
 do not construct replacements and need no fallback. Their message expression uses the containing
 rule's semantic fields; pattern captures are used for recognition, not introduced as C# message variables.
 
 All diagnostic patterns are validated when the language is composed, including ones no input reaches.
 Warnings are preserved by the CLI and language service and do not block lowering; errors do. See the
 [XML example](../examples/XmlPatterns/README.md) for the complete grammar, configuration and input.
+
+## Sequence patterns and wildcards
+
+Patterns can select several elements anywhere in an ordered list:
+
+```text
+f(..$_, $X, ..$_, $Y, ..$_)
+f(..$Before, $X, ..$Between, $Y, ..$After)
+f(..$_, $X, $_, $Y, ..$_)
+```
+
+The first two forms select distinct positions with `X` before `Y`; the last requires exactly one
+intervening item. Declare named captures with their syntax categories (`X: Expr`, `Before: Expr*`
+in grammar arms, or `QuoteHole.Node`/`QuoteHole.List` in C#). `$_` matches one syntax node and `..$_`
+matches zero or more list items, without a declaration or binding. Each discard is independent and
+gets its category from its grammar position. `_` is reserved in pattern capture declarations;
+construction quotations retain their existing named-input behavior.
+
+Matching covers the entire selected syntax node. Segments try shortest spans first, in pattern
+source order, and return the first complete successful match. Thus on `f(1, 2, 3)`, the first pattern
+captures `X = 1`, `Y = 2`; `f(..$A, ..$B)` captures empty `A` and all arguments as `B`. Later structure
+or repeated captures can force backtracking, including into nested lists. Repeated named captures
+must be structurally equal; repeated discards impose no equality. Separators are punctuation, not
+items, and required-list cardinality still applies to the input.
+
+`QuotePattern.Match(input)` uses a default limit of 1,000,000 work steps, including whole-input
+validation, structural comparisons, candidate splits and item checks. Use `Match(input, new
+QuoteMatchOptions { MaxWorkSteps = ..., CancellationToken = ... })` to supply a positive limit and
+cancellation token. Exhaustion returns `NQP0006`, false, and empty captures; an ordinary mismatch
+has no diagnostics. Cancellation throws `OperationCanceledException`. Grammar helpers stop on
+match errors rather than trying another arm or fallback; lowering wraps quotation errors in its
+existing `NH0009` diagnostic. Ignored input still must be valid syntax from the same language snapshot.
+
+Captures borrow input syntax and preserve its origins. Keep the source tree alive while consuming
+captures or instantiating a replacement. Matching performs no rewriting, lowering or implicit subtree
+search. Unsupported token/list hole sites remain unsupported.
 
 ## Declaration scopes
 
@@ -235,7 +271,7 @@ call site and retain the helper body as related source.
 
 This first version accepts positional caller fields, scalar syntax returns, and scalar/list syntax
 parameters. Nested helper-call arguments, arbitrary C# arguments, overloads, defaults, list returns,
-template-authored declarations and quasiquote pattern matching are not supported. The C# quotation
+template-authored declarations are not supported. Typed pattern matching is supported through syntax-function match arms and the C# pattern API. The C# quotation
 API below remains available; named `.ngr` helpers are currently called from grammar rewrites.
 
 VS Code offers **Extract Quote Helper…** for a caret inside an inline quote or a whole-quote selection.

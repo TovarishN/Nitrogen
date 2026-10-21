@@ -231,6 +231,10 @@ Regular, verbatim, raw and concatenated constant strings retain their C# source 
 compilation diagnostics appear at those locations. Unrelated methods with the same name and dynamic
 patterns receive no guessed assistance. Native C# diagnostics and navigation remain available.
 
+Pattern discards `$_` and `..$_` have category/shape hover and completion in C# and grammar helper
+patterns. They have no declaration, references or rename target. Named captures alongside discards
+retain their navigation and rename behavior; dollar text in strings/comments remains opaque.
+
 Every match arm is checked, including unused ones; development mode refreshes consumers after edits.
 Use [DateCalc's match helper](../examples/DateCalc/DateCalc.ngr) and
 [pattern sample](../examples/DateCalc/pattern-matching.datecalc) to try selector/capture navigation,

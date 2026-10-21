@@ -15,7 +15,9 @@ public sealed class QuoteHelperRuntimeTests
         ])).Build();
 
     [Theory]
-    [InlineData("twice()", "f()")]
+    [InlineData("pair(f(1, 2, 3))", "f(1, 2)")]
+    [InlineData("pair(f(1))", "f(1)")]
+    [InlineData("twice()", "f()") ]
     [InlineData("twice(3; 4)", "f(3, 4, 3, 4)")]
     [InlineData("(1 + 2) times", "(1 + 2) * 2")]
     [InlineData("3 duplicate", "3 + 3")]
@@ -40,6 +42,18 @@ public sealed class QuoteHelperRuntimeTests
         var explicitLowered = TemplateListInstantiationTests.Lower(language, expected.Tree);
         Assert.Equal(TemplateListInstantiationTests.Shape(Assert.Single(explicitLowered.Roots)),
             TemplateListInstantiationTests.Shape(Assert.Single(lowered.Roots)));
+    }
+
+    [Fact]
+    public void Sequence_search_exhaustion_stops_before_fallback()
+    {
+        var language = CreateLanguage();
+        using var input = language.ParseTemplate("limit(f(" + string.Join(",", Enumerable.Repeat("1", 45)) + "))",
+            "QuoteHelpers.Expr", new Dictionary<string, string>());
+        Assert.True(input.Success);
+        var result = TemplateListInstantiationTests.Lower(language, input.Tree);
+        Assert.Contains(result.Diagnostics, d => d.Code == "NH0009" && d.Message.Contains("work limit", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Roots, root => TemplateListInstantiationTests.Shape(root) == "9:Core.Scalar");
     }
 
     [Fact]
@@ -78,6 +92,7 @@ public sealed class QuoteHelperRuntimeTests
     }
 
     [Theory]
+    [InlineData("repeated(f(1, 2, 2))", "2:Core.Scalar")]
     [InlineData("swap(1)", "9:Core.Scalar")]
     [InlineData("swap(2)", "2:Core.Scalar")]
     public void Match_helpers_can_return_typed_non_operation_roots(string input, string expected)

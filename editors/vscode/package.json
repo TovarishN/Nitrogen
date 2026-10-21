@@ -2,7 +2,7 @@
   "name": "nitrogen",
   "displayName": "Nitrogen DSL",
   "description": ".ngr grammars and nitrogen.json workspace languages through nitrogen lsp.",
-  "version": "0.17.3",
+  "version": "0.18.0",
   "publisher": "nitrogen",
   "license": "MIT",
   "engines": {

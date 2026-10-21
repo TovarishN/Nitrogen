@@ -47,7 +47,9 @@ public sealed class XmlPatternExampleTests
     [InlineData("<root><password>demo</password></root>", 0)]
     [InlineData("<Credentials><password>demo</password></Credentials>", 0)]
     [InlineData("<credentials><wrapper><password>demo</password></wrapper></credentials>", 0)]
-    [InlineData("<credentials><user>alice</user><password>demo</password></credentials>", 0)]
+    [InlineData("<credentials><user>alice</user><password>demo</password></credentials>", 1)]
+    [InlineData("<credentials><password>demo</password><user>alice</user></credentials>", 1)]
+    [InlineData("<credentials><user>alice</user><password>demo</password><other /></credentials>", 1)]
     [InlineData("<credentials><password /></credentials>", 0)]
     [InlineData("<root><!-- <credentials><password>x</password></credentials> --></root>", 0)]
     public void Rule_matches_structure_with_typed_list_captures(string source, int count)

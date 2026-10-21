@@ -218,8 +218,10 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// </summary>
     public HoverInfo? Hover(string uri, DocumentPosition position)
     {
-        if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpNameAt(csharp, position) is { } quoteName
-            ? new HoverInfo(quoteName.Description, csharp.Host.Lines.RangeOf(quoteName.Span)) : null;
+        if (CSharpQuoteAt(uri, position) is { } csharp) return CSharpDiscardHover(csharp, position)
+            ?? (CSharpNameAt(csharp, position) is { } quoteName
+                ? new HoverInfo(quoteName.Description, csharp.Host.Lines.RangeOf(quoteName.Span)) : null);
+        if (QuoteHelperIndex(uri, position)?.DiscardHover(new Uri(uri).LocalPath, position) is { } discard) return discard;
         if (QuoteAt(uri, position) is { } quote)
             return QuoteNameAt(quote, quote.Document.Lines.OffsetOf(position)) is { } name
                 ? new HoverInfo(name.Description, quote.Document.Lines.RangeOf(name.Span)) : null;

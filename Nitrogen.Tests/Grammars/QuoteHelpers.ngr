@@ -25,10 +25,25 @@ syntax module QuoteHelpers
         | (Items:Expr*) <[ f(1, ..$Items, 2) ]> => <[ required(..$Items) ]>;
         | _ => <[ $Value ]>;
     };
+    syntax function SequencePair(Value:Expr):Expr=match Value {
+        | (X:Expr, Y:Expr) <[ f(..$_, $X, ..$_, $Y, ..$_) ]> => <[ f($X, $Y) ]>;
+        | _ => <[ $Value ]>;
+    };
+    syntax function SequenceRepeat(Value:Expr):Expr=match Value {
+        | (X:Expr) <[ f(..$_, $X, ..$_, $X, ..$_) ]> => <[ $X ]>;
+        | _ => <[ $Value ]>;
+    };
+    syntax function SequenceLimit(Value:Expr):Expr=match Value {
+        | <[ f(..$_, $_, ..$_, $_, ..$_, $_, ..$_, $_, ..$_, 999) ]> => <[ 0 ]>;
+        | _ => <[ 9 ]>;
+    };
     syntax function MakeNested(Value:Expr):Expr=<[ swap($Value + 1) ]>;
     syntax function MakeComposite(Value:Expr):Expr=<[ first($Value * 2 + 1) ]>;
     extensible syntax Expr
     {
+        | SequencePair = "pair" "(" Value:Expr ")" rewrites SequencePair(Value)
+        | SequenceRepeat = "repeated" "(" Value:Expr ")" rewrites SequenceRepeat(Value)
+        | SequenceLimit = "limit" "(" Value:Expr ")" rewrites SequenceLimit(Value)
         | Swapped = "swap" "(" Value:Expr ")" rewrites Swap(Value)
         | First = "first" "(" Value:Expr ")" rewrites SelectFirst(Value)
         | Middle = "middle" "(" Value:Expr ")" rewrites SelectMiddle(Value)

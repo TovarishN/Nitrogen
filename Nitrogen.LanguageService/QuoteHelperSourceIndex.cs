@@ -9,7 +9,11 @@ internal sealed class QuoteHelperSourceIndex
     readonly IReadOnlyDictionary<string, string> _texts;
     readonly List<(string Path, ModuleDecl Module)> _modules = [];
     readonly List<Occurrence> _occurrences = [];
-    sealed record QuotePart(int Kind, int Children, string Text, string? Capture);
+    sealed record QuotePart(int Kind, int Children, string Text, string? Capture, string? DiscardCategory = null);
+    sealed record Discard(string Path, TextSpan Span, PatternHoleSite Site);
+    sealed record PatternContext(string Path, QuoteText Quote, string Category, IReadOnlyDictionary<string, QuoteHole> Captures);
+    readonly List<Discard> _discards = [];
+    readonly List<PatternContext> _patterns = [];
     readonly Dictionary<string, QuotePart[]> _quoteStructures = new(StringComparer.Ordinal);
     readonly GrammarAnalysis _analysis;
     readonly Language? _language;
@@ -85,20 +89,23 @@ internal sealed class QuoteHelperSourceIndex
                         captures[capture.Name.Name] = (new(_analysis.Helpers.Category(capture.Category, module)?.Key ?? capture.Category.Name, capture.IsList), captureId);
                     }
                     var selectorParameter = helper.Parameters.FirstOrDefault(parameter => parameter.Name.Name == match.Selector.Name);
-                    if (selectorParameter is not null) IndexQuote(arm.Pattern, selectorParameter.Category, captures, scopeId, "arm:" + armIndex + ":pattern");
+                    if (selectorParameter is not null) IndexQuote(arm.Pattern, selectorParameter.Category, captures, scopeId, "arm:" + armIndex + ":pattern", pattern: true);
                     var scope = new Dictionary<string, (QuoteHole Shape, string Identity)>(parameters, StringComparer.Ordinal);
                     foreach (var capture in captures) scope[capture.Key] = capture.Value;
                     IndexQuote(arm.Result, helper.ReturnCategory, scope, scopeId, "arm:" + armIndex + ":result");
                 }
 
                 void IndexQuote(QuoteText quote, NameDecl categoryName,
-                    IReadOnlyDictionary<string, (QuoteHole Shape, string Identity)> scope, string scopeId, string slot)
+                    IReadOnlyDictionary<string, (QuoteHole Shape, string Identity)> scope, string scopeId, string slot, bool pattern = false)
                 {
                     try
                     {
                         var category = _analysis.Helpers.Category(categoryName, module);
-                        using var parsed = category is null ? null : _language?.ParseTemplate(quote.Text, category.Key,
-                            scope.ToDictionary(pair => pair.Key, pair => pair.Value.Shape, StringComparer.Ordinal));
+                        var shapes = scope.ToDictionary(pair => pair.Key, pair => pair.Value.Shape, StringComparer.Ordinal);
+                        if (pattern && category is not null) _patterns.Add(new(path, quote, category.Key, shapes));
+                        using var parsed = category is null ? null : pattern
+                            ? _language?.ParsePattern(quote.Text, category.Key, shapes)
+                            : _language?.ParseTemplate(quote.Text, category.Key, shapes);
                         if (parsed is not { Success: true, HasErrors: false })
                         {
                             _unparsedHelpers.Add(scopeId);
@@ -111,8 +118,14 @@ internal sealed class QuoteHelperSourceIndex
                         {
                             int kind = tree.Kind(node), children = tree.ChildCount(node);
                             bool hole = kind is SyntaxKinds.Hole or SyntaxKinds.ListHole;
-                            string? capture = hole ? scope[tree.GetText(node)[(kind == SyntaxKinds.Hole ? 1 : 3)..].ToString()].Identity : null;
-                            structure[node] = new(kind, children, !hole && children == 0 ? tree.GetText(node).ToString() : "", capture);
+                            bool discard = tree.PatternHoleSites.TryGetValue(node, out var site);
+                            string? capture = hole && !discard ? scope[tree.GetText(node)[(kind == SyntaxKinds.Hole ? 1 : 3)..].ToString()].Identity : null;
+                            structure[node] = new(kind, children, !hole && children == 0 ? tree.GetText(node).ToString() : "", capture, site?.Category);
+                            if (discard)
+                            {
+                                var span = tree.Span(node);
+                                _discards.Add(new(path, new(quote.Span.Start + span.Start, span.Length), site!));
+                            }
                         }
                         _quoteStructures[id + ":quote:" + slot] = structure;
                         for (int node = 0; node < tree.NodeCount; node++)
@@ -175,6 +188,51 @@ internal sealed class QuoteHelperSourceIndex
         }
     }
 
+    public HoverInfo? DiscardHover(string path, DocumentPosition position)
+    {
+        if (!_texts.TryGetValue(path, out var text)) return null;
+        var lines = new LineMap(text);
+        int offset = lines.OffsetOf(position);
+        var discard = _discards.FirstOrDefault(d => d.Path == path && d.Span.Start <= offset && offset < d.Span.End);
+        return discard is null ? null : new HoverInfo(
+            $"`{(discard.Site.IsList ? "..$_" : "$_")}` — {(discard.Site.IsList ? "list" : "scalar")} discard of `{discard.Site.Category}`",
+            lines.RangeOf(discard.Span));
+    }
+
+    IReadOnlyList<CompletionItem>? PatternCompletion(string path, int offset)
+    {
+        var context = _patterns.FirstOrDefault(p => p.Path == path && p.Quote.Span.Start <= offset && offset <= p.Quote.Span.End);
+        if (context is null || _language is null) return null;
+        string text = context.Quote.Text;
+        int local = offset - context.Quote.Span.Start, start = local, end = local;
+        while (start > 0 && (char.IsLetterOrDigit(text[start - 1]) || text[start - 1] == '_')) start--;
+        while (end < text.Length && (char.IsLetterOrDigit(text[end]) || text[end] == '_')) end++;
+        if (start == 0 || text[start - 1] != '$') return null;
+        bool list = start >= 3 && text[(start - 3)..start] == "..$";
+        int marker = start - (list ? 3 : 1);
+        string prefix = text[start..local];
+        if (!QuotationWriter.Holes(text[..start] + "_" + text[end..]).Any(h => h.Start == marker)) return [];
+        var result = new List<CompletionItem>();
+        var replace = new LineMap(_texts[path]).RangeOf(new(context.Quote.Span.Start + start, local - start));
+        foreach (string name in context.Captures.Where(c => c.Value.IsList == list).Select(c => c.Key).Append("_"))
+        {
+            if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            using var parsed = _language.ParsePattern(text[..start] + name + text[end..], context.Category, context.Captures);
+            bool accepted = parsed.Success && !parsed.HasErrors && Enumerable.Range(0, parsed.Tree.NodeCount)
+                .Any(n => parsed.Tree.Kind(n) == (list ? SyntaxKinds.ListHole : SyntaxKinds.Hole) && parsed.Tree.Span(n).Start == marker);
+            if (!parsed.Success)
+            {
+                string probe = text[..start] + name;
+                accepted = name == "_"
+                    ? _language.AcceptsPatternDiscardPrefix(probe, context.Category, context.Captures, marker)
+                    : _language.ExpectedPattern(probe + "\u0001", context.Category, context.Captures).Position >= probe.Length;
+            }
+            if (!accepted) continue;
+            result.Add(new(name, CompletionKind.Field, name == "_" ? "discard syntax" : "pattern capture", replace));
+        }
+        return result;
+    }
+
     public Occurrence? At(string path, DocumentPosition position)
     {
         if (!_texts.TryGetValue(path, out string? text)) return null;
@@ -195,6 +253,7 @@ internal sealed class QuoteHelperSourceIndex
     {
         if (!_texts.TryGetValue(path, out string? text)) return null;
         int offset = new LineMap(text).OffsetOf(position);
+        if (PatternCompletion(path, offset) is { } patternItems) return patternItems;
         var selectorPrefix = Regex.Match(text[..offset], @"\bmatch\s+([A-Za-z_][\w]*|)$");
         var helperContext = _modules.Where(module => module.Path == path).SelectMany(module => module.Module.Helpers)
             .FirstOrDefault(helper => helper.Span.Start <= offset && offset <= helper.Span.End);

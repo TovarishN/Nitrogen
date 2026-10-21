@@ -262,8 +262,8 @@ public static class GrammarValidator
                     var captures = new HashSet<string>(StringComparer.Ordinal);
                     foreach (var capture in match.Captures)
                     {
-                        if (!captures.Add(capture.Name.Name))
-                            Report(GrammarCodes.QuoteMatchCapture, $"duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
+                        if (capture.Name.Name == "_" || !captures.Add(capture.Name.Name))
+                            Report(GrammarCodes.QuoteMatchCapture, $"reserved or duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
                         _analysis.Helpers.Category(capture.Category, module, Report);
                     }
                 }
