@@ -96,9 +96,9 @@ SymbolProperty: "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Typ
   8 Default:CsCode  static  insert {";"}  sync {CsCode} @8, {";"} @9
   9 ";"  static  insert {"builtin", "extend", "extensible", "function", "symbol", "symbols", "syntax", "token", "using", "}"}  sync {";"} @9
 Semantics: "{" Items:SemanticItem* "}"
-  2 "}"  static  insert {"builtin", "extend", "extensible", "function", "symbol", "symbols", "syntax", "token", "using", "|", "}"}  sync {"}"} @2, {"check", "in", "out", DottedName, Identifier} @1
+  2 "}"  static  insert {"builtin", "extend", "extensible", "function", "symbol", "symbols", "syntax", "token", "using", "|", "}"}  sync {"}"} @2, {"check", "in", "match", "out", DottedName, Identifier} @1
 Assignment: Target:QualifiedName "=" Value:CsCode ";"
   1 "="  static  insert {CsCode}  sync {"="} @1, {CsCode} @2, {";"} @3
   2 Value:CsCode  static  insert {";"}  sync {CsCode} @2, {";"} @3
-  3 ";"  static  insert {"check", "in", "out", "}", DottedName, Identifier}  sync {";"} @3
+  3 ";"  static  insert {"check", "in", "match", "out", "}", DottedName, Identifier}  sync {";"} @3
 // calls with recovery bits: 0

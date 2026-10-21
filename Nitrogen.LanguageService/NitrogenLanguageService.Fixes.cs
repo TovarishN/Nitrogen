@@ -82,7 +82,7 @@ public sealed partial class NitrogenLanguageService
             if (Severity(diagnostic.Severity) == ServiceSeverity.Error) errors.Add((diagnostic.Code.ToString(), diagnostic.Span));
         foreach (var diagnostic in project.Diagnostics(uri)) errors.Add((diagnostic.Code, diagnostic.Span));
         foreach (var diagnostic in new ProjectSemantics(project)[uri].Diagnostics())
-            if (!diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal)) errors.Add((diagnostic.Code, diagnostic.Span));
+            if (diagnostic.Severity == DiagnosticSeverity.Error && !diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal)) errors.Add((diagnostic.Code, diagnostic.Span));
         return errors;
     }
 

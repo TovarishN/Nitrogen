@@ -1147,8 +1147,9 @@ public static class GrammarParser
             {
                 if (AtKeyword("out") || AtKeyword("in")) properties.Add(ParseProperty());
                 else if (AtKeyword("check")) statements.Add(ParseCheck());
+                else if (AtKeyword("match") && Next.Kind != TokenKind.Equals) statements.Add(ParseMatchDiagnostic());
                 else if ((At(TokenKind.Identifier) || At(TokenKind.QualifiedName)) && Next.Kind == TokenKind.Equals) statements.Add(ParseAssign());
-                else throw Error("expected 'out', 'in', 'check', an assignment or '}'");
+                else throw Error("expected 'out', 'in', 'check', 'match', an assignment or '}'");
             }
             var close = Advance();
             return new SemanticsBlock(properties.ToArray(), statements.ToArray(), GrammarSpan.FromBounds(open.Start, close.End));
@@ -1171,6 +1172,23 @@ public static class GrammarParser
             var value = Code(AfterLast, CSharpCapture.Statement, "a C# default value");
             var semicolon = Expect(TokenKind.Semicolon, "';'");
             return new PropertyDecl(direction, name, type, value, hover, expected, GrammarSpan.FromBounds(keyword.Start, semicolon.End));
+        }
+
+        MatchDiagnosticStatement ParseMatchDiagnostic()
+        {
+            var keyword = Advance();
+            bool hasCaptures = At(TokenKind.LParen);
+            var captures = hasCaptures ? ReadQuoteParameters() : Array.Empty<QuoteParameter>();
+            var pattern = ReadQuote(hasCaptures ? _tokens[_position - 1].End : keyword.End);
+            Expect(TokenKind.Arrow, "'=>'");
+            if (!AtKeyword("warning") && !AtKeyword("error")) throw Error("expected 'warning' or 'error'");
+            bool warning = Advance().Value == "warning";
+            var code = Name(Expect(TokenKind.Identifier, "a diagnostic code"));
+            if (!IsCheckCode(code.Name)) throw new GrammarSyntaxException("expected a diagnostic code such as XML1001", code.Span);
+            var colon = Expect(TokenKind.Colon, "':'");
+            var message = Code(colon.End, CSharpCapture.Statement, "a diagnostic message");
+            var semicolon = Expect(TokenKind.Semicolon, "';'");
+            return new(captures, pattern, code, warning, message, GrammarSpan.FromBounds(keyword.Start, semicolon.End));
         }
 
         CheckStatement ParseCheck()

@@ -275,5 +275,9 @@ public sealed record AssignStatement(AssignTarget Target, NameDecl? Child, NameD
 /// <summary><c>check [CODE] condition : message;</c> (issue 239). A message that is a string literal is interpolated.</summary>
 public sealed record CheckStatement(NameDecl? Code, CodeText Condition, CodeText Message, GrammarSpan Span, NameDecl? At = null) : SemanticStatement(Span);
 
+/// <summary>A structural match on the current syntax node that reports a diagnostic.</summary>
+public sealed record MatchDiagnosticStatement(EquatableArray<QuoteParameter> Captures, QuoteText Pattern,
+    NameDecl Code, bool IsWarning, CodeText Message, GrammarSpan Span) : SemanticStatement(Span);
+
 /// <summary>The <c>{ … }</c> after a syntax rule or an alternative (issue 239).</summary>
 public sealed record SemanticsBlock(EquatableArray<PropertyDecl> Properties, EquatableArray<SemanticStatement> Statements, GrammarSpan Span);

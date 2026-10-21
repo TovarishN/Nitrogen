@@ -150,8 +150,8 @@ public static class HirLowering
         }
         var bindingError = FirstWithin(file.BindingDiagnosticsByStart(), diagnostic => diagnostic.Span, span);
         var semanticError = context.CheckScope == SemanticCheckScope.SubtreeAndAncestors
-            ? file.DiagnosticsForSubtree(node).FirstOrDefault(diagnostic => Contains(span, diagnostic.Span))
-            : FirstWithin(file.Diagnostics(), diagnostic => diagnostic.Span, span);
+            ? file.DiagnosticsForSubtree(node).FirstOrDefault(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error && Contains(span, diagnostic.Span))
+            : FirstWithin(file.Diagnostics(), diagnostic => diagnostic.Span, span, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         if (bindingError is not null || semanticError is not null)
         {
             var site = bindingError?.Span ?? semanticError!.Span;
@@ -230,7 +230,7 @@ public static class HirLowering
                         continue;
                     }
                     var bindingError = FirstWithin(file.BindingDiagnosticsByStart(), diagnostic => diagnostic.Span, span);
-                    var semanticError = FirstWithin(file.Diagnostics(), diagnostic => diagnostic.Span, span);
+                    var semanticError = FirstWithin(file.Diagnostics(), diagnostic => diagnostic.Span, span, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
                     if (bindingError is not null || semanticError is not null)
                     {
                         var site = bindingError?.Span ?? semanticError!.Span;
@@ -281,7 +281,7 @@ public static class HirLowering
     /// The first item of <paramref name="byStart"/> (sorted by span start) whose span lies within
     /// <paramref name="outer"/>: a binary search to the first start inside it, then a walk while starts stay inside.
     /// </summary>
-    static T? FirstWithin<T>(IReadOnlyList<T> byStart, Func<T, TextSpan> spanOf, TextSpan outer) where T : class
+    static T? FirstWithin<T>(IReadOnlyList<T> byStart, Func<T, TextSpan> spanOf, TextSpan outer, Func<T, bool>? accept = null) where T : class
     {
         int low = 0, high = byStart.Count;
         while (low < high)
@@ -291,7 +291,7 @@ public static class HirLowering
             else high = middle;
         }
         for (int i = low; i < byStart.Count && spanOf(byStart[i]).Start <= outer.End; i++)
-            if (spanOf(byStart[i]).End <= outer.End) return byStart[i];
+            if (spanOf(byStart[i]).End <= outer.End && (accept is null || accept(byStart[i]))) return byStart[i];
         return null;
     }
 

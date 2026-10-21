@@ -88,6 +88,7 @@ public static class GrammarDumper
     {
         AssignStatement a => $"(set {(a.Target == AssignTarget.Self ? "" : a.Target == AssignTarget.Symbol ? "symbol." : a.Child!.Name + ".")}{a.Property.Name} {{{a.Value.Text}}})",
         CheckStatement c => $"(check{(c.Code is { } code ? " " + code.Name : "")} {{{c.Condition.Text}}} {{{c.Message.Text}}}{(c.At is { } at ? " at " + at.Name : "")})",
+        MatchDiagnosticStatement m => $"(match {{{m.Pattern.Text}}} {(m.IsWarning ? "warning" : "error")} {m.Code.Name} {{{m.Message.Text}}})",
         _ => throw new ArgumentOutOfRangeException(nameof(statement)),
     };
 

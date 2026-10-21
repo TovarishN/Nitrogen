@@ -257,6 +257,16 @@ public static class GrammarValidator
                     else if ((element is LabeledExpr labeled ? labeled.Inner : element) is RepeatExpr or SeparatedListExpr)
                         Report(GrammarCodes.UnknownSemanticChild, $"'{at.Name}' may be absent or repeated; `at` needs one child", at.Span, module);
                 }
+                foreach (var match in block.Statements.OfType<MatchDiagnosticStatement>())
+                {
+                    var captures = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var capture in match.Captures)
+                    {
+                        if (!captures.Add(capture.Name.Name))
+                            Report(GrammarCodes.QuoteMatchCapture, $"duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
+                        _analysis.Helpers.Category(capture.Category, module, Report);
+                    }
+                }
             }
 
             foreach (var property in own)

@@ -63,11 +63,22 @@ public sealed class SemanticsSymbol<T>(SymbolProperty<T> property, Func<FileSema
 
 /// <summary>A <c>check</c>: when the condition is false, the message is reported at the node under the code.</summary>
 public sealed class SemanticsCheck(string code, Func<FileSemantics, int, bool> condition, Func<FileSemantics, int, string> message,
-    Func<FileSemantics, int, TextSpan>? at = null)
+    Func<FileSemantics, int, TextSpan>? at = null, DiagnosticSeverity severity = DiagnosticSeverity.Error,
+    SyntaxDiagnosticPattern? pattern = null)
 {
     public string Code { get; } = code;
+    public DiagnosticSeverity Severity { get; } = severity;
+    public SyntaxDiagnosticPattern? Pattern { get; } = pattern;
 
-    public bool Holds(FileSemantics semantics, int node) => condition(semantics, node);
+    public bool Holds(FileSemantics semantics, int node)
+    {
+        if (Pattern is null) return condition(semantics, node);
+        var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern);
+        if (!compiled.Success) throw new InvalidOperationException(string.Join("; ", compiled.Diagnostics));
+        var match = compiled.Pattern!.Match(new(semantics.Tree, node));
+        if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
+        return !match.Matched;
+    }
 
     public string Message(FileSemantics semantics, int node) => message(semantics, node);
 

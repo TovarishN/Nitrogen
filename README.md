@@ -69,6 +69,11 @@ explicit source origins; keep that tree alive until captures have been consumed.
 compilation when finished. Instantiation produces independently owned syntax for the destination's
 ordinary bind/check/lower pipeline. Both APIs require the same `Language` snapshot.
 
+The [XML pattern example](examples/XmlPatterns/README.md) parses an ordinary XML configuration
+with a Nitrogen grammar and reports a warning for a credentials element containing a password.
+Its `.ngr` rule uses `match (...) <[ ... ]> => warning XML1001 : "...";` with typed list captures;
+the standard CLI and language service report the warning at its source location.
+
 `f(1, ..$Args, 2)` captures the middle items, including an empty middle, when `Args` is declared
 `QuoteHole.List("Module.Expr")` or `Args: Expr*`. One variable-length capture is allowed per physical
 list; nested lists are independent. Repeated capture names require structural equality and return

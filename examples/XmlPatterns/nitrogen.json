@@ -1,0 +1,11 @@
+{
+  "languages": [
+    {
+      "name": "XmlPatterns",
+      "extensions": [".xml"],
+      "grammars": ["Xml.ngr"],
+      "start": "Xml.Document",
+      "namespace": "XmlPatterns.Syntax"
+    }
+  ]
+}

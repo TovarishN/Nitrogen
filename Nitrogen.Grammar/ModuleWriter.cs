@@ -60,6 +60,7 @@ internal static class ModuleWriter
         QuotationWriter.Write(b, model, info);
         BindingWriter.Write(b, info);
         QuoteHelperWriter.Write(b, model, info);
+        semantics.WriteDiagnosticPatterns(b);
         if (hasSemantics) semantics.WriteMembers(b);
         if (!quotationSyntaxOnly) DeclarativeWriter.Write(b, model, info);
 

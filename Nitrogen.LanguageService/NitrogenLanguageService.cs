@@ -110,7 +110,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         if (InfoOf(document.Language).HasSemantics)
             foreach (var diagnostic in SemanticsOf(document.Language)[uri].Diagnostics())
                 diagnostics.Add(new ServiceDiagnostic(document.Lines.RangeOf(diagnostic.Span),
-                    diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal) ? ServiceSeverity.Warning : ServiceSeverity.Error,
+                    diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal) ? ServiceSeverity.Warning : Severity(diagnostic.Severity),
                     diagnostic.Code, diagnostic.Message, Related: QuoteHelperRelated(diagnostic.Related)));
         diagnostics.AddRange(LoweringDiagnostics(document, diagnostics));
         if (!IsEmbedded(uri))

@@ -2,6 +2,29 @@
 
 How `.ngr` grammars declare scopes, pass typed arguments to operations, repeat and expand typed templates, and how the editor uses what a document lowers to. For an overview of Nitrogen, see the [README](../README.md); for editor setup, [editor support](editor-support.md).
 
+## Structural diagnostic matches
+
+A semantics block can report a diagnostic when a typed syntax pattern matches the current node:
+
+```ngr
+syntax Paired = "<" Open:Name Attributes:Attribute* ">" Children:Node* "</" Close:Name ">" {
+  match (Attrs: Attribute*, PasswordAttrs: Attribute*, Content: Node*)
+    <[ <credentials ..$Attrs><password ..$PasswordAttrs>..$Content</password></credentials> ]>
+    => warning XML1001 : "Use a secret reference instead of an embedded password.";
+}
+```
+
+Use `warning` or `error` after `=>`. A match reports at the current node; a mismatch produces no diagnostic.
+The capture list is optional for a literal pattern. Captures have syntax categories, with `*` for lists,
+and use the same structural matching rules as syntax-function match arms: exact token spelling and
+nesting, trivia ignored, and at most one variable-length capture per physical list. These statements
+do not construct replacements and need no fallback. Their message expression uses the containing
+rule's semantic fields; pattern captures are used for recognition, not introduced as C# message variables.
+
+All diagnostic patterns are validated when the language is composed, including ones no input reaches.
+Warnings are preserved by the CLI and language service and do not block lowering; errors do. See the
+[XML example](../examples/XmlPatterns/README.md) for the complete grammar, configuration and input.
+
 ## Declaration scopes
 
 A `scope` clause opens a local scope for a rule's children. A declaration normally belongs to its enclosing scope. Use `in file` to place selected declarations in the file scope:

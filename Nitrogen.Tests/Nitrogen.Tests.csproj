@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Nitrogen.Ngr\Nitrogen.Ngr.csproj" />
     <ProjectReference Include="..\Nitrogen.Geometry\Nitrogen.Geometry.csproj" />
     <ProjectReference Include="..\examples\DateCalc\DateCalc.csproj" />
+    <ProjectReference Include="..\examples\XmlPatterns\XmlPatterns.csproj" />
     <ProjectReference Include="..\Nitrogen.Workspace\Nitrogen.Workspace.csproj" />
     <ProjectReference Include="..\Nitrogen.Cli\Nitrogen.Cli.csproj" />
     <ProjectReference Include="..\Nitrogen.LanguageService\Nitrogen.LanguageService.csproj" />

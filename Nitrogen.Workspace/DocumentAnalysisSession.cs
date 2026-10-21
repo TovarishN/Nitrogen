@@ -145,7 +145,7 @@ public sealed class DocumentAnalysisSession : IDisposable
             issues.Add(projection.Projection.Map(new AnalysisIssue(diagnostic.Code, diagnostic.Message, new(path, diagnostic.Span.Start, diagnostic.Span.Length), [], source, true, projection.Selection.Key)));
         foreach (var diagnostic in semantics[path].Diagnostics())
             issues.Add(projection.Projection.Map(new AnalysisIssue(diagnostic.Code, diagnostic.Message, new(path, diagnostic.Span.Start, diagnostic.Span.Length), [], source,
-                !diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal), projection.Selection.Key)));
+                diagnostic.Severity == DiagnosticSeverity.Error && !diagnostic.Code.StartsWith("NS000", StringComparison.Ordinal), projection.Selection.Key)));
     }
 
     public bool IsCurrent(DocumentAnalysisResult result) =>

@@ -10,11 +10,18 @@ public static class QuoteHelperValidation
     public static IReadOnlyList<WorkspaceDiagnostic> Validate(IEnumerable<GrammarInput> inputs)
     {
         var files = inputs.ToArray();
-        if (!files.Any(input => GrammarParser.Parse(input.Text).File?.Modules.Any(m => m.Helpers.Count > 0) == true))
+        if (!files.Any(input => GrammarParser.Parse(input.Text).File?.Modules.Any(m => m.Helpers.Count > 0 || HasDiagnosticPatterns(m)) == true))
             return [];
         using var snapshot = CompileSyntax(files);
         return snapshot.Diagnostics;
     }
+
+    static bool HasDiagnosticPatterns(ModuleDecl module) => module.Rules.Any(rule => rule switch
+    {
+        SyntaxRule syntax => syntax.Semantics?.Statements.Any(s => s is MatchDiagnosticStatement) == true,
+        ExtensibleRule extensible => extensible.Alternatives.Any(a => a.Semantics?.Statements.Any(s => s is MatchDiagnosticStatement) == true),
+        _ => false,
+    }) || module.Extends.Any(e => e.Alternatives.Any(a => a.Semantics?.Statements.Any(s => s is MatchDiagnosticStatement) == true));
 
     /// <summary>Compiles a disposable parser without loading configured semantic helpers.</summary>
     public static WorkspaceSnapshot CompileSyntax(IEnumerable<GrammarInput> inputs)

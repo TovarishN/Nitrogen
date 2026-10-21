@@ -146,6 +146,40 @@ internal sealed class SemanticsWriter
             .Append("        (uint)localKind < (uint)s_semantics.Length ? s_semantics[localKind] : null;\n\n");
     }
 
+    public void WriteDiagnosticPatterns(StringBuilder b)
+    {
+        var patterns = new List<string>();
+        foreach (var kind in _info.Kinds)
+        {
+            if (Block(kind) is not { } block) continue;
+            var (_, category) = OwnerOf(kind);
+            int index = 0;
+            foreach (var statement in block.Statements.Where(s => s is CheckStatement or MatchDiagnosticStatement))
+            {
+                if (statement is MatchDiagnosticStatement match)
+                {
+                    string field = $"s_match_{kind.Name}_{index}";
+                    patterns.Add(field);
+                    string map = "new global::System.Collections.Generic.Dictionary<string, global::Nitrogen.QuoteHole> { " +
+                        string.Join(", ", match.Captures.Select(capture => "[" + CSharpText.Literal(capture.Name.Name) + "] = new(" +
+                            CSharpText.Literal(_model.Analysis.Helpers.Category(capture.Category, _info.Module)!.Key) +
+                            (capture.IsList ? ", true)" : ", false)"))) + " }";
+                    b.Append($"    static readonly global::Nitrogen.SyntaxDiagnosticPattern {field} = new(")
+                        .Append(CSharpText.Literal(OwnerOf(kind).Owner.Module.Name + "." + category)).Append(", ")
+                        .Append(CSharpText.Literal(match.Pattern.Text)).Append(", ").Append(map)
+                        .Append(", new global::Nitrogen.QuoteHelperSource(")
+                        .Append(CSharpText.Literal(_model.InputOf(_info.Module)?.Path ?? ""))
+                        .Append($", {match.Pattern.Span.Start}, {match.Pattern.Span.Length}));\n");
+                }
+                index++;
+            }
+        }
+        if (patterns.Count > 0)
+            b.Append("    public override global::System.Collections.Generic.IReadOnlyList<global::Nitrogen.SyntaxDiagnosticPattern> DiagnosticPatterns => new global::Nitrogen.SyntaxDiagnosticPattern[] { ")
+                .Append(string.Join(", ", patterns)).Append(" };\n\n");
+
+    }
+
     string Rule(KindInfo kind)
     {
         if (Block(kind) is not { } block) return "null";
@@ -174,11 +208,14 @@ internal sealed class SemanticsWriter
                     break;
             }
         }
-        var checks = block.Statements.OfType<CheckStatement>()
-            .Select((check, i) => $"new {Ns}SemanticsCheck({CSharpText.Literal(check.Code?.Name ?? "NS0100")}, "
+        var checks = block.Statements.Where(s => s is CheckStatement or MatchDiagnosticStatement)
+            .Select((statement, i) => statement is MatchDiagnosticStatement match
+                ? $"new {Ns}SemanticsCheck({CSharpText.Literal(match.Code.Name)}, static (s, n) => true, "
+                    + $"static (s, n) => new {view}(s, n).Message_{i}(), severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")}, pattern: s_match_{kind.Name}_{i})"
+                : statement is CheckStatement check ? $"new {Ns}SemanticsCheck({CSharpText.Literal(check.Code?.Name ?? "NS0100")}, "
                 + $"static (s, n) => new {view}(s, n).Check_{i}(), static (s, n) => new {view}(s, n).Message_{i}()"
                 + (check.At is { } at ? $", static (s, n) => new {view}(s, n).{CSharpText.Identifier(at.Name)}.Span" : "")
-                + ")");
+                + ")" : throw new InvalidOperationException());
         return $"new(new {Ns}SemanticsOut[] {{ {string.Join(", ", outs)} }}, new {Ns}SemanticsIn[] {{ {string.Join(", ", ins)} }}, "
             + $"new {Ns}SemanticsSymbol[] {{ {string.Join(", ", symbols)} }}, new {Ns}SemanticsCheck[] {{ {string.Join(", ", checks)} }})";
     }
@@ -260,6 +297,13 @@ internal sealed class SemanticsWriter
                 b.Append("        ;\n\n")
                     .Append($"    internal string Message_{check}() =>\n");
                 Fragment(b, c.Message, c.Message.Text.StartsWith("\"", StringComparison.Ordinal) ? "$" : "");
+                b.Append("        ;\n\n");
+                check++;
+            }
+            else if (statement is MatchDiagnosticStatement match)
+            {
+                b.Append($"    internal string Message_{check}() =>\n");
+                Fragment(b, match.Message, match.Message.Text.StartsWith("\"", StringComparison.Ordinal) ? "$" : "");
                 b.Append("        ;\n\n");
                 check++;
             }

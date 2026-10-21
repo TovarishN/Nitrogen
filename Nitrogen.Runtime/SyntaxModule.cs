@@ -56,6 +56,8 @@ public abstract class SyntaxModule
 
     public virtual IReadOnlyList<QuoteHelper> QuoteHelpers => [];
 
+    public virtual IReadOnlyList<SyntaxDiagnosticPattern> DiagnosticPatterns => [];
+
     /// <summary>Syntax categories supported by this generated module.</summary>
     public virtual IReadOnlyList<string> QuoteCategoryNames => [];
 

@@ -147,7 +147,7 @@ public sealed partial class FileSemantics
                     found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}") { Related = related });
                 foreach (var diagnostic in file.Diagnostics())
                     found.Add(new SemanticDiagnostic(diagnostic.Code, Tree.Span(node), $"in the expansion of {name}: {diagnostic.Message}")
-                    { Related = diagnostic.Related.Concat(related).Distinct().ToArray() });
+                    { Severity = diagnostic.Severity, Related = diagnostic.Related.Concat(related).Distinct().ToArray() });
             }
         return _expansions = found;
     }

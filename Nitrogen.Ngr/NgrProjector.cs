@@ -405,6 +405,13 @@ internal static class NgrProjector
                 case "Assignment":
                     statements.Add(Assign(statement));
                     break;
+                case "MatchDiagnostic":
+                    var captures = Value(a[0]) is { } captureList
+                        ? Items(Expect(captureList, "QuoteCaptures").Arguments[0]).Select(QuoteParameter).ToArray()
+                        : Array.Empty<QuoteParameter>();
+                    statements.Add(new MatchDiagnosticStatement(captures, Quote(a[1]), Name(a[3]),
+                        Text(a[2]) == "warning", Code(a[4]), Span(statement)));
+                    break;
                 default:
                     throw Unexpected(statement);
             }

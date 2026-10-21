@@ -59,6 +59,18 @@ public sealed unsafe class LanguageBuilder
             if (catalog is null) return false;
         }
         var composed = BuildSyntax(catalog, declarative!);
+        var patternErrors = composed.Modules.SelectMany(module => module.DiagnosticPatterns)
+            .SelectMany(pattern => composed.DiagnosticPattern(pattern).Diagnostics.Select(diagnostic =>
+                new CompositionDiagnostic(diagnostic.Code, new[] { pattern.Category }, diagnostic.Message)
+                {
+                    Location = new(pattern.Source.Path, new(pattern.Source.Start + diagnostic.Span.Start,
+                        diagnostic.Span.Length > 0 ? diagnostic.Span.Length : pattern.Source.Length))
+                })).ToArray();
+        if (patternErrors.Length > 0)
+        {
+            diagnostics = patternErrors;
+            return false;
+        }
         var quoteErrors = composed.ValidateQuoteHelpers();
         if (quoteErrors.Count > 0)
         {

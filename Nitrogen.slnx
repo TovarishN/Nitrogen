@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="Nitrogen.Build/Nitrogen.Build.csproj" />
   <Project Path="examples/DateCalc/DateCalc.csproj" />
+  <Project Path="examples/XmlPatterns/XmlPatterns.csproj" />
   <Project Path="Nitrogen.Cli/Nitrogen.Cli.csproj" />
   <Project Path="Nitrogen.Generator/Nitrogen.Generator.csproj" />
   <Project Path="Nitrogen.Geometry/Nitrogen.Geometry.csproj" />

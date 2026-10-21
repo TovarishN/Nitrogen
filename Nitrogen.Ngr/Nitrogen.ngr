@@ -152,13 +152,15 @@ syntax module Nitrogen
   syntax SymbolProperty = "symbol" "property" Name:Identifier "for" Kinds:KindList ":" Type:CsType "=" Default:CsCode ";"  declares property Name
                           lowers Grammar.SymbolProperty(text Name, Kinds, text Type, text Default);
   syntax Semantics      = "{" Items:SemanticItem* "}"  lowers Grammar.Semantics(sequence Grammar.SemanticItem Items);
-  syntax SemanticItem   = PropertyDecl / Check / Assignment;
+  syntax SemanticItem   = PropertyDecl / Check / MatchDiagnostic / Assignment;
   syntax PropertyDecl   = Direction:("out" / "in") Flags:PropertyFlag* Name:Identifier ":" Type:CsType "=" Default:CsCode ";"  declares property Name
                           lowers Grammar.PropertyDecl(text Direction, sequence Core.Text Flags, text Name, text Type, text Default);
   syntax PropertyFlag   = "hover" / "expected"  lowers text Core.Text this;
   syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:CheckAt? ";"
                           lowers Grammar.Check(optional text Code, text Condition, text Message, optional Core.Text At);
   syntax CheckAt        = "at" Name:Identifier  lowers text Core.Text Name;
+  syntax MatchDiagnostic = "match" Captures:QuoteCaptures? Pattern:TemplateString "=>" Severity:("warning" / "error") Code:CheckCode ":" Message:CsCode ";"
+                          lowers Grammar.MatchDiagnostic(optional Grammar.QuoteCaptures Captures, text Pattern, text Severity, text Code, text Message);
   syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target  lowers Grammar.Assignment(text Target, text Value);
 
   syntax Expression     = Choices:(Sequence; "/")+  lowers Grammar.Choice(sequence Grammar.Expression Choices);

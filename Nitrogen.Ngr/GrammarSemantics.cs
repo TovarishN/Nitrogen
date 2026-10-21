@@ -116,6 +116,7 @@ public static class GrammarSemantics
         Op("Semantics", Types.Semantics, Seq(Types.SemanticItem)),
         Op("PropertyDecl", Types.SemanticItem, Text, Seq(Text), Text, Text, Text),
         Op("Check", Types.SemanticItem, Opt(Text), Text, Text, Opt(Text)),
+        Op("MatchDiagnostic", Types.SemanticItem, Opt(Types.QuoteCaptures), Text, Text, Text, Text),
         Op("Assignment", Types.SemanticItem, Text, Text),
         Op("Choice", Types.Expression, Seq(Types.Expression)),
         Op("Sequence", Types.Expression, Seq(Types.Expression)),

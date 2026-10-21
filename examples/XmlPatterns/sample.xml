@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<application name="Inventory">
+  <!-- Arbitrary surrounding structure does not affect the match. -->
+  <service name="catalog" port="8080">
+    <endpoint path="/items" />
+    <credentials source="local">
+      <dfg />
+      <password encoding="plain">example-only-password</password>
+    </credentials>
+  </service>
+  <service name="reports">
+    <credentials><secret-ref key="reports-password" /></credentials>
+  </service>
+  <documentation>
+    <password>This tag is outside credentials, so it does not match.</password>
+  </documentation>
+</application>
