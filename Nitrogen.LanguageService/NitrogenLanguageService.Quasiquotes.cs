@@ -181,7 +181,8 @@ public sealed partial class NitrogenLanguageService
         try
         {
             using var json = JsonDocument.Parse(configuration);
-            foreach (var entry in json.RootElement.GetProperty("languages").EnumerateArray())
+            if (!json.RootElement.TryGetProperty("languages", out var languages)) return null;
+            foreach (var entry in languages.EnumerateArray())
             {
                 var files = QuoteFiles(Path.GetDirectoryName(config)!, entry, "grammars");
                 if (files.Contains(path, StringComparer.Ordinal)) return files;
@@ -198,7 +199,8 @@ public sealed partial class NitrogenLanguageService
         {
             using var json = JsonDocument.Parse(configuration);
             string root = Path.GetDirectoryName(config)!;
-            foreach (var entry in json.RootElement.GetProperty("languages").EnumerateArray())
+            if (!json.RootElement.TryGetProperty("languages", out var languages)) return null;
+            foreach (var entry in languages.EnumerateArray())
             {
                 var grammars = QuoteFiles(root, entry, "grammars");
                 if (!grammars.Contains(path, StringComparer.Ordinal)) continue;
