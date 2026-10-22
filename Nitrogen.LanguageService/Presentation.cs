@@ -67,8 +67,8 @@ public enum OutlineKind
     TypeParameter = 26,
 }
 
-/// <summary>How the editor shows one symbol kind: its token colour and its outline icon.</summary>
-public readonly record struct SymbolStyle(TokenType Token, OutlineKind Outline)
+/// <summary>How the editor shows one symbol kind: its token colour, its outline icon, and optionally its palette entry.</summary>
+public readonly record struct SymbolStyle(TokenType Token, OutlineKind Outline, string? Palette = null)
 {
     public static SymbolStyle Default => new(TokenType.Variable, OutlineKind.Variable);
 }

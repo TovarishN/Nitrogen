@@ -1,4 +1,4 @@
-using Nitrogen.Tests.Palette;
+using Nitrogen.Tests.PaletteGrammar;
 using Xunit;
 
 namespace Nitrogen.Tests;

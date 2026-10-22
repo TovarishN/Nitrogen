@@ -30,6 +30,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
     bool _watchDynamically;
     bool _refreshInlayHints;  // the client takes workspace/inlayHint/refresh
     bool _refreshSemanticTokens; // the client takes workspace/semanticTokens/refresh
+    bool _paletteTokens; // the client colours Palette token types (initializationOptions.paletteTokens)
     int _languagesSeen;       // service.LanguagesVersion when the client last had current language data
     int _refreshes;
     readonly object _gate = new();            // orders the reader's enqueue against the loop's idle check
@@ -228,12 +229,13 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
                     _watchDynamically = initialize?.Capabilities?.Workspace?.DidChangeWatchedFiles?.DynamicRegistration == true;
                     _refreshInlayHints = initialize?.Capabilities?.Workspace?.InlayHint?.RefreshSupport == true;
                     _refreshSemanticTokens = initialize?.Capabilities?.Workspace?.SemanticTokens?.RefreshSupport == true;
+                    _paletteTokens = initialize?.InitializationOptions?.PaletteTokens == true;
                     service.SkipEmbedded(initialize?.InitializationOptions?.SkipLanguages ?? []);
                     service.ServeSignatureDocuments(initialize?.InitializationOptions?.SignatureDocuments ?? true);
                 }
                 _configRoot = fixedRoot ?? _workspaceRoot;
                 await RespondAsync(id, new InitializeResult(
-                    new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend, Full: true), DocumentSymbolProvider: true,
+                    new ServerCapabilities(2, new SemanticTokensOptions(SemanticTokenEncoding.Legend(_paletteTokens), Full: true), DocumentSymbolProvider: true,
                         DefinitionProvider: true, DeclarationProvider: true, ReferencesProvider: true, DocumentHighlightProvider: true, HoverProvider: true,
                         RenameProvider: new RenameOptions(PrepareProvider: true),
                         CompletionProvider: new CompletionOptions(["."]), InlayHintProvider: true, CodeActionProvider: new CodeActionOptions(["quickfix", "refactor.extract", "refactor.inline"]),
@@ -252,7 +254,7 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             case "textDocument/semanticTokens/full":
             {
                 string uri = Params(parameters, LspJson.Default.TextDocumentParams).TextDocument.Uri;
-                await RespondAsync(id, new SemanticTokensResult(SemanticTokenEncoding.Encode(service.SemanticTokens(uri))),
+                await RespondAsync(id, new SemanticTokensResult(SemanticTokenEncoding.Encode(service.SemanticTokens(uri), _paletteTokens)),
                     LspJson.Default.SemanticTokensResult, cancel);
                 break;
             }

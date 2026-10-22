@@ -80,7 +80,7 @@
     <AdditionalFiles Include="Grammars\OptionalText.ngr" Namespace="Nitrogen.Tests.OptionalText" />
     <AdditionalFiles Include="Grammars\HexValues.ngr" Namespace="Nitrogen.Tests.HexValues" />
     <AdditionalFiles Include="Grammars\Shapes.ngr" Namespace="Nitrogen.Tests.Shapes" />
-    <AdditionalFiles Include="Grammars\Palette.ngr" Namespace="Nitrogen.Tests.Palette" />
+    <AdditionalFiles Include="Grammars\Palette.ngr" Namespace="Nitrogen.Tests.PaletteGrammar" />
     <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
     <CompilerVisibleProperty Include="RootNamespace" />
   </ItemGroup>
