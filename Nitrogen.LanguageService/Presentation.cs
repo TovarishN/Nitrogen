@@ -91,6 +91,18 @@ public sealed class Presentation(IReadOnlyDictionary<string, SymbolStyle> styles
 {
     public static Presentation Default { get; } = new(new Dictionary<string, SymbolStyle>());
 
+    // A misspelt palette name would fail every semantic tokens request; reject it where the language is defined.
+    readonly bool _checked = Check(styles.Values.Select(s => s.Palette).Concat(literals?.Values ?? []).Concat(tokens?.Values ?? [])
+        .Concat(comments is { } c ? [c.Line, c.Block] : []));
+
+    static bool Check(IEnumerable<string?> names)
+    {
+        foreach (string? name in names)
+            if (name is not null && !Palette.Contains(name))
+                throw new ArgumentException($"'{name}' is not a palette entry (Nitrogen.LanguageService.Palette)");
+        return true;
+    }
+
     /// <summary>Whether what a document lowers to colours its tokens.</summary>
     public bool ColorFromLowering { get; } = colorFromLowering;
 

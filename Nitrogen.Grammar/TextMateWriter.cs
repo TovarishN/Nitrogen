@@ -54,16 +54,22 @@ internal static class TextMateWriter
         {
             if (rule.Name.Contains("String") || rule.Name.Contains("Char"))
             {
+                // A string between literal delimiters is a begin/end pattern, so it can span lines; else its regex; else
+                // a plain double-quoted string, so the rule is painted as a string either way.
                 string scope = Scope(rule.Name.Contains("Char") && !rule.Name.Contains("String") ? "string.quoted.single" : "string.quoted.double");
-                if (RegexOf(info, rule) is { } regex) { patterns.Add(Match(scope, regex)); anyString = true; }
+                var items = rule.Body is SequenceExpr sequence ? sequence.Items : default;
+                patterns.Add(items.Count >= 2 && items[0] is LiteralExpr { Value.Length: > 0 } open && items[items.Count - 1] is LiteralExpr { Value.Length: > 0 } close
+                    ? BeginEnd(scope, TokenRegex.Escape(open.Value), TokenRegex.Escape(close.Value), Escapes(rule.Body))
+                    : RegexOf(info, rule) is { } regex ? Match(scope, regex)
+                    : BeginEnd(scope, "\"", "\"", escapes: true));
+                anyString = true;
             }
             else if (rule.Name.Contains("Number") || rule.Name.Contains("Digit") || rule.Name.Contains("Integer"))
             {
                 if (RegexOf(info, rule) is { } regex) { patterns.Add(Match(Scope("constant.numeric"), "\\b" + regex + "\\b")); anyNumber = true; }
             }
         }
-        if (!anyString)
-            patterns.Add($"{{\"name\":{Json(Scope("string.quoted.double"))},\"begin\":\"\\\"\",\"end\":\"\\\"\",\"patterns\":[{{\"match\":{Json("\\\\.")}}}]}}");
+        if (!anyString) patterns.Add(BeginEnd(Scope("string.quoted.double"), "\"", "\"", escapes: true));
         if (!anyNumber) patterns.Add(Match(Scope("constant.numeric"), "\\b\\d+(?:\\.\\d+)?\\b"));
 
         var roles = new Dictionary<string, GrammarLiteralRole>(StringComparer.Ordinal);
@@ -128,6 +134,21 @@ internal static class TextMateWriter
                 $"\"captures\":{{\"1\":{{\"name\":{Json(Scope(options.RoleScopes[role]))}}},\"2\":{{\"name\":{Json(Scope(followerScope))}}}}}}}");
         }
     }
+
+    static string BeginEnd(string name, string begin, string end, bool escapes) =>
+        $"{{\"name\":{Json(name)},\"begin\":{Json(begin)},\"end\":{Json(end)}" +
+        (escapes ? $",\"patterns\":[{{\"match\":{Json("\\\\.")}}}]}}" : "}");
+
+    /// <summary>Whether a token rule has backslash escapes: a literal with a backslash anywhere in it.</summary>
+    static bool Escapes(Expr expr) => expr switch
+    {
+        LiteralExpr literal => literal.Value.IndexOf('\\') >= 0,
+        SequenceExpr sequence => sequence.Items.Any(Escapes),
+        ChoiceExpr choice => choice.Alternatives.Any(Escapes),
+        LabeledExpr labeled => Escapes(labeled.Inner),
+        RepeatExpr repeat => Escapes(repeat.Inner),
+        _ => false,
+    };
 
     static int Rank(GrammarLiteralRole role) => Array.IndexOf(WordPriority, role) is var i and >= 0 ? i : WordPriority.Length;
 

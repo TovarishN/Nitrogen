@@ -25,7 +25,7 @@ public static class SemanticTokenEncoding
         foreach (var token in tokens)
         {
             int type;
-            if (token.Palette is null) type = (int)token.Type;
+            if (token.Palette is null || !Palette.Contains(token.Palette)) type = (int)token.Type; // an assist's unknown name: its own type
             else if (palette) type = s_paletteIndex[token.Palette];
             else if (Palette.Named(token.Palette).Fallback is { } fallback) type = (int)fallback;
             else continue;

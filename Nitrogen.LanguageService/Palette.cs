@@ -38,6 +38,9 @@ public static partial class Palette
 
     public static PaletteEntry Named(string name) => s_byName[name];
 
+    /// <summary>Whether <paramref name="name"/> is a palette entry.</summary>
+    public static bool Contains(string name) => s_byName.ContainsKey(name);
+
     public static PaletteEntry Of(LiteralRole role) => s_general[role switch
     {
         LiteralRole.Operation => 0,

@@ -94,6 +94,22 @@ public sealed class TextMateWriterTests
     }
 
     [Fact]
+    public void Delimited_strings_span_lines()
+    {
+        var grammar = Generate("""
+            syntax module M
+            {
+              token TemplateString = "<[" (!"]>" .)* "]>";
+              syntax S = "quote" Value:TemplateString;
+            }
+            """);
+        var template = Assert.Single(grammar.GetProperty("patterns").EnumerateArray(), p => p.TryGetProperty("begin", out var b) && b.GetString() == "<\\[");
+        Assert.Equal("string.quoted.double.palette", template.GetProperty("name").GetString());
+        Assert.Equal("\\]>", template.GetProperty("end").GetString());
+        Assert.False(template.TryGetProperty("patterns", out _)); // no backslash escapes in this rule
+    }
+
+    [Fact]
     public void Metacharacters_are_escaped()
     {
         var grammar = Generate("""
@@ -124,7 +140,10 @@ public sealed class TextMateWriterTests
             .Select(p => p.TryGetProperty("name", out var n) ? n.GetString() : null).ToList();
         Assert.Equal("comment.line.double-slash.palette", names[0]);
         Assert.Equal("comment.block.palette", names[1]);
-        PatternFor(grammar, "string.quoted.double.palette", "\"a b\"");
+        var text = Assert.Single(grammar.GetProperty("patterns").EnumerateArray(), p => p.TryGetProperty("name", out var n) && n.GetString() == "string.quoted.double.palette");
+        Assert.Equal("\"", text.GetProperty("begin").GetString());
+        Assert.Equal("\"", text.GetProperty("end").GetString());
+        Assert.Equal("\\\\.", text.GetProperty("patterns")[0].GetProperty("match").GetString()); // `\"` does not end the string
         PatternFor(grammar, "constant.numeric.palette", "12.5");
         Assert.True(names.IndexOf("string.quoted.double.palette") < names.IndexOf("keyword.other.palette"));
     }

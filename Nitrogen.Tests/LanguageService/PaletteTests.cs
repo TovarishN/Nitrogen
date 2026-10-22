@@ -51,6 +51,26 @@ public sealed class PaletteTests
     }
 
     [Fact]
+    public void A_presentation_rejects_an_unknown_palette_name()
+    {
+        var error = Assert.Throws<ArgumentException>(() => new Presentation(new Dictionary<string, SymbolStyle>
+        {
+            ["rule"] = new(TokenType.Type, OutlineKind.Class, "ngrEntityNameFunctionRul"),
+        }));
+        Assert.Contains("ngrEntityNameFunctionRul", error.Message);
+        Assert.Throws<ArgumentException>(() => new Presentation(new Dictionary<string, SymbolStyle>(),
+            literals: new Dictionary<(string, string), string> { [("*", "x")] = "nope" }));
+        Assert.Throws<ArgumentException>(() => new Presentation(new Dictionary<string, SymbolStyle>(), comments: ("nope", "comment")));
+    }
+
+    [Fact]
+    public void Unknown_assist_palette_falls_back_to_its_type()
+    {
+        var token = new SemanticToken(new(0, 0), 1, TokenType.Keyword, TokenModifiers.None, "nope");
+        Assert.Equal(new[] { 0, 0, 1, (int)TokenType.Keyword, 0 }, Nitrogen.LanguageService.Lsp.SemanticTokenEncoding.Encode([token], palette: true));
+    }
+
+    [Fact]
     public void Standard_types_have_vscode_default_scopes()
     {
         Assert.Equal("entity.name.type.class", Palette.StandardScope(TokenType.Class));
