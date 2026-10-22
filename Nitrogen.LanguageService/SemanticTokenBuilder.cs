@@ -177,8 +177,10 @@ internal static class SemanticTokenBuilder
             string literal = text.Substring(span.Start, span.Length);
             if (rule >= 0 && tree.Language is { } language)
             {
-                // The language's own choice for this literal in this rule, else its grammar role.
+                // The language's own choice for this literal in this rule, then the lowers clause (lowering colours operation
+                // words, unless the language keeps its syntax colours), then the grammar role.
                 var entry = presentation.LiteralPalette(language.GetKindName(tree.Kind(rule)), literal) is { } own ? Palette.Named(own)
+                    : presentation.ColorFromLowering && language.IsOperationWord(tree.Kind(rule), literal) ? Palette.Of(LiteralRole.Operation)
                     : language.GetLiteralRole(tree.Kind(rule), literal) is { } role ? Palette.Of(role) : null;
                 if (entry is not null) return (entry.Fallback ?? TokenType.Operator, entry.Name);
             }

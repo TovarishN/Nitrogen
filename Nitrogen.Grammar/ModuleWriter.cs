@@ -119,6 +119,13 @@ internal static class ModuleWriter
         foreach (var role in roles.OrderBy(r => locals[r.Key.Kind]).ThenBy(r => r.Key.Literal, StringComparer.Ordinal))
             b.Append($"        ({locals[role.Key.Kind]}, {CSharpText.Literal(role.Key.Literal)}) => global::Nitrogen.LiteralRole.{role.Value},\n");
         b.Append("        _ => null,\n    };\n\n");
+
+        var operations = LiteralRoles.Of(model, info, operations: true).Where(r => r.Value == GrammarLiteralRole.Operation)
+            .Select(r => r.Key).OrderBy(k => locals[k.Kind]).ThenBy(k => k.Literal, StringComparer.Ordinal).ToList();
+        if (operations.Count == 0) return;
+        b.Append("    public override bool IsOperationWord(int localKind, string literal) => (localKind, literal) switch\n    {\n");
+        foreach (var (kind, literal) in operations) b.Append($"        ({locals[kind]}, {CSharpText.Literal(literal)}) => true,\n");
+        b.Append("        _ => false,\n    };\n\n");
     }
 
     static void WriteListSlots(StringBuilder b, ModuleInfo info)

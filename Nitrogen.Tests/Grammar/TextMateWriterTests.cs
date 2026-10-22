@@ -63,11 +63,32 @@ public sealed class TextMateWriterTests
         PatternFor(Generate(PaletteGrammar), "keyword.other.palette", "hold");
     }
 
+    /// <summary>The context pattern (keyword, then what follows) that matches <paramref name="text"/>.</summary>
+    static JsonElement ContextPattern(JsonElement grammar, string text) =>
+        Assert.Single(grammar.GetProperty("patterns").EnumerateArray(), p => p.TryGetProperty("captures", out _)
+            && Regex.IsMatch(text, "^(?:" + p.GetProperty("match").GetString() + ")$"));
+
+    static string Capture(JsonElement pattern, int index) => pattern.GetProperty("captures").GetProperty(index.ToString()).GetProperty("name").GetString()!;
+
+    [Fact]
+    public void Reference_and_constant_context_patterns()
+    {
+        var grammar = Generate(PaletteGrammar);
+        var reference = ContextPattern(grammar, "use stand");
+        Assert.Equal("keyword.other.palette", Capture(reference, 1));
+        Assert.Equal("entity.name.type.class.palette", Capture(reference, 2));
+        var toggle = ContextPattern(grammar, "perturb on");
+        Assert.Equal("keyword.other.palette", Capture(toggle, 1));
+        Assert.Equal("constant.language.palette", Capture(toggle, 2));
+        var constant = ContextPattern(grammar, "anchored xz");
+        Assert.Equal("entity.name.function.palette", Capture(constant, 1));
+        Assert.Equal("constant.language.palette", Capture(constant, 2));
+    }
+
     [Fact]
     public void Declaration_name_pattern()
     {
-        var pattern = Assert.Single(Generate(PaletteGrammar).GetProperty("patterns").EnumerateArray(), p => p.TryGetProperty("captures", out _));
-        Assert.Matches(new Regex(pattern.GetProperty("match").GetString()!), "goal stand");
+        var pattern = ContextPattern(Generate(PaletteGrammar), "goal stand");
         Assert.Equal("storage.type.palette", pattern.GetProperty("captures").GetProperty("1").GetProperty("name").GetString());
         Assert.Equal("entity.name.type.class.palette", pattern.GetProperty("captures").GetProperty("2").GetProperty("name").GetString());
     }

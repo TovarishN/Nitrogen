@@ -112,6 +112,13 @@ public sealed unsafe class LoweredModule : SyntaxModule
         _ => null,
     };
 
+    public override bool IsOperationWord(int localKind, string literal) => (localKind, literal) switch
+    {
+        (10, "add") => true,
+        (11, "turn") => true,
+        _ => false,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lowered.File", "Lowered.Item", "Lowered.Input", "Lowered.Fixed", "Lowered.Plain", "Lowered.Statement", "Lowered.Value", "Lowered.Add", "Lowered.Turn", "Lowered.Wrap", "Lowered.Num", "Lowered.Ref" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

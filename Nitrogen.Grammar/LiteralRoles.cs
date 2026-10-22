@@ -47,6 +47,7 @@ internal static class LiteralRoles
                 declares: clauses.Any(c => c.Kind == BindingClauseKind.Declares),
                 arguments: operations && clauses.FirstOrDefault(c => c.Kind == BindingClauseKind.Lowers) is { } lowers
                     ? new HashSet<string>(lowers.Arguments.Select(a => a.Name), StringComparer.Ordinal) : null);
+            walker.Body = body is LabeledExpr labeled ? labeled.Inner : body;
             walker.Walk(body, first: true, inArgument: false, wordChoice: false);
         }
         return roles;
@@ -76,6 +77,9 @@ internal static class LiteralRoles
     {
         readonly HashSet<string> _inlining = new(StringComparer.Ordinal);
 
+        /// <summary>The rule's body without a label: a choice of words that is all of it is an enumeration (constants).</summary>
+        public Expr? Body { get; set; }
+
         /// <summary>Visits <paramref name="expr"/>; returns whether it can match empty input.</summary>
         public bool Walk(Expr expr, bool first, bool inArgument, bool wordChoice)
         {
@@ -95,9 +99,10 @@ internal static class LiteralRoles
                 case ChoiceExpr choice:
                 {
                     bool words = choice.Alternatives.Count >= 2 && choice.Alternatives.All(a => a is LiteralExpr l && IsWord(l.Value));
+                    bool whole = ReferenceEquals(choice, Body);
                     bool nullable = false;
                     foreach (var alternative in choice.Alternatives)
-                        nullable |= Walk(alternative, first, inArgument, words);
+                        nullable |= Walk(alternative, first && !(words && whole), inArgument, words);
                     return nullable;
                 }
                 case LabeledExpr labeled:

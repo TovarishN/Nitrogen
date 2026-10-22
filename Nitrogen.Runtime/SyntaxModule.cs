@@ -82,6 +82,12 @@ public abstract class SyntaxModule
     /// </summary>
     public virtual LiteralRole? GetLiteralRole(int localKind, string literal) => null;
 
+    /// <summary>
+    /// Whether <paramref name="literal"/> is a word of the operation this local kind's rule lowers to (outside its arguments):
+    /// what lowering colours as a function, known from the clause alone.
+    /// </summary>
+    public virtual bool IsOperationWord(int localKind, string literal) => false;
+
     public override string ToString() => Name;
 }
 

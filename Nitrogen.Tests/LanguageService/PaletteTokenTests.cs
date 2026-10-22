@@ -15,6 +15,7 @@ public sealed class PaletteTokenTests
         policy p
         anchored xz;
         hold (1) [2]
+        left
         """;
 
     static readonly Language PaletteLanguage = new LanguageBuilder().Add(PaletteModule.Instance).Build();
@@ -61,6 +62,16 @@ public sealed class PaletteTokenTests
         var tokens = Tokens(Source);
         Assert.Equal("modifierWord", PaletteAt(tokens, Source, "hold", 0));
         Assert.Equal("sectionKeyword", PaletteAt(tokens, Source, "hold", 1));
+    }
+
+    [Fact]
+    public void Lowered_rule_words_are_operations_without_runtime_lowering()
+    {
+        // Palette.Doc is undeclared, so nothing lowers at runtime: the lowers clause alone decides.
+        var tokens = Tokens(Source);
+        Assert.Equal("operationWord", PaletteAt(tokens, Source, "policy"));
+        Assert.Equal("operationWord", PaletteAt(tokens, Source, "anchored"));
+        Assert.Equal("constantWord", PaletteAt(tokens, Source, "left"));
     }
 
     [Fact]

@@ -92,23 +92,40 @@ internal static class TextMateWriter
             .Where(r => r.Value == role && LiteralRoles.IsWord(r.Key) == word && r.Key.Length > 0)
             .Select(r => r.Key).OrderByDescending(l => l.Length).ThenBy(l => l, StringComparer.Ordinal).ToList();
 
-        // `keyword Name` where a declaring rule starts with a word and then its declared field.
+        // The words an element is: one word literal, or a (labeled) choice of word literals; else null.
+        static List<string>? Words(Expr element)
+        {
+            var bare = element is LabeledExpr labeled ? labeled.Inner : element;
+            var words = bare is LiteralExpr literal ? [literal] : bare is ChoiceExpr choice ? choice.Alternatives.ToList() : [];
+            return words.Count > 0 && words.All(w => w is LiteralExpr l && LiteralRoles.IsWord(l.Value))
+                ? words.Cast<LiteralExpr>().Select(l => l.Value).ToList() : null;
+        }
+
+        // A rule that starts with a word (or a choice of words) paints what follows from what the grammar says it is: `keyword Name` for the field
+        // it declares or references (by the symbol kind's style), `keyword constant` for a choice of words.
         void DeclarationName(ModuleInfo info, KindInfo kind, IReadOnlyDictionary<(string Kind, string Literal), GrammarLiteralRole> moduleRoles)
         {
             var (body, clauses) = kind.Rule is SyntaxRule syntax ? (syntax.Body, syntax.Clauses)
                 : kind.Alternative is { } alternative ? (alternative.Body, alternative.Clauses) : (null, default);
-            if (clauses.FirstOrDefault(c => c.Kind == BindingClauseKind.Declares) is not { } declares) return;
-            if (body is not SequenceExpr { Items.Count: >= 2 } sequence
-                || sequence.Items[0] is not LiteralExpr keyword || !LiteralRoles.IsWord(keyword.Value)
-                || sequence.Items[1] is not LabeledExpr { Inner: ReferenceExpr field } labeled || labeled.Label != declares.Field)
-                return;
-            string name = Resolve(info.Module, field.Name) is { } fieldBody
-                ? TokenRegex.TryConvert(fieldBody, n => Resolve(info.Module, n)) ?? Identifier : Identifier;
-            var role = moduleRoles.TryGetValue((kind.Name, keyword.Value), out var r) ? r : GrammarLiteralRole.DeclarationKeyword;
-            string symbolScope = declares.Kinds.Count > 0 && options.DeclarationScopes.TryGetValue(declares.Kinds[0].Name, out var s)
-                ? s : options.DefaultDeclarationScope;
-            patterns.Add($"{{\"match\":{Json("\\b(" + TokenRegex.Escape(keyword.Value) + ")\\s+(" + name + ")")}," +
-                $"\"captures\":{{\"1\":{{\"name\":{Json(Scope(options.RoleScopes[role]))}}},\"2\":{{\"name\":{Json(Scope(symbolScope))}}}}}}}");
+            if (body is not SequenceExpr { Items.Count: >= 2 } sequence || Words(sequence.Items[0]) is not { } leads) return;
+            var second = sequence.Items[1];
+            string? follower = null, followerScope = null;
+            if (second is LabeledExpr { Inner: ReferenceExpr field } labeled
+                && clauses.FirstOrDefault(c => c.Kind is BindingClauseKind.Declares or BindingClauseKind.References && c.Field == labeled.Label) is { } binding)
+            {
+                follower = Resolve(info.Module, field.Name) is { } fieldBody
+                    ? TokenRegex.TryConvert(fieldBody, n => Resolve(info.Module, n)) ?? Identifier : Identifier;
+                followerScope = binding.Kinds.Count > 0 && options.DeclarationScopes.TryGetValue(binding.Kinds[0].Name, out var s) ? s : options.DefaultDeclarationScope;
+            }
+            else if (Words(second) is { } choice && moduleRoles.TryGetValue((kind.Name, choice[0]), out var choiceRole))
+            {
+                follower = string.Join("|", choice.Select(TokenRegex.Escape));
+                followerScope = options.RoleScopes[choiceRole];
+            }
+            if (follower is null || followerScope is null) return;
+            var role = moduleRoles.TryGetValue((kind.Name, leads[0]), out var r) ? r : GrammarLiteralRole.SectionKeyword;
+            patterns.Add($"{{\"match\":{Json("\\b(" + string.Join("|", leads.Select(TokenRegex.Escape)) + ")\\s+(" + follower + ")\\b")}," +
+                $"\"captures\":{{\"1\":{{\"name\":{Json(Scope(options.RoleScopes[role]))}}},\"2\":{{\"name\":{Json(Scope(followerScope))}}}}}}}");
         }
     }
 

@@ -23,6 +23,7 @@ public sealed class LiteralRolesTests
     [InlineData(nameof(PaletteModule.LHold), "hold", LiteralRole.SectionKeyword)]
     [InlineData(nameof(PaletteModule.LHold), "(", LiteralRole.Parenthesis)]
     [InlineData(nameof(PaletteModule.LHold), "[", LiteralRole.SquareBracket)]
+    [InlineData(nameof(PaletteModule.LSide), "left", LiteralRole.ConstantWord)]
     public void Roles_follow_grammar_shape(string kind, string literal, LiteralRole expected)
     {
         int local = (int)typeof(PaletteModule).GetField(kind)!.GetValue(null)!;
@@ -35,6 +36,16 @@ public sealed class LiteralRolesTests
         // Lowered HIR colours operation words in the server; the generated table stays positional.
         Assert.Equal(LiteralRole.SectionKeyword, Role(PaletteModule.LAnchor, "anchored"));
         Assert.Equal(LiteralRole.ConstantWord, Role(PaletteModule.LAnchor, "xyz"));
+    }
+
+    [Fact]
+    public void Operation_words_are_the_lowered_rule_words_outside_arguments()
+    {
+        Assert.True(PaletteModule.Instance.IsOperationWord(PaletteModule.LAnchor, "anchored"));
+        Assert.True(PaletteModule.Instance.IsOperationWord(PaletteModule.LDoc, "policy"));
+        Assert.False(PaletteModule.Instance.IsOperationWord(PaletteModule.LAnchor, "xz"));
+        Assert.False(PaletteModule.Instance.IsOperationWord(PaletteModule.LTrain, "train"));
+        Assert.False(PaletteModule.Instance.IsOperationWord(PaletteModule.LSide, "left"));
     }
 
     [Fact]

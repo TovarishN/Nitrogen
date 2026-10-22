@@ -53,6 +53,10 @@ public sealed unsafe partial class Language
     public LiteralRole? GetLiteralRole(int kind, string literal) =>
         SyntaxKinds.ModuleOf(kind) == 0 ? null : ModuleById(SyntaxKinds.ModuleOf(kind))?.GetLiteralRole(SyntaxKinds.LocalOf(kind), literal);
 
+    /// <summary>Whether <paramref name="literal"/> is an operation word under a <paramref name="kind"/> node (<see cref="SyntaxModule.IsOperationWord"/>).</summary>
+    public bool IsOperationWord(int kind, string literal) =>
+        SyntaxKinds.ModuleOf(kind) != 0 && (ModuleById(SyntaxKinds.ModuleOf(kind))?.IsOperationWord(SyntaxKinds.LocalOf(kind), literal) ?? false);
+
     public ExtensionPoint GetExtensionPoint(ExtensionPointDecl decl) =>
         (uint)decl.GlobalId < (uint)_points.Length && _points[decl.GlobalId] is { } point
             ? point
