@@ -138,6 +138,20 @@ public class LspServerTests
     }
 
     [Fact]
+    public async Task Semantic_tokens_are_null_for_a_document_of_no_known_language()
+    {
+        // VS Code takes the first non-null result among equally scored providers: an empty one would hide another extension's colors.
+        using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+        var (_, messages, _) = await Session(service,
+            Initialize, DidOpen("file:///w/a.policy", 1, "goal stand_up { }"),
+            """{"jsonrpc":"2.0","id":2,"method":"textDocument/semanticTokens/full","params":{"textDocument":{"uri":"file:///w/a.policy"}}}""",
+            Shutdown, Exit);
+
+        var result = messages.Single(m => m.TryGetProperty("id", out var id) && id.GetInt32() == 2).GetProperty("result");
+        Assert.Equal(JsonValueKind.Null, result.ValueKind);
+    }
+
+    [Fact]
     public async Task Navigation_and_rename_over_the_protocol()
     {
         using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
