@@ -38,4 +38,5 @@ For a new frame-aware geometry capability, first search existing exports. If abs
 - For `.ngr` changes, inspect `Nitrogen.Grammar`, `Nitrogen.Generator`, and `Nitrogen.Ngr`. Generated C# is build output; edit the grammar or generator.
 - For parsing or semantics, use `Nitrogen.Runtime` APIs and preserve existing behavior unless the task calls for a migration.
 - For editor behavior, trace `Nitrogen.Workspace`, `Nitrogen.LanguageService`, `Nitrogen.Cli`, and `editors/vscode` as applicable.
+- For coloring (semantic tokens, the TextMate palette, generated or hand-written TextMate grammars), also run `eng/check-palette.sh` after `npm ci` in `editors/vscode`; it compares the server's tokens with the TextMate grammars scope by scope.
 - Verify core changes with `dotnet build Nitrogen.slnx` and `dotnet test Nitrogen.Tests/Nitrogen.Tests.csproj`. Keep build/test results distinct from validation of a particular DSL program.
