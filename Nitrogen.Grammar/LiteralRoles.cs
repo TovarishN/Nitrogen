@@ -26,8 +26,12 @@ public enum GrammarLiteralRole
 /// </summary>
 internal static class LiteralRoles
 {
-    /// <summary>Each (kind, literal) of <paramref name="info"/>'s kinds → its role; the earliest occurrence decides.</summary>
-    public static IReadOnlyDictionary<(string Kind, string Literal), GrammarLiteralRole> Of(EmitModel model, ModuleInfo info)
+    /// <summary>
+    /// Each (kind, literal) of <paramref name="info"/>'s kinds → its role; the earliest occurrence decides. Without
+    /// <paramref name="operations"/>, a lowered rule's words keep their positional role: the server colours operation
+    /// words from lowered HIR, which a language may turn off, while a TextMate grammar can only read the clause.
+    /// </summary>
+    public static IReadOnlyDictionary<(string Kind, string Literal), GrammarLiteralRole> Of(EmitModel model, ModuleInfo info, bool operations)
     {
         var roles = new Dictionary<(string Kind, string Literal), GrammarLiteralRole>();
         foreach (var kind in info.Kinds)
@@ -41,7 +45,7 @@ internal static class LiteralRoles
             if (body is null) continue;
             var walker = new Walker(model, module, implicitModule, kind.Name, roles,
                 declares: clauses.Any(c => c.Kind == BindingClauseKind.Declares),
-                arguments: clauses.FirstOrDefault(c => c.Kind == BindingClauseKind.Lowers) is { } lowers
+                arguments: operations && clauses.FirstOrDefault(c => c.Kind == BindingClauseKind.Lowers) is { } lowers
                     ? new HashSet<string>(lowers.Arguments.Select(a => a.Name), StringComparer.Ordinal) : null);
             walker.Walk(body, first: true, inArgument: false, wordChoice: false);
         }

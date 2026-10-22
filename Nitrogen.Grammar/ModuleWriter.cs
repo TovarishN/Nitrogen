@@ -112,7 +112,7 @@ internal static class ModuleWriter
     /// <summary>The TextMate palette's role of each literal under each kind (<see cref="LiteralRoles"/>).</summary>
     static void WriteLiteralRoles(StringBuilder b, EmitModel model, ModuleInfo info)
     {
-        var roles = LiteralRoles.Of(model, info);
+        var roles = LiteralRoles.Of(model, info, operations: false);
         if (roles.Count == 0) return;
         var locals = info.Kinds.ToDictionary(k => k.Name, k => k.Local, StringComparer.Ordinal);
         b.Append("    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch\n    {\n");

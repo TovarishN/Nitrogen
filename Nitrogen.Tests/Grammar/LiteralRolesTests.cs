@@ -18,7 +18,7 @@ public sealed class LiteralRolesTests
     [InlineData(nameof(PaletteModule.LStep), "..", LiteralRole.Operator)]
     [InlineData(nameof(PaletteModule.LStep), ",", LiteralRole.Separator)]
     [InlineData(nameof(PaletteModule.LStep), "kg", LiteralRole.ConstantWord)]
-    [InlineData(nameof(PaletteModule.LDoc), "policy", LiteralRole.Operation)]
+    [InlineData(nameof(PaletteModule.LDoc), "policy", LiteralRole.SectionKeyword)]
     [InlineData(nameof(PaletteModule.LAnchor), "xz", LiteralRole.ConstantWord)]
     [InlineData(nameof(PaletteModule.LHold), "hold", LiteralRole.SectionKeyword)]
     [InlineData(nameof(PaletteModule.LHold), "(", LiteralRole.Parenthesis)]
@@ -30,9 +30,10 @@ public sealed class LiteralRolesTests
     }
 
     [Fact]
-    public void Argument_words_of_a_lowered_rule_are_not_operations()
+    public void Lowered_rule_words_keep_their_position_at_runtime()
     {
-        Assert.Equal(LiteralRole.Operation, Role(PaletteModule.LAnchor, "anchored"));
+        // Lowered HIR colours operation words in the server; the generated table stays positional.
+        Assert.Equal(LiteralRole.SectionKeyword, Role(PaletteModule.LAnchor, "anchored"));
         Assert.Equal(LiteralRole.ConstantWord, Role(PaletteModule.LAnchor, "xyz"));
     }
 
