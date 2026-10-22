@@ -43,14 +43,15 @@ internal sealed partial class NgrAssist : ILanguageAssist
     public IEnumerable<AssistToken> Tokens(AssistDocument document)
     {
         foreach (var name in Names(document))
-            yield return new AssistToken(name.Span, name.Role switch
+            yield return name.Role switch
             {
-                Role.Operation => TokenType.Function,
-                Role.Type => TokenType.Type,
-                Role.Field => TokenType.Parameter,
-                _ => TokenType.Property,
-            });
-        foreach (var label in Labels(document.Tree)) yield return new AssistToken(label, TokenType.Parameter);
+                Role.Operation => new AssistToken(name.Span, TokenType.Function, Palette.Ngr("entity.name.function.call")),
+                Role.Type => new AssistToken(name.Span, TokenType.Type, Palette.Ngr("entity.name.type.qualified")),
+                Role.Field => new AssistToken(name.Span, TokenType.Parameter),
+                _ => new AssistToken(name.Span, TokenType.Property),
+            };
+        foreach (var label in Labels(document.Tree)) yield return new AssistToken(label, TokenType.Parameter, Palette.Ngr("variable.other.member.label"));
+        foreach (var token in TokenRuleNames(document.Tree)) yield return new AssistToken(token, TokenType.Type, Palette.Ngr("entity.name.type.token"));
     }
 
     public IEnumerable<AssistDiagnostic> Diagnostics(AssistDocument document)
@@ -212,6 +213,15 @@ internal sealed partial class NgrAssist : ILanguageAssist
     }
 
     /// <summary>The labels of the grammar's elements (<c>Width:Dimension</c>), which clauses pass as fields.</summary>
+    /// <summary>The declared names of token rules (<c>token Name = …</c>), which ngr.tmLanguage.json paints as token types.</summary>
+    static IEnumerable<TextSpan> TokenRuleNames(SyntaxTree tree)
+    {
+        for (int node = 0; node < tree.NodeCount; node++)
+            if (tree.Kind(node) == NitrogenKinds.TokenRule && tree.ChildCount(node) > 1 && tree.Child(node, 1) is var name and not SyntaxTree.NoNode
+                && tree.Kind(name) == NitrogenKinds.Identifier && tree.Span(name).Length > 0)
+                yield return tree.Span(name);
+    }
+
     static IEnumerable<TextSpan> Labels(SyntaxTree tree)
     {
         for (int node = 0; node < tree.NodeCount; node++)

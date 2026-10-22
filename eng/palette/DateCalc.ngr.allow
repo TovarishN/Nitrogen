@@ -1,0 +1,7 @@
+# `operation? Selected(Arg)`: the server resolves Selected as a property; ngr.tmLanguage.json can only guess a call.
+55:103
+61:119
+72:81
+78:81
+84:81
+90:81

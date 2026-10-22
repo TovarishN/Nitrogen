@@ -17,7 +17,8 @@ public enum ServiceSeverity
 public sealed record ServiceDiagnostic(DocumentRange Range, ServiceSeverity Severity, string Code, string Message, string Source = "nitrogen", IReadOnlyList<DocumentLocation>? Related = null);
 
 /// <summary>One coloured stretch of a single line.</summary>
-public readonly record struct SemanticToken(DocumentPosition Start, int Length, TokenType Type, TokenModifiers Modifiers);
+/// <param name="Palette">The <see cref="Nitrogen.LanguageService.Palette"/> entry an opted-in client sees; null: <paramref name="Type"/>.</param>
+public readonly record struct SemanticToken(DocumentPosition Start, int Length, TokenType Type, TokenModifiers Modifiers, string? Palette = null);
 
 /// <summary>An outline entry: a declaration, its declaring node's range, its name's range, and the declarations inside it.</summary>
 public sealed record OutlineSymbol(string Name, string Kind, OutlineKind Outline, DocumentRange Range, DocumentRange SelectionRange,

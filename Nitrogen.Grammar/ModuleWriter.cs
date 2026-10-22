@@ -57,6 +57,7 @@ internal static class ModuleWriter
             b.Append($"        {CSharpText.Literal(rule.Name)} => {CSharpText.Identifier(rule.Name)},\n");
         b.Append("        _ => null,\n    };\n\n");
         WriteListSlots(b, info);
+        WriteLiteralRoles(b, model, info);
         QuotationWriter.Write(b, model, info);
         BindingWriter.Write(b, info);
         QuoteHelperWriter.Write(b, model, info);
@@ -108,6 +109,25 @@ internal static class ModuleWriter
     /// <c>IsListSlot</c>: the child slots that hold a list (<c>X*</c>, <c>X+</c>, <c>(X; S)*</c>), so
     /// generic tree walkers can tell a one-item list, which is its item, from a plain child.
     /// </summary>
+    /// <summary>The TextMate palette's role of each literal under each kind (<see cref="LiteralRoles"/>).</summary>
+    static void WriteLiteralRoles(StringBuilder b, EmitModel model, ModuleInfo info)
+    {
+        var roles = LiteralRoles.Of(model, info, operations: false);
+        if (roles.Count == 0) return;
+        var locals = info.Kinds.ToDictionary(k => k.Name, k => k.Local, StringComparer.Ordinal);
+        b.Append("    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch\n    {\n");
+        foreach (var role in roles.OrderBy(r => locals[r.Key.Kind]).ThenBy(r => r.Key.Literal, StringComparer.Ordinal))
+            b.Append($"        ({locals[role.Key.Kind]}, {CSharpText.Literal(role.Key.Literal)}) => global::Nitrogen.LiteralRole.{role.Value},\n");
+        b.Append("        _ => null,\n    };\n\n");
+
+        var operations = LiteralRoles.Of(model, info, operations: true).Where(r => r.Value == GrammarLiteralRole.Operation)
+            .Select(r => r.Key).OrderBy(k => locals[k.Kind]).ThenBy(k => k.Literal, StringComparer.Ordinal).ToList();
+        if (operations.Count == 0) return;
+        b.Append("    public override bool IsOperationWord(int localKind, string literal) => (localKind, literal) switch\n    {\n");
+        foreach (var (kind, literal) in operations) b.Append($"        ({locals[kind]}, {CSharpText.Literal(literal)}) => true,\n");
+        b.Append("        _ => false,\n    };\n\n");
+    }
+
     static void WriteListSlots(StringBuilder b, ModuleInfo info)
     {
         var cases = new List<string>();

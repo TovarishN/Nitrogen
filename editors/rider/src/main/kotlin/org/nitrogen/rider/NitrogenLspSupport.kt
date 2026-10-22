@@ -29,6 +29,7 @@ class NitrogenLspSupport : LspIntegrationProvider {
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "Nitrogen") {
         override fun isSupportedFile(file: VirtualFile): Boolean = file.extension == "ngr"
         override fun createCommandLine(): GeneralCommandLine = commandLine()
+        override fun createInitializationOptions(): Any = mapOf("paletteTokens" to true)
         override val lspCustomization: LspCustomization = NitrogenCustomization()
     }
 }

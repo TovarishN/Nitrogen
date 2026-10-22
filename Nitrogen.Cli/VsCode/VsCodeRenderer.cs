@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Nitrogen.LanguageService;
 
 namespace Nitrogen.Cli;
 
@@ -34,6 +35,7 @@ internal static class VsCodeRenderer
                 ["src/csharpStrings.ts"] = Resource("vscode/csharpStrings.ts"),
                 ["src/signatureDocuments.ts"] = Resource("vscode/signatureDocuments.ts"),
                 ["src/signatureRouting.ts"] = Resource("vscode/signatureRouting.ts"),
+                [$"syntaxes/{ExtensionName(model)}.tmLanguage.json"] = TextMateGrammar(model),
             };
             foreach (var (relative, content) in files)
             {
@@ -71,6 +73,11 @@ internal static class VsCodeRenderer
         return Encoding.UTF8.GetString(stream.ToArray()) + "\n";
     }
 
+    /// <summary>The language's TextMate grammar (scope <c>source.&lt;extension name&gt;</c>), painted with the server's palette.</summary>
+    static string TextMateGrammar(LanguagePluginModel model) =>
+        TextMateCommand.Generate(model, ExtensionName(model), out var diagnostics)
+        ?? throw new ArgumentException("the grammars do not compile: " + string.Join("; ", diagnostics.Select(d => d.Diagnostic.ToString())));
+
     static string PackageJson(LanguagePluginModel model)
     {
         var template = JsonNode.Parse(Resource("vscode/package.json"))!;
@@ -95,6 +102,14 @@ internal static class VsCodeRenderer
                     ["extensions"] = extensions,
                     ["configuration"] = "./language-configuration.json",
                 }, new JsonObject { ["id"] = "nitrogen-signature", ["aliases"] = new JsonArray("Nitrogen signed program") }, new JsonObject { ["id"] = "ngr", ["aliases"] = new JsonArray("Nitrogen grammar"), ["extensions"] = new JsonArray(".ngr") }),
+                ["grammars"] = new JsonArray(new JsonObject
+                {
+                    ["language"] = name,
+                    ["scopeName"] = "source." + name,
+                    ["path"] = $"./syntaxes/{name}.tmLanguage.json",
+                }),
+                ["semanticTokenTypes"] = Palette.VsCodeContributions()["semanticTokenTypes"]!.DeepClone(),
+                ["semanticTokenScopes"] = Palette.VsCodeContributions()["semanticTokenScopes"]!.DeepClone(),
                 ["configuration"] = new JsonObject
                 {
                     ["title"] = model.DisplayName,
@@ -250,7 +265,7 @@ export async function activate(context: ExtensionContext): Promise<void> {
   const clientOptions: LanguageClientOptions = {
     documentSelector: [{ scheme: 'file', language: LANGUAGE }, { scheme: 'untitled', language: LANGUAGE }, ...csharpSelector, ...(signatureOwner ? [{ scheme: 'file', pattern: '**/*' }, { scheme: 'file', language: 'nitrogen-signature' }, { scheme: 'untitled' }] : [])],
     middleware: routing.middleware(strings.middleware, document => signatureOwner && (document.uri.scheme === 'file' || document.uri.scheme === 'untitled') || document.languageId === LANGUAGE || document.languageId === 'csharp' || document.languageId === 'nitrogen-signature' || document.languageId === 'ngr'),
-    initializationOptions: { signatureDocuments: signatureOwner },
+    initializationOptions: { signatureDocuments: signatureOwner, paletteTokens: true },
     synchronize: watcher ? { fileEvents: watcher } : undefined,
   };
   client = new LanguageClient(LANGUAGE, DISPLAY, serverOptions, clientOptions);

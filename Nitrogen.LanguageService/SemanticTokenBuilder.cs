@@ -23,24 +23,28 @@ internal static class SemanticTokenBuilder
         var binding = project[document.Uri];
 
         // Name spans by start; a declaration wins over a reference on the same name.
-        var names = new Dictionary<int, (int End, TokenType Type, TokenModifiers Modifiers)>();
+        var names = new Dictionary<int, (int End, TokenType Type, TokenModifiers Modifiers, string? Palette)>();
         foreach (var reference in binding.References)
         {
             if (!project.IsEffective(reference)) continue;
             var resolved = project.Resolve(reference);
             if (resolved.Count == 0) continue;
             var symbol = resolved[0];
-            names[reference.NameSpan.Start] = (reference.NameSpan.End, presentation.StyleOf(symbol.Kind).Token,
-                symbol.IsBuiltin ? TokenModifiers.DefaultLibrary : TokenModifiers.None);
+            var style = presentation.StyleOf(symbol.Kind);
+            names[reference.NameSpan.Start] = (reference.NameSpan.End, style.Token,
+                symbol.IsBuiltin ? TokenModifiers.DefaultLibrary : TokenModifiers.None, style.Palette);
         }
         foreach (var declaration in binding.Declarations)
-            names[declaration.NameSpan.Start] = (declaration.NameSpan.End, presentation.StyleOf(declaration.Kind).Token, TokenModifiers.Declaration);
+        {
+            var style = presentation.StyleOf(declaration.Kind);
+            names[declaration.NameSpan.Start] = (declaration.NameSpan.End, style.Token, TokenModifiers.Declaration, style.Palette);
+        }
 
         var hir = Lowered(document, lowered ?? []);
         var assistedStarts = new HashSet<int>();
         foreach (var token in assisted ?? [])
         {
-            hir[token.Span.Start] = (token.Span.End, token.Type); // the language knows best
+            hir[token.Span.Start] = (token.Span.End, token.Type, token.Palette); // the language knows best
             assistedStarts.Add(token.Span.Start);
         }
 
@@ -53,29 +57,30 @@ internal static class SemanticTokenBuilder
             if (kind is SyntaxKinds.Empty or SyntaxKinds.List || (tree.Flags(node) & NodeFlags.Missing) != 0) continue;
             var span = tree.Span(node);
             if (span.Length == 0 || span.Start < covered) continue;
-            if (names.TryGetValue(span.Start, out var name))
+            // Language assistance first (precedence level 1), then names.
+            if (names.TryGetValue(span.Start, out var name) && !assistedStarts.Contains(span.Start))
             {
-                Add(tokens, document.Lines, span.Start, name.End, name.Type, name.Modifiers);
+                Add(tokens, document.Lines, span.Start, name.End, name.Type, name.Modifiers, name.Palette);
                 covered = name.End;
                 continue;
             }
-            var lexical = Classify(tree, kind, text, span);
+            var lexical = Classify(tree, presentation, node, kind, text, span);
             // Literal spelling survives incidental AST/list/text wrappers. Explicit type styles and
             // language assistance remain authoritative; ordinary lowering never guesses a number.
             // An assisted token may colour the start of a leaf, such as the name of a call head `Name(`.
             if (hir.TryGetValue(span.Start, out var meaning) && (meaning.End == span.End || assistedStarts.Contains(span.Start) && meaning.End < span.End))
             {
-                Add(tokens, document.Lines, span.Start, meaning.End, meaning.Type, TokenModifiers.None);
+                Add(tokens, document.Lines, span.Start, meaning.End, meaning.Type, TokenModifiers.None, meaning.Palette);
                 covered = meaning.End;
                 continue;
             }
-            if (lexical is { } type)
+            if (lexical is var (type, palette))
             {
-                Add(tokens, document.Lines, span.Start, span.End, type, TokenModifiers.None);
+                Add(tokens, document.Lines, span.Start, span.End, type, TokenModifiers.None, palette);
                 covered = span.End;
             }
         }
-        foreach (var trivia in tree.Trivia) Comments(tokens, document.Lines, text, trivia);
+        foreach (var trivia in tree.Trivia) Comments(tokens, document.Lines, text, trivia, presentation.CommentPalette);
         tokens.Sort((a, b) => a.Start.Line != b.Start.Line ? a.Start.Line.CompareTo(b.Start.Line) : a.Start.Character.CompareTo(b.Start.Character));
         return tokens;
     }
@@ -85,9 +90,9 @@ internal static class SemanticTokenBuilder
     /// arguments) are functions. Explicit type styles and scalar constants colour a single token;
     /// structural nodes do not guess a value colour.
     /// </summary>
-    static Dictionary<int, (int End, TokenType Type)> Lowered(Document document, IReadOnlyList<HirNode> roots)
+    static Dictionary<int, (int End, TokenType Type, string? Palette)> Lowered(Document document, IReadOnlyList<HirNode> roots)
     {
-        var meanings = new Dictionary<int, (int End, TokenType Type)>();
+        var meanings = new Dictionary<int, (int End, TokenType Type, string? Palette)>();
         if (roots.Count == 0) return meanings;
         var tree = document.Parsed.Tree;
         string text = document.Text;
@@ -113,7 +118,7 @@ internal static class SemanticTokenBuilder
             for (int i = low; i < leaves.Count && leaves[i].Span.End <= outer.End; i++) yield return leaves[i];
         }
 
-        void Mark(TextSpan span, TokenType type) => meanings.TryAdd(span.Start, (span.End, type));
+        void Mark(TextSpan span, TokenType type, string? palette = null) => meanings.TryAdd(span.Start, (span.End, type, palette));
 
         IEnumerable<TextSpan> Here(HirNode node) => node.Origins.Where(o => o.Path == document.Uri).Select(o => o.Span);
 
@@ -134,7 +139,7 @@ internal static class SemanticTokenBuilder
                     var arguments = operation.Arguments.SelectMany(Here).ToList();
                     foreach (var leaf in inside)
                         if (leaf.Literal && leaf.Word && !arguments.Any(a => a.Start <= leaf.Span.Start && leaf.Span.End <= a.End))
-                            Mark(leaf.Span, TokenType.Function);
+                            Mark(leaf.Span, TokenType.Function, "operationWord");
                 }
             }
             switch (node)
@@ -159,27 +164,45 @@ internal static class SemanticTokenBuilder
         return meanings;
     }
 
-    static TokenType? Classify(SyntaxTree tree, int kind, string text, TextSpan span)
+    /// <summary>
+    /// A literal's palette entry from its role in the nearest rule node above it (lists and groups have none), else
+    /// today's lexical class: words are keywords, other literals operators, number- and string-like tokens by rule name.
+    /// </summary>
+    static (TokenType Type, string? Palette)? Classify(SyntaxTree tree, Presentation presentation, int node, int kind, string text, TextSpan span)
     {
-        if (kind == SyntaxKinds.Literal) return IsWord(text.AsSpan(span.Start, span.Length)) ? TokenType.Keyword : TokenType.Operator;
+        if (kind == SyntaxKinds.Literal)
+        {
+            int rule = tree.Parent(node);
+            while (rule >= 0 && tree.Kind(rule) is SyntaxKinds.List or SyntaxKinds.Group) rule = tree.Parent(rule);
+            string literal = text.Substring(span.Start, span.Length);
+            if (rule >= 0 && tree.Language is { } language)
+            {
+                // The language's own choice for this literal in this rule, then the lowers clause (lowering colours operation
+                // words, unless the language keeps its syntax colours), then the grammar role.
+                var entry = presentation.LiteralPalette(language.GetKindName(tree.Kind(rule)), literal) is { } own ? Palette.Named(own)
+                    : presentation.ColorFromLowering && language.IsOperationWord(tree.Kind(rule), literal) ? Palette.Of(LiteralRole.Operation)
+                    : language.GetLiteralRole(tree.Kind(rule), literal) is { } role ? Palette.Of(role) : null;
+                if (entry is not null) return (entry.Fallback ?? TokenType.Operator, entry.Name);
+            }
+            return (IsWord(text.AsSpan(span.Start, span.Length)) ? TokenType.Keyword : TokenType.Operator, null);
+        }
         if (SyntaxKinds.ModuleOf(kind) == 0 || tree.Language is null) return null;
-        string rule = tree.Language.GetKindName(kind);
-        if (rule.Contains("Number", StringComparison.Ordinal) || rule.Contains("Digit", StringComparison.Ordinal)
-            || rule.Contains("Integer", StringComparison.Ordinal)) return TokenType.Number;
-        if (rule.Contains("String", StringComparison.Ordinal) || rule.Contains("Char", StringComparison.Ordinal)) return TokenType.String;
+        string name = tree.Language.GetKindName(kind);
+        if (presentation.TokenPalette(name) is { } tokenPalette)
+        {
+            var entry = Palette.Named(tokenPalette);
+            return (entry.Fallback ?? TokenType.Operator, entry.Name);
+        }
+        if (name.Contains("Number", StringComparison.Ordinal) || name.Contains("Digit", StringComparison.Ordinal)
+            || name.Contains("Integer", StringComparison.Ordinal)) return (TokenType.Number, null);
+        if (name.Contains("String", StringComparison.Ordinal) || name.Contains("Char", StringComparison.Ordinal)) return (TokenType.String, null);
         return null;
     }
 
-    internal static bool IsWord(ReadOnlySpan<char> text)
-    {
-        if (text.IsEmpty || !(char.IsLetter(text[0]) || text[0] == '_')) return false;
-        foreach (char c in text)
-            if (!(char.IsLetterOrDigit(c) || c == '_')) return false;
-        return true;
-    }
+    internal static bool IsWord(ReadOnlySpan<char> text) => SyntaxKinds.IsWordText(text);
 
     /// <summary><c>//</c> to the end of the line and <c>/* … */</c> inside one trivia span.</summary>
-    static void Comments(List<SemanticToken> tokens, LineMap lines, string text, TextSpan trivia)
+    static void Comments(List<SemanticToken> tokens, LineMap lines, string text, TextSpan trivia, (string Line, string Block)? palette)
     {
         int i = trivia.Start, end = trivia.End;
         while (i < end - 1)
@@ -188,14 +211,14 @@ internal static class SemanticTokenBuilder
             {
                 int stop = i;
                 while (stop < end && text[stop] != '\n' && text[stop] != '\r') stop++;
-                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None);
+                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None, palette?.Line);
                 i = stop;
             }
             else if (text[i] == '/' && text[i + 1] == '*')
             {
                 int close = text.IndexOf("*/", i + 2, end - i - 2, StringComparison.Ordinal);
                 int stop = close < 0 ? end : close + 2;
-                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None);
+                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None, palette?.Block);
                 i = stop;
             }
             else
@@ -206,7 +229,7 @@ internal static class SemanticTokenBuilder
     }
 
     /// <summary>Adds [start, end) as one token per line it touches.</summary>
-    static void Add(List<SemanticToken> tokens, LineMap lines, int start, int end, TokenType type, TokenModifiers modifiers)
+    static void Add(List<SemanticToken> tokens, LineMap lines, int start, int end, TokenType type, TokenModifiers modifiers, string? palette = null)
     {
         var from = lines.PositionOf(start);
         var to = lines.PositionOf(end);
@@ -214,7 +237,7 @@ internal static class SemanticTokenBuilder
         {
             int first = line == from.Line ? from.Character : 0;
             int last = line == to.Line ? to.Character : lines.LineLength(line);
-            if (last > first) tokens.Add(new SemanticToken(new DocumentPosition(line, first), last - first, type, modifiers));
+            if (last > first) tokens.Add(new SemanticToken(new DocumentPosition(line, first), last - first, type, modifiers, palette));
         }
     }
 }

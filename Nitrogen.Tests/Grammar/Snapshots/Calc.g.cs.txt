@@ -77,6 +77,23 @@ public sealed unsafe class CalcModule : SyntaxModule
         _ => false,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (4, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (4, "=") => global::Nitrogen.LiteralRole.Operator,
+        (5, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (8, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (8, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (8, ",") => global::Nitrogen.LiteralRole.Separator,
+        (9, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (9, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (10, "-") => global::Nitrogen.LiteralRole.Operator,
+        (11, "+") => global::Nitrogen.LiteralRole.Operator,
+        (12, "-") => global::Nitrogen.LiteralRole.Operator,
+        (13, "*") => global::Nitrogen.LiteralRole.Operator,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Program", "Calc.Statement", "Calc.Assign", "Calc.ExprStatement", "Calc.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

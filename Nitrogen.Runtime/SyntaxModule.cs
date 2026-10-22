@@ -76,6 +76,18 @@ public abstract class SyntaxModule
     /// </summary>
     public virtual bool IsListSlot(int localKind, int slot) => false;
 
+    /// <summary>
+    /// The role of the Literal leaf <paramref name="literal"/> under a node of this local kind (the TextMate palette),
+    /// or null when the kind's rule has no such literal.
+    /// </summary>
+    public virtual LiteralRole? GetLiteralRole(int localKind, string literal) => null;
+
+    /// <summary>
+    /// Whether <paramref name="literal"/> is a word of the operation this local kind's rule lowers to (outside its arguments):
+    /// what lowering colours as a function, known from the clause alone.
+    /// </summary>
+    public virtual bool IsOperationWord(int localKind, string literal) => false;
+
     public override string ToString() => Name;
 }
 

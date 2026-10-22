@@ -77,7 +77,8 @@ public sealed record ChangeAnnotationSupport(bool? GroupsOnLabel = null);
 public sealed record ClientCapabilities(WorkspaceClientCapabilities? Workspace);
 
 /// <param name="SkipLanguages">Languages, by name or extension without the dot, whose tagged C# strings this server leaves to another (an editor plugin that carries the language).</param>
-public sealed record InitializationOptions(string[]? SkipLanguages, bool SignatureDocuments = true, bool GrammarExtraction = false);
+/// <param name="PaletteTokens">The client colours <see cref="Palette"/> token types by their scopes.</param>
+public sealed record InitializationOptions(string[]? SkipLanguages, bool SignatureDocuments = true, bool GrammarExtraction = false, bool PaletteTokens = false);
 
 public sealed record InitializeParams(string? RootUri, WorkspaceFolder[]? WorkspaceFolders, ClientCapabilities? Capabilities = null,
     InitializationOptions? InitializationOptions = null);

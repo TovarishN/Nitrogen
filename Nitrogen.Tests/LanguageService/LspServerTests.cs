@@ -102,15 +102,45 @@ public class LspServerTests
     [Fact]
     public void Tokens_are_encoded_relative_to_the_previous_one()
     {
-        var data = SemanticTokenEncoding.Encode(new[]
+        var data = SemanticTokenEncoding.Encode(palette: false, tokens: new[]
         {
             new SemanticToken(new(0, 0), 7, TokenType.Comment, TokenModifiers.None),
             new SemanticToken(new(1, 0), 4, TokenType.Keyword, TokenModifiers.None),
             new SemanticToken(new(1, 5), 1, TokenType.Class, TokenModifiers.Declaration),
         });
         Assert.Equal(new[] { 0, 0, 7, (int)TokenType.Comment, 0, 1, 0, 4, (int)TokenType.Keyword, 0, 0, 5, 1, (int)TokenType.Class, 1 }, data);
-        Assert.Equal("enumMember", SemanticTokenEncoding.Legend.TokenTypes[(int)TokenType.EnumMember]);
-        Assert.Equal(new[] { "declaration", "defaultLibrary" }, SemanticTokenEncoding.Legend.TokenModifiers);
+        Assert.Equal("enumMember", SemanticTokenEncoding.Legend(palette: false).TokenTypes[(int)TokenType.EnumMember]);
+        Assert.Equal(new[] { "declaration", "defaultLibrary" }, SemanticTokenEncoding.Legend(palette: false).TokenModifiers);
+    }
+
+    [Fact]
+    public async Task Palette_legend_only_for_opted_in_clients()
+    {
+        using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+        var (_, plain, _) = await Session(service, Initialize, Shutdown, Exit);
+        var types = plain[0].GetProperty("result").GetProperty("capabilities").GetProperty("semanticTokensProvider").GetProperty("legend").GetProperty("tokenTypes");
+        Assert.Equal(22, types.GetArrayLength());
+
+        using var opted = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+        var (_, messages, _) = await Session(opted,
+            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"initializationOptions":{"paletteTokens":true}}}""", Shutdown, Exit);
+        var paletteTypes = messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("semanticTokensProvider").GetProperty("legend").GetProperty("tokenTypes");
+        Assert.Equal(22 + Palette.Entries.Count, paletteTypes.GetArrayLength());
+        Assert.Equal("operationWord", paletteTypes[22].GetString());
+    }
+
+    [Fact]
+    public void Unaware_client_gets_fallback_types()
+    {
+        var tokens = new[]
+        {
+            new SemanticToken(new(0, 0), 4, TokenType.Keyword, TokenModifiers.None, "declarationKeyword"),
+            new SemanticToken(new(0, 5), 1, TokenType.Operator, TokenModifiers.None, "blockBracket"),
+        };
+        Assert.Equal(new[] { 0, 0, 4, (int)TokenType.Keyword, 0 }, SemanticTokenEncoding.Encode(tokens, palette: false));
+        int keyword = 22 + Palette.Entries.ToList().FindIndex(e => e.Name == "declarationKeyword");
+        int bracket = 22 + Palette.Entries.ToList().FindIndex(e => e.Name == "blockBracket");
+        Assert.Equal(new[] { 0, 0, 4, keyword, 0, 0, 5, 1, bracket, 0 }, SemanticTokenEncoding.Encode(tokens, palette: true));
     }
 
     [Fact]

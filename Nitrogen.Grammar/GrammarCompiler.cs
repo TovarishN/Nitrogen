@@ -24,9 +24,28 @@ public static class GrammarCompiler
     public static GrammarCompileResult CompileQuotationSyntax(IEnumerable<GrammarInput> inputs)
         => CompileCore(inputs, quotationSyntaxOnly: true);
 
+    /// <summary>A TextMate grammar for the modules of <paramref name="inputs"/> (see <see cref="TextMateWriter"/>).</summary>
+    public static TextMateResult TextMate(IEnumerable<GrammarInput> inputs, TextMateOptions options)
+    {
+        var diagnostics = new List<CompiledDiagnostic>();
+        var model = Model(inputs, diagnostics);
+        return new TextMateResult(model is null ? null : TextMateWriter.Write(model, options), diagnostics.ToArray());
+    }
+
     static GrammarCompileResult CompileCore(IEnumerable<GrammarInput> inputs, bool quotationSyntaxOnly)
     {
         var diagnostics = new List<CompiledDiagnostic>();
+        var model = Model(inputs, diagnostics);
+        if (model is null) return new GrammarCompileResult(diagnostics.ToArray(), default);
+        var sources = model.Modules
+            .Select(info => new GeneratedSource(info.Module.Name + ".g.cs", ModuleWriter.Write(model, info, quotationSyntaxOnly)))
+            .ToArray();
+        return new GrammarCompileResult(diagnostics.ToArray(), sources);
+    }
+
+    /// <summary>Parses, expands, validates and checks <paramref name="inputs"/>; null when an error stops it.</summary>
+    static EmitModel? Model(IEnumerable<GrammarInput> inputs, List<CompiledDiagnostic> diagnostics)
+    {
         var modules = new List<ModuleDecl>();
         var paths = new Dictionary<string, string>(StringComparer.Ordinal);
         var namespaces = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -56,17 +75,12 @@ public static class GrammarCompiler
 
         foreach (var diagnostic in GrammarValidator.Validate(modules))
             diagnostics.Add(new CompiledDiagnostic(PathOf(diagnostic), diagnostic));
-        if (HasErrors(diagnostics)) return new GrammarCompileResult(diagnostics.ToArray(), default);
+        if (HasErrors(diagnostics)) return null;
 
         var model = new EmitModel(new GrammarAnalysis(modules), namespaces, moduleInputs);
         foreach (var diagnostic in model.Check())
             diagnostics.Add(new CompiledDiagnostic(PathOf(diagnostic), diagnostic));
-        if (HasErrors(diagnostics)) return new GrammarCompileResult(diagnostics.ToArray(), default);
-
-        var sources = model.Modules
-            .Select(info => new GeneratedSource(info.Module.Name + ".g.cs", ModuleWriter.Write(model, info, quotationSyntaxOnly)))
-            .ToArray();
-        return new GrammarCompileResult(diagnostics.ToArray(), sources);
+        return HasErrors(diagnostics) ? null : model;
     }
 
     static bool HasErrors(List<CompiledDiagnostic> diagnostics) =>

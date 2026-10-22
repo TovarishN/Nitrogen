@@ -154,6 +154,18 @@ public sealed class LoweredLanguageTests : IDisposable
     }
 
     [Fact]
+    public void Lowering_beats_grammar_position_in_the_palette()
+    {
+        using var service = Service();
+        const string text = "let start = 2026-10-05;\nweekday(start + 2 weeks);\n";
+        service.Open(Uri("a.datecalc"), 1, text);
+        var tokens = service.SemanticTokens(Uri("a.datecalc"));
+
+        Assert.Equal("operationWord", tokens.Single(t => t.Start == At(text, "weeks")).Palette);
+        Assert.Equal("declarationKeyword", tokens.Single(t => t.Start == At(text, "let")).Palette);
+    }
+
+    [Fact]
     public void A_language_can_colour_values_by_their_semantic_type()
     {
         string config = Path.Combine(_root, "nitrogen.json");
