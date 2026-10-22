@@ -115,11 +115,14 @@ were operators before; dropping them lets TextMate or the editor default show th
   generator and runtime-compiled workspace/bundled grammars). It must reach the server as generated
   metadata on `SyntaxModule`, the way `GetBinding`, `GetSemantics` and `DiagnosticPatterns` already
   do, and reach the TextMate generator from the same computation.
-- **Wire format.** The legend stays standard types plus modifiers, extended with custom modifiers
-  (one per fine category), for example `keyword` + `nitrogenDeclaration`. VS Code maps `type.modifier`
-  selectors to scopes through `contributes.semanticTokenScopes` (with `semanticTokenModifiers`
-  declared). Unaware clients ignore unknown modifiers and still colour the standard type. This meets
-  the degrade anti-goal; custom token types would not.
+- **Wire format: opt-in palette token types** *(revised while planning: `.ngr` alone needs about
+  90 distinct scopes, and LSP token modifiers are a 32-bit set with 2 bits already used, so a
+  modifier per category cannot work)*. A client that sends `initializationOptions.paletteTokens:
+  true` gets a legend of the standard types followed by one custom token type per palette category,
+  and tokens use those types. VS Code maps each type to its scope through
+  `contributes.semanticTokenTypes` + `contributes.semanticTokenScopes`. Any other client gets today's
+  standard-type legend, with each category reduced to its fallback standard type. Unaware clients
+  therefore look exactly as they do today, which meets the degrade anti-goal.
 - **Scopes in every VS Code client.** The vocabulary is language-independent, so the generic
   extension (`editors/vscode/package.json`) declares the mapping once for all files, and every
   generated extension (`Nitrogen.Cli/VsCode/VsCodeRenderer.cs`) writes the same block. MotionDSL's
@@ -166,6 +169,6 @@ were operators before; dropping them lets TextMate or the editor default show th
 - How far the generated TextMate grammar goes beyond word lists (begin/end blocks for strings and
   comments are required; contextual declaration-name patterns like "word after `goal`" →
   `entity.name.*` are desirable where the inference makes them unambiguous).
-- Modifier names and the exact `semanticTokenScopes` block.
+- Palette token type names and the exact `semanticTokenScopes` block.
 - Order of work. Suggested: categories + VS Code scopes (visible gain everywhere), then the
   TextMate generator, then `.ngr` tuning, then Rider.
