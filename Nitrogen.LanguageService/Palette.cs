@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Nitrogen.LanguageService;
 
 /// <summary>
@@ -76,6 +78,19 @@ public static partial class Palette
         TokenType.Number => "constant.numeric",
         TokenType.Regexp => "constant.regexp",
         _ => "keyword.operator",
+    };
+
+    /// <summary>
+    /// A VS Code extension's <c>contributes.semanticTokenTypes</c> and <c>contributes.semanticTokenScopes</c> for the palette,
+    /// for every language. The types have no superType: a theme's colour for a supertype would win over the scope.
+    /// </summary>
+    public static JsonObject VsCodeContributions() => new()
+    {
+        ["semanticTokenTypes"] = new JsonArray(Entries.Select(e => (JsonNode)new JsonObject { ["id"] = e.Name, ["description"] = e.Scope }).ToArray()),
+        ["semanticTokenScopes"] = new JsonArray(new JsonObject
+        {
+            ["scopes"] = new JsonObject(Entries.Select(e => KeyValuePair.Create(e.Name, (JsonNode?)new JsonArray(e.Scope)))),
+        }),
     };
 
     /// <summary>Language-specific entries (the .ngr grammar's scopes), appended after the general ones.</summary>
