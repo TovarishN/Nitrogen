@@ -26,6 +26,8 @@ internal static class NitrogenCli
             }
             return await RiderPluginCommand.RunAsync(request, output, cancel);
         }
+        if (args.Count >= 2 && args[0] == "generate" && args[1] == "textmate")
+            return await TextMateCommand.RunAsync(args, output, cancel);
         if (args.Count >= 2 && args[0] == "generate" && args[1] == "vscode")
         {
             var request = VsCodeInput.ParseRequest(args, out string generationError);
