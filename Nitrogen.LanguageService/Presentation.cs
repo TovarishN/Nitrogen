@@ -79,13 +79,31 @@ public readonly record struct SymbolStyle(TokenType Token, OutlineKind Outline, 
 /// <c>DateCalc.Date</c>); unmapped types retain lexical colours, with numeric constants coloured as numbers.
 /// <paramref name="colorFromLowering"/> false keeps lowered HIR from colouring tokens (the .ngr grammars).
 /// </summary>
+/// <param name="literals">
+/// Palette entries for literals by (rule kind, literal), or by (<c>*</c>, literal) in every rule, where the grammar position is
+/// not precise enough (.ngr matches its hand-written TextMate grammar scope for scope).
+/// </param>
+/// <param name="tokens">Palette entries for token rule leaves by rule name.</param>
+/// <param name="comments">Palette entries for <c>//</c> and <c>/* */</c> comments.</param>
 public sealed class Presentation(IReadOnlyDictionary<string, SymbolStyle> styles, IReadOnlyDictionary<string, TokenType>? types = null,
-    bool colorFromLowering = true)
+    bool colorFromLowering = true, IReadOnlyDictionary<(string Kind, string Literal), string>? literals = null,
+    IReadOnlyDictionary<string, string>? tokens = null, (string Line, string Block)? comments = null)
 {
     public static Presentation Default { get; } = new(new Dictionary<string, SymbolStyle>());
 
     /// <summary>Whether what a document lowers to colours its tokens.</summary>
     public bool ColorFromLowering { get; } = colorFromLowering;
+
+    /// <summary>The language's own palette entry for <paramref name="literal"/> under a <paramref name="kind"/> node, or null.</summary>
+    public string? LiteralPalette(string kind, string literal) =>
+        literals is null ? null
+        : literals.TryGetValue((kind, literal), out var palette) || literals.TryGetValue(("*", literal), out palette) ? palette : null;
+
+    /// <summary>The language's own palette entry for a leaf of token rule <paramref name="rule"/>, or null.</summary>
+    public string? TokenPalette(string rule) => tokens is not null && tokens.TryGetValue(rule, out var palette) ? palette : null;
+
+    /// <summary>The language's own palette entries for comments, or null.</summary>
+    public (string Line, string Block)? CommentPalette => comments;
 
     public SymbolStyle StyleOf(string kind) => styles.TryGetValue(kind, out var style) ? style : SymbolStyle.Default;
 

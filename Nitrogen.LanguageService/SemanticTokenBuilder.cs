@@ -57,13 +57,14 @@ internal static class SemanticTokenBuilder
             if (kind is SyntaxKinds.Empty or SyntaxKinds.List || (tree.Flags(node) & NodeFlags.Missing) != 0) continue;
             var span = tree.Span(node);
             if (span.Length == 0 || span.Start < covered) continue;
-            if (names.TryGetValue(span.Start, out var name))
+            // Language assistance first (precedence level 1), then names.
+            if (names.TryGetValue(span.Start, out var name) && !assistedStarts.Contains(span.Start))
             {
                 Add(tokens, document.Lines, span.Start, name.End, name.Type, name.Modifiers, name.Palette);
                 covered = name.End;
                 continue;
             }
-            var lexical = Classify(tree, node, kind, text, span);
+            var lexical = Classify(tree, presentation, node, kind, text, span);
             // Literal spelling survives incidental AST/list/text wrappers. Explicit type styles and
             // language assistance remain authoritative; ordinary lowering never guesses a number.
             // An assisted token may colour the start of a leaf, such as the name of a call head `Name(`.
@@ -79,7 +80,7 @@ internal static class SemanticTokenBuilder
                 covered = span.End;
             }
         }
-        foreach (var trivia in tree.Trivia) Comments(tokens, document.Lines, text, trivia);
+        foreach (var trivia in tree.Trivia) Comments(tokens, document.Lines, text, trivia, presentation.CommentPalette);
         tokens.Sort((a, b) => a.Start.Line != b.Start.Line ? a.Start.Line.CompareTo(b.Start.Line) : a.Start.Character.CompareTo(b.Start.Character));
         return tokens;
     }
@@ -167,21 +168,29 @@ internal static class SemanticTokenBuilder
     /// A literal's palette entry from its role in the nearest rule node above it (lists and groups have none), else
     /// today's lexical class: words are keywords, other literals operators, number- and string-like tokens by rule name.
     /// </summary>
-    static (TokenType Type, string? Palette)? Classify(SyntaxTree tree, int node, int kind, string text, TextSpan span)
+    static (TokenType Type, string? Palette)? Classify(SyntaxTree tree, Presentation presentation, int node, int kind, string text, TextSpan span)
     {
         if (kind == SyntaxKinds.Literal)
         {
             int rule = tree.Parent(node);
             while (rule >= 0 && tree.Kind(rule) is SyntaxKinds.List or SyntaxKinds.Group) rule = tree.Parent(rule);
-            if (rule >= 0 && tree.Language?.GetLiteralRole(tree.Kind(rule), text.Substring(span.Start, span.Length)) is { } role)
+            string literal = text.Substring(span.Start, span.Length);
+            if (rule >= 0 && tree.Language is { } language)
             {
-                var entry = Palette.Of(role);
-                return (entry.Fallback ?? TokenType.Operator, entry.Name);
+                // The language's own choice for this literal in this rule, else its grammar role.
+                var entry = presentation.LiteralPalette(language.GetKindName(tree.Kind(rule)), literal) is { } own ? Palette.Named(own)
+                    : language.GetLiteralRole(tree.Kind(rule), literal) is { } role ? Palette.Of(role) : null;
+                if (entry is not null) return (entry.Fallback ?? TokenType.Operator, entry.Name);
             }
             return (IsWord(text.AsSpan(span.Start, span.Length)) ? TokenType.Keyword : TokenType.Operator, null);
         }
         if (SyntaxKinds.ModuleOf(kind) == 0 || tree.Language is null) return null;
         string name = tree.Language.GetKindName(kind);
+        if (presentation.TokenPalette(name) is { } tokenPalette)
+        {
+            var entry = Palette.Named(tokenPalette);
+            return (entry.Fallback ?? TokenType.Operator, entry.Name);
+        }
         if (name.Contains("Number", StringComparison.Ordinal) || name.Contains("Digit", StringComparison.Ordinal)
             || name.Contains("Integer", StringComparison.Ordinal)) return (TokenType.Number, null);
         if (name.Contains("String", StringComparison.Ordinal) || name.Contains("Char", StringComparison.Ordinal)) return (TokenType.String, null);
@@ -191,7 +200,7 @@ internal static class SemanticTokenBuilder
     internal static bool IsWord(ReadOnlySpan<char> text) => SyntaxKinds.IsWordText(text);
 
     /// <summary><c>//</c> to the end of the line and <c>/* … */</c> inside one trivia span.</summary>
-    static void Comments(List<SemanticToken> tokens, LineMap lines, string text, TextSpan trivia)
+    static void Comments(List<SemanticToken> tokens, LineMap lines, string text, TextSpan trivia, (string Line, string Block)? palette)
     {
         int i = trivia.Start, end = trivia.End;
         while (i < end - 1)
@@ -200,14 +209,14 @@ internal static class SemanticTokenBuilder
             {
                 int stop = i;
                 while (stop < end && text[stop] != '\n' && text[stop] != '\r') stop++;
-                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None);
+                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None, palette?.Line);
                 i = stop;
             }
             else if (text[i] == '/' && text[i + 1] == '*')
             {
                 int close = text.IndexOf("*/", i + 2, end - i - 2, StringComparison.Ordinal);
                 int stop = close < 0 ? end : close + 2;
-                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None);
+                Add(tokens, lines, i, stop, TokenType.Comment, TokenModifiers.None, palette?.Block);
                 i = stop;
             }
             else

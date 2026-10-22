@@ -94,5 +94,5 @@ public static partial class Palette
     };
 
     /// <summary>Language-specific entries (the .ngr grammar's scopes), appended after the general ones.</summary>
-    static IEnumerable<PaletteEntry> LanguageEntries() => [];
+    static IEnumerable<PaletteEntry> LanguageEntries() => NgrEntries();
 }

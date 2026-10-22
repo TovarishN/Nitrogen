@@ -26,6 +26,8 @@ internal static class NitrogenCli
             }
             return await RiderPluginCommand.RunAsync(request, output, cancel);
         }
+        if (args.Count >= 1 && args[0] == "tokens")
+            return await TokensCommand.RunAsync(args, output, cancel);
         if (args.Count >= 2 && args[0] == "generate" && args[1] == "palette")
             return await PaletteCommand.RunAsync(args, output, cancel);
         if (args.Count >= 2 && args[0] == "generate" && args[1] == "textmate")
