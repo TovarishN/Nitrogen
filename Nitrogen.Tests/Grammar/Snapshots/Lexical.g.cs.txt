@@ -66,6 +66,21 @@ public sealed unsafe class LexicalModule : SyntaxModule
         _ => false,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (8, ",") => global::Nitrogen.LiteralRole.Separator,
+        (8, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (9, "=") => global::Nitrogen.LiteralRole.Operator,
+        (9, "{") => global::Nitrogen.LiteralRole.BlockBracket,
+        (9, "}") => global::Nitrogen.LiteralRole.BlockBracket,
+        (10, "a") => global::Nitrogen.LiteralRole.ModifierWord,
+        (10, "b") => global::Nitrogen.LiteralRole.ModifierWord,
+        (10, "c") => global::Nitrogen.LiteralRole.ModifierWord,
+        (10, "pick") => global::Nitrogen.LiteralRole.SectionKeyword,
+        (11, "tag") => global::Nitrogen.LiteralRole.SectionKeyword,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lexical.Document", "Lexical.Item", "Lexical.Block", "Lexical.Pick", "Lexical.Tagged" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

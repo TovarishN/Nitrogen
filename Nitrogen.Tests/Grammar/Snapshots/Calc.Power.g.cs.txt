@@ -35,6 +35,12 @@ public sealed unsafe class PowerModule : SyntaxModule
         _ => null,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (1, "^") => global::Nitrogen.LiteralRole.Operator,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

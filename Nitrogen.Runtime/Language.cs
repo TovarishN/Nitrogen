@@ -46,6 +46,13 @@ public sealed unsafe partial class Language
     public bool IsListSlot(int kind, int slot) =>
         ModuleById(SyntaxKinds.ModuleOf(kind))?.IsListSlot(SyntaxKinds.LocalOf(kind), slot) ?? false;
 
+    /// <summary>
+    /// The role of the Literal leaf <paramref name="literal"/> under a <paramref name="kind"/> node
+    /// (<see cref="SyntaxModule.GetLiteralRole"/>); null for built-in kinds such as lists and groups.
+    /// </summary>
+    public LiteralRole? GetLiteralRole(int kind, string literal) =>
+        SyntaxKinds.ModuleOf(kind) == 0 ? null : ModuleById(SyntaxKinds.ModuleOf(kind))?.GetLiteralRole(SyntaxKinds.LocalOf(kind), literal);
+
     public ExtensionPoint GetExtensionPoint(ExtensionPointDecl decl) =>
         (uint)decl.GlobalId < (uint)_points.Length && _points[decl.GlobalId] is { } point
             ? point

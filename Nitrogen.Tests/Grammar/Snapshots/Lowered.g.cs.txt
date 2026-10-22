@@ -89,6 +89,29 @@ public sealed unsafe class LoweredModule : SyntaxModule
         _ => false,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (6, ":") => global::Nitrogen.LiteralRole.Operator,
+        (6, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (6, "input") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (7, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (7, "fixed") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (8, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (8, "plain") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (9, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (10, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (10, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (10, ",") => global::Nitrogen.LiteralRole.Separator,
+        (10, "add") => global::Nitrogen.LiteralRole.Operation,
+        (11, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (11, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (11, "turn") => global::Nitrogen.LiteralRole.Operation,
+        (12, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (12, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (12, "wrap") => global::Nitrogen.LiteralRole.SectionKeyword,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Lowered.File", "Lowered.Item", "Lowered.Input", "Lowered.Fixed", "Lowered.Plain", "Lowered.Statement", "Lowered.Value", "Lowered.Add", "Lowered.Turn", "Lowered.Wrap", "Lowered.Num", "Lowered.Ref" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

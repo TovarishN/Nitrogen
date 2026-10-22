@@ -170,13 +170,7 @@ internal static class SemanticTokenBuilder
         return null;
     }
 
-    internal static bool IsWord(ReadOnlySpan<char> text)
-    {
-        if (text.IsEmpty || !(char.IsLetter(text[0]) || text[0] == '_')) return false;
-        foreach (char c in text)
-            if (!(char.IsLetterOrDigit(c) || c == '_')) return false;
-        return true;
-    }
+    internal static bool IsWord(ReadOnlySpan<char> text) => SyntaxKinds.IsWordText(text);
 
     /// <summary><c>//</c> to the end of the line and <c>/* … */</c> inside one trivia span.</summary>
     static void Comments(List<SemanticToken> tokens, LineMap lines, string text, TextSpan trivia)

@@ -41,6 +41,15 @@ public static class SyntaxKinds
 
     public static string GetBuiltinName(int localKind) =>
         (uint)localKind < (uint)s_names.Length ? s_names[localKind] : "#" + localKind;
+
+    /// <summary>Whether a literal's text is a word (a letter or <c>_</c>, then letters, digits or <c>_</c>) rather than punctuation.</summary>
+    public static bool IsWordText(ReadOnlySpan<char> text)
+    {
+        if (text.IsEmpty || !(char.IsLetter(text[0]) || text[0] == '_')) return false;
+        foreach (char c in text)
+            if (!(char.IsLetterOrDigit(c) || c == '_')) return false;
+        return true;
+    }
 }
 
 [Flags]

@@ -41,6 +41,14 @@ public sealed unsafe class ClashModule : SyntaxModule
         _ => false,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (1, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (1, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (1, ",") => global::Nitrogen.LiteralRole.Separator,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Calc.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

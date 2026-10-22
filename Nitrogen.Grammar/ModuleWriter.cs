@@ -57,6 +57,7 @@ internal static class ModuleWriter
             b.Append($"        {CSharpText.Literal(rule.Name)} => {CSharpText.Identifier(rule.Name)},\n");
         b.Append("        _ => null,\n    };\n\n");
         WriteListSlots(b, info);
+        WriteLiteralRoles(b, model, info);
         QuotationWriter.Write(b, model, info);
         BindingWriter.Write(b, info);
         QuoteHelperWriter.Write(b, model, info);
@@ -108,6 +109,18 @@ internal static class ModuleWriter
     /// <c>IsListSlot</c>: the child slots that hold a list (<c>X*</c>, <c>X+</c>, <c>(X; S)*</c>), so
     /// generic tree walkers can tell a one-item list, which is its item, from a plain child.
     /// </summary>
+    /// <summary>The TextMate palette's role of each literal under each kind (<see cref="LiteralRoles"/>).</summary>
+    static void WriteLiteralRoles(StringBuilder b, EmitModel model, ModuleInfo info)
+    {
+        var roles = LiteralRoles.Of(model, info);
+        if (roles.Count == 0) return;
+        var locals = info.Kinds.ToDictionary(k => k.Name, k => k.Local, StringComparer.Ordinal);
+        b.Append("    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch\n    {\n");
+        foreach (var role in roles.OrderBy(r => locals[r.Key.Kind]).ThenBy(r => r.Key.Literal, StringComparer.Ordinal))
+            b.Append($"        ({locals[role.Key.Kind]}, {CSharpText.Literal(role.Key.Literal)}) => global::Nitrogen.LiteralRole.{role.Value},\n");
+        b.Append("        _ => null,\n    };\n\n");
+    }
+
     static void WriteListSlots(StringBuilder b, ModuleInfo info)
     {
         var cases = new List<string>();
