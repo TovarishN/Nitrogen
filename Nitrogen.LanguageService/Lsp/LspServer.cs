@@ -252,6 +252,12 @@ public sealed class LspServer(JsonRpcConnection connection, NitrogenLanguageServ
             case "textDocument/semanticTokens/full":
             {
                 string uri = Params(parameters, LspJson.Default.TextDocumentParams).TextDocument.Uri;
+                // Null, not empty, for a file of no known language: VS Code shows the first non-null result, so empty tokens would hide another extension's.
+                if (!service.HasSemanticTokens(uri))
+                {
+                    await RespondNullAsync(id, cancel);
+                    break;
+                }
                 await RespondAsync(id, new SemanticTokensResult(SemanticTokenEncoding.Encode(service.SemanticTokens(uri))),
                     LspJson.Default.SemanticTokensResult, cancel);
                 break;

@@ -127,6 +127,9 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
         return diagnostics;
     }
 
+    /// <summary>Whether <see cref="SemanticTokens"/> colors the document: it is open as a language document or a host.</summary>
+    public bool HasSemanticTokens(string uri) => _hosts.ContainsKey(uri) || _documents.ContainsKey(uri);
+
     /// <summary>The document's semantic tokens in text order; empty when it is not open.</summary>
     public IReadOnlyList<SemanticToken> SemanticTokens(string uri) =>
         _hosts.TryGetValue(uri, out var host) ? HostTokens(host)
