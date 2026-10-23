@@ -281,7 +281,7 @@ public sealed partial class FileSemantics
         {
             try
             {
-                if (check.Diagnose(this, node) is { } diagnostic) _checks.Add(diagnostic);
+                if (check.Evaluate(this, node) is { } diagnostic) _checks!.Add(diagnostic);
             }
             catch (Exception error)
             {

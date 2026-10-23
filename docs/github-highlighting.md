@@ -4,7 +4,9 @@ GitHub highlights files and fenced code blocks through [Linguist](https://github
 Linguist only knows languages listed in its `languages.yml`, each tied to a TextMate grammar. Nitrogen
 ships that grammar at [editors/vscode/syntaxes/ngr.tmLanguage.json](../editors/vscode/syntaxes/ngr.tmLanguage.json)
 (scope `source.ngr`). The VS Code extension uses the same file, so `.ngr` files are coloured before
-`nitrogen lsp` starts; semantic tokens from the server refine it afterwards.
+`nitrogen lsp` starts; semantic tokens from the server refine it afterwards. The server's `.ngr` tokens use this
+grammar's scopes exactly ([editor support](editor-support.md#coloring-the-textmate-palette)), so a scope change here
+needs the matching change in `NgrStyles` (`Nitrogen.Cli/LspCommand.cs`); `eng/check-palette.sh` finds any difference.
 
 Until Linguist accepts the language, GitHub shows `.ngr` files and ` ```ngr ` blocks as plain text.
 Keep tagging fences ` ```ngr `: they start highlighting as soon as Linguist knows the alias, with no

@@ -1,0 +1,22 @@
+// Literal roles by grammar shape (the TextMate palette): one rule per row of the role table.
+syntax module Palette
+{
+  symbols { goal }
+
+  token Word   = ['a'..'z']+;
+  token Num    = ['0'..'9']+;
+
+  syntax File     = Items:Item*;
+  syntax Item     = Goal / Train / Doc / Anchor / Hold / Side / Use / Toggle;
+  syntax Goal     = "goal" Name:Word "{" Terms:Term* "}" declares goal Name;
+  syntax Train    = "train" "{" Steps:Step* "}";
+  syntax Term     = Value:Num "sharpness" Sharp:Num ";";
+  syntax Step     = Range:Num Holds:("hold" Num)* ".." Num "," Weight:Num Unit:Unit;
+  syntax Unit     = "kg" / "lb";
+  syntax Doc      = "policy" Name:Word lowers Palette.Doc(text Name);
+  syntax Anchor   = "anchored" Frame:("xz" / "xyz") ";" lowers Palette.Anchor(text Frame);
+  syntax Hold     = "hold" "(" Num ")" "[" Num "]";
+  syntax Side     = Name:("left" / "right") lowers Palette.Side(text Name);
+  syntax Use      = "use" Target:Word references goal Target;
+  syntax Toggle   = Setting:("noise" / "perturb") State:("on" / "off") lowers Palette.Toggle(text Setting, text State);
+}

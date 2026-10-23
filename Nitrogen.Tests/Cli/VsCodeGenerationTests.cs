@@ -55,6 +55,24 @@ public sealed class VsCodeGenerationTests : IDisposable
     }
 
     [Fact]
+    public void Generated_extension_paints_with_the_palette_and_a_textmate_grammar()
+    {
+        var request = Request();
+        VsCodeRenderer.Render(request, CancellationToken.None);
+        var contributes = JsonNode.Parse(Read(request, "package.json"))!["contributes"]!;
+        var palette = Nitrogen.LanguageService.Palette.VsCodeContributions();
+
+        Assert.True(JsonNode.DeepEquals(palette["semanticTokenTypes"], contributes["semanticTokenTypes"]));
+        Assert.True(JsonNode.DeepEquals(palette["semanticTokenScopes"], contributes["semanticTokenScopes"]));
+        var grammar = contributes["grammars"]![0]!;
+        Assert.Equal("nitrogen-catalog", (string?)grammar["language"]);
+        Assert.Equal("source.nitrogen-catalog", (string?)grammar["scopeName"]);
+        Assert.Equal("./syntaxes/nitrogen-catalog.tmLanguage.json", (string?)grammar["path"]);
+        Assert.Equal("source.nitrogen-catalog", (string?)JsonNode.Parse(Read(request, "syntaxes/nitrogen-catalog.tmLanguage.json"))!["scopeName"]);
+        Assert.Contains("paletteTokens: true", Read(request, "src/extension.ts"));
+    }
+
+    [Fact]
     public void Development_mode_is_opt_in_and_watches_workspace_grammar_and_helpers()
     {
         var request = Request();

@@ -46,6 +46,17 @@ public sealed unsafe partial class Language
     public bool IsListSlot(int kind, int slot) =>
         ModuleById(SyntaxKinds.ModuleOf(kind))?.IsListSlot(SyntaxKinds.LocalOf(kind), slot) ?? false;
 
+    /// <summary>
+    /// The role of the Literal leaf <paramref name="literal"/> under a <paramref name="kind"/> node
+    /// (<see cref="SyntaxModule.GetLiteralRole"/>); null for built-in kinds such as lists and groups.
+    /// </summary>
+    public LiteralRole? GetLiteralRole(int kind, string literal) =>
+        SyntaxKinds.ModuleOf(kind) == 0 ? null : ModuleById(SyntaxKinds.ModuleOf(kind))?.GetLiteralRole(SyntaxKinds.LocalOf(kind), literal);
+
+    /// <summary>Whether <paramref name="literal"/> is an operation word under a <paramref name="kind"/> node (<see cref="SyntaxModule.IsOperationWord"/>).</summary>
+    public bool IsOperationWord(int kind, string literal) =>
+        SyntaxKinds.ModuleOf(kind) != 0 && (ModuleById(SyntaxKinds.ModuleOf(kind))?.IsOperationWord(SyntaxKinds.LocalOf(kind), literal) ?? false);
+
     public ExtensionPoint GetExtensionPoint(ExtensionPointDecl decl) =>
         (uint)decl.GlobalId < (uint)_points.Length && _points[decl.GlobalId] is { } point
             ? point
@@ -272,6 +283,13 @@ public sealed unsafe partial class Language
         => ParseTemplate(text, category, holes.ToDictionary(h => h.Key, h => QuoteHole.Node(h.Value)));
 
     public ParseResult ParseTemplate(string text, string category, IReadOnlyDictionary<string, QuoteHole> holes)
+        => ParseTemplateCore(text, category, holes, pattern: false);
+
+    internal ParseResult ParsePattern(string text, string category, IReadOnlyDictionary<string, QuoteHole> captures)
+        => ParseTemplateCore(text, category, captures, pattern: true);
+
+    ParseResult ParseTemplateCore(string text, string category, IReadOnlyDictionary<string, QuoteHole> holes, bool pattern,
+        Action<TextSpan, PatternHoleSite>? holeProbe = null)
     {
         ArgumentNullException.ThrowIfNull(text);
         ArgumentNullException.ThrowIfNull(holes);
@@ -290,7 +308,7 @@ public sealed unsafe partial class Language
         try
         {
             var arena = context.Arena;
-            if (Run(text, start, context, recovering: false, holes, point))
+            if (Run(text, start, context, recovering: false, holes, point, pattern: pattern, patternHoleProbe: holeProbe))
                 return ParseResult.Succeeded(TreeFreezer.Freeze(arena, arena.ChildStack[0], text, this), arena);
             return ParseResult.Failed(TreeFreezer.ErrorTree(text, this), arena, ParseResult.CaptureFailure(arena));
         }
@@ -313,6 +331,23 @@ public sealed unsafe partial class Language
         string text, string category, IReadOnlyDictionary<string, QuoteHole> holes)
     {
         using var result = ParseTemplate(text, category, holes);
+        return result.Success || result.Diagnostics.Length == 0 ? (-1, [])
+            : (result.Diagnostics[0].Span.Start, result.ExpectedItems());
+    }
+
+    // Completion of an unfinished quotation needs an actual typed-hole attempt, not just token progress.
+    internal bool AcceptsPatternDiscardPrefix(string text, string category, IReadOnlyDictionary<string, QuoteHole> captures, int marker)
+    {
+        bool recognized = false;
+        using var result = ParseTemplateCore(text + "\u0001", category, captures, pattern: true,
+            (span, _) => recognized |= span.Start == marker && span.End == text.Length);
+        return recognized && result.Diagnostics.Length > 0 && result.Diagnostics[0].Span.Start >= text.Length;
+    }
+
+    internal (int Position, IReadOnlyList<(string Text, bool IsLiteral)> Items) ExpectedPattern(
+        string text, string category, IReadOnlyDictionary<string, QuoteHole> captures)
+    {
+        using var result = ParsePattern(text, category, captures);
         return result.Success || result.Diagnostics.Length == 0 ? (-1, [])
             : (result.Diagnostics[0].Span.Start, result.ExpectedItems());
     }
@@ -361,7 +396,7 @@ public sealed unsafe partial class Language
 
     bool Run(string text, Rule start, ParseContext context, bool recovering,
         IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null, bool tracking = false,
-        ReuseContext? reuse = null)
+        ReuseContext? reuse = null, bool pattern = false, Action<TextSpan, PatternHoleSite>? patternHoleProbe = null)
     {
         var arena = context.Arena;
         arena.Clear();
@@ -372,7 +407,7 @@ public sealed unsafe partial class Language
         if (!arena.Tracking) reuse = null;
         arena.GraftSource = reuse?.Tree;
         arena.CallFlagMask = recovering ? 3 : 0;
-        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, TemplateStart = templateStart, Reuse = reuse };
+        var state = new ParserState(text, arena, context.Memo, Trivia, TriviaStart) { Language = this, Holes = holes, PatternMode = pattern, PatternHoleProbe = patternHoleProbe, TemplateStart = templateStart, Reuse = reuse };
         if (holes is not null) state.SkipTrivia();
         var parse = start.Parse;
         if (!parse(ref state)) return false;

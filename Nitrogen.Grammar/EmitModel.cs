@@ -74,7 +74,7 @@ internal sealed class EmitModel
     static readonly HashSet<string> ReservedNames = new(StringComparer.Ordinal)
     {
         "Instance", "Name", "Id", "KindBase", "Kind", "GetKindName", "Register", "GetRule", "GetBinding", "Builtins", "HasSemantics", "GetSemantics", "Properties", "SymbolProperties", "Fail",
-        "QuoteCategoryNames", "GetQuoteCategories", "AcceptsQuoteLiteral", "IsListSlot", "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "ReferenceEquals",
+        "QuoteCategoryNames", "GetQuoteCategories", "AcceptsQuoteLiteral", "IsListSlot", "GetLiteralRole", "IsOperationWord", "ToString", "Equals", "GetHashCode", "GetType", "MemberwiseClone", "ReferenceEquals",
     };
 
     readonly Dictionary<string, ModuleInfo> _infos = new(StringComparer.Ordinal);

@@ -102,15 +102,45 @@ public class LspServerTests
     [Fact]
     public void Tokens_are_encoded_relative_to_the_previous_one()
     {
-        var data = SemanticTokenEncoding.Encode(new[]
+        var data = SemanticTokenEncoding.Encode(palette: false, tokens: new[]
         {
             new SemanticToken(new(0, 0), 7, TokenType.Comment, TokenModifiers.None),
             new SemanticToken(new(1, 0), 4, TokenType.Keyword, TokenModifiers.None),
             new SemanticToken(new(1, 5), 1, TokenType.Class, TokenModifiers.Declaration),
         });
         Assert.Equal(new[] { 0, 0, 7, (int)TokenType.Comment, 0, 1, 0, 4, (int)TokenType.Keyword, 0, 0, 5, 1, (int)TokenType.Class, 1 }, data);
-        Assert.Equal("enumMember", SemanticTokenEncoding.Legend.TokenTypes[(int)TokenType.EnumMember]);
-        Assert.Equal(new[] { "declaration", "defaultLibrary" }, SemanticTokenEncoding.Legend.TokenModifiers);
+        Assert.Equal("enumMember", SemanticTokenEncoding.Legend(palette: false).TokenTypes[(int)TokenType.EnumMember]);
+        Assert.Equal(new[] { "declaration", "defaultLibrary" }, SemanticTokenEncoding.Legend(palette: false).TokenModifiers);
+    }
+
+    [Fact]
+    public async Task Palette_legend_only_for_opted_in_clients()
+    {
+        using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+        var (_, plain, _) = await Session(service, Initialize, Shutdown, Exit);
+        var types = plain[0].GetProperty("result").GetProperty("capabilities").GetProperty("semanticTokensProvider").GetProperty("legend").GetProperty("tokenTypes");
+        Assert.Equal(22, types.GetArrayLength());
+
+        using var opted = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+        var (_, messages, _) = await Session(opted,
+            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"capabilities":{},"initializationOptions":{"paletteTokens":true}}}""", Shutdown, Exit);
+        var paletteTypes = messages[0].GetProperty("result").GetProperty("capabilities").GetProperty("semanticTokensProvider").GetProperty("legend").GetProperty("tokenTypes");
+        Assert.Equal(22 + Palette.Entries.Count, paletteTypes.GetArrayLength());
+        Assert.Equal("operationWord", paletteTypes[22].GetString());
+    }
+
+    [Fact]
+    public void Unaware_client_gets_fallback_types()
+    {
+        var tokens = new[]
+        {
+            new SemanticToken(new(0, 0), 4, TokenType.Keyword, TokenModifiers.None, "declarationKeyword"),
+            new SemanticToken(new(0, 5), 1, TokenType.Operator, TokenModifiers.None, "blockBracket"),
+        };
+        Assert.Equal(new[] { 0, 0, 4, (int)TokenType.Keyword, 0 }, SemanticTokenEncoding.Encode(tokens, palette: false));
+        int keyword = 22 + Palette.Entries.ToList().FindIndex(e => e.Name == "declarationKeyword");
+        int bracket = 22 + Palette.Entries.ToList().FindIndex(e => e.Name == "blockBracket");
+        Assert.Equal(new[] { 0, 0, 4, keyword, 0, 0, 5, 1, bracket, 0 }, SemanticTokenEncoding.Encode(tokens, palette: true));
     }
 
     [Fact]
@@ -135,6 +165,20 @@ public class LspServerTests
         Assert.Equal("a", symbol.GetProperty("name").GetString());
         Assert.Equal((int)OutlineKind.Class, symbol.GetProperty("kind").GetInt32());
         Assert.Equal("x", symbol.GetProperty("children")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task Semantic_tokens_are_null_for_a_document_of_no_known_language()
+    {
+        // VS Code takes the first non-null result among equally scored providers: an empty one would hide another extension's colors.
+        using var service = new NitrogenLanguageService(LanguageServiceTests.ScopesRegistry());
+        var (_, messages, _) = await Session(service,
+            Initialize, DidOpen("file:///w/a.policy", 1, "goal stand_up { }"),
+            """{"jsonrpc":"2.0","id":2,"method":"textDocument/semanticTokens/full","params":{"textDocument":{"uri":"file:///w/a.policy"}}}""",
+            Shutdown, Exit);
+
+        var result = messages.Single(m => m.TryGetProperty("id", out var id) && id.GetInt32() == 2).GetProperty("result");
+        Assert.Equal(JsonValueKind.Null, result.ValueKind);
     }
 
     [Fact]

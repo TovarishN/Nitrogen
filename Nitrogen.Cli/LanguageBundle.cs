@@ -58,7 +58,7 @@ internal static class LanguageBundle
     }
 
     /// <summary>The files the patterns name, as the language service expands them; every pattern must match and names must be unique.</summary>
-    static List<string> Match(IReadOnlyList<string> patterns, string kind)
+    internal static List<string> Match(IReadOnlyList<string> patterns, string kind)
     {
         var files = new List<string>();
         foreach (string pattern in patterns)

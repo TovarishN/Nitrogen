@@ -57,6 +57,20 @@ public sealed unsafe class MiniModule : SyntaxModule
         _ => null,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (2, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (2, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (3, "a") => global::Nitrogen.LiteralRole.SectionKeyword,
+        (3, "b") => global::Nitrogen.LiteralRole.ModifierWord,
+        (4, "a") => global::Nitrogen.LiteralRole.SectionKeyword,
+        (4, "c") => global::Nitrogen.LiteralRole.ModifierWord,
+        (5, "if") => global::Nitrogen.LiteralRole.SectionKeyword,
+        (6, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (6, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Mini.Pair", "Mini.Choice", "Mini.Ab", "Mini.Ac", "Mini.If", "Mini.Maybe" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch

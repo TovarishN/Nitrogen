@@ -64,6 +64,10 @@ even in an unused helper. Parentheses and wrappers remain part of the syntax.
 
 The same matcher is available from C#; [PatternMatching.cs](examples/DateCalc/PatternMatching.cs) shows
 match → instantiate through `Language.CompilePattern`, `QuotePattern.Match`, and `CompileQuote`.
+List patterns allow several segments, for example `f(..$_, $X, ..$_, $Y, ..$_)` selects two
+ordered elements anywhere. `$_` ignores one node and `..$_` ignores zero or more list items without
+bindings. Matching returns the first complete result, trying shortest spans first. See
+[sequence patterns](docs/language-guide.md#sequence-patterns-and-wildcards) for typing and work limits.
 A normal mismatch has no diagnostics or partial captures. Captures borrow their input tree and carry
 explicit source origins; keep that tree alive until captures have been consumed. Dispose the pattern
 compilation when finished. Instantiation produces independently owned syntax for the destination's
@@ -75,13 +79,11 @@ Its `.ngr` rule uses `match (...) <[ ... ]> => warning XML1001 : "...";` with ty
 the standard CLI and language service report the warning at its source location.
 
 `f(1, ..$Args, 2)` captures the middle items, including an empty middle, when `Args` is declared
-`QuoteHole.List("Module.Expr")` or `Args: Expr*`. One named variable-length capture is allowed per physical
+`QuoteHole.List("Module.Expr")` or `Args: Expr*`. One variable-length capture is allowed per physical
 list; nested lists are independent. Repeated capture names require structural equality and return
 the first occurrence. Matching ignores trivia and compares exact token spelling and ordered children.
 Read-only patterns can recognize declarations; construction quotes still cannot author declarations.
-Anonymous `$_` and `..$_` discard a node or a list segment without declarations or returned captures.
-Multiple independent list discards can surround a fixed pattern; matching tries the shortest prefix first.
-Matching alone changes no source text or semantic state. Guards, multiple named list captures in one list,
+Matching alone changes no source text or semantic state. Guards, multiple captures in one list,
 semantic equivalence and matching a native host's semantic model are outside this interface.
 
 Pattern diagnostics: `NQP0001` invalid category/pattern; `NQP0002` invalid or unused capture contract;

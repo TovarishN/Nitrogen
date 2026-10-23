@@ -64,53 +64,64 @@ public sealed class SemanticsSymbol<T>(SymbolProperty<T> property, Func<FileSema
 /// <summary>A <c>check</c>: when the condition is false, the message is reported at the node under the code.</summary>
 public sealed class SemanticsCheck(string code, Func<FileSemantics, int, bool> condition, Func<FileSemantics, int, string> message,
     Func<FileSemantics, int, TextSpan>? at = null, DiagnosticSeverity severity = DiagnosticSeverity.Error,
-    SyntaxDiagnosticPattern? pattern = null,
-    Func<FileSemantics, int, IReadOnlyDictionary<string, QuoteArgument>, string>? matchedMessage = null)
+    SyntaxDiagnosticPattern? pattern = null)
 {
     public string Code { get; } = code;
     public DiagnosticSeverity Severity { get; } = severity;
     public SyntaxDiagnosticPattern? Pattern { get; } = pattern;
 
-    public bool Holds(FileSemantics semantics, int node)
+    readonly Func<FileSemantics, int, SemanticPatternCaptures, string>? _patternMessage;
+
+    /// <summary>A diagnostic whose message receives the successful pattern's typed captures.</summary>
+    public SemanticsCheck(string code, SyntaxDiagnosticPattern pattern,
+        Func<FileSemantics, int, SemanticPatternCaptures, string> message,
+        DiagnosticSeverity severity = DiagnosticSeverity.Error)
+        : this(code, static (_, _) => true, static (_, _) => "", severity: severity, pattern: pattern)
     {
-        if (Pattern is null) return condition(semantics, node);
-        return !Match(semantics, node).Matched;
+        ArgumentNullException.ThrowIfNull(pattern);
+        ArgumentNullException.ThrowIfNull(message);
+        _patternMessage = message;
     }
 
     QuoteMatchResult Match(FileSemantics semantics, int node)
     {
-        if (Pattern is null) throw new InvalidOperationException("This check has no syntax pattern.");
-        var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern);
+        var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern!);
         if (!compiled.Success) throw new InvalidOperationException(string.Join("; ", compiled.Diagnostics));
         var match = compiled.Pattern!.Match(new(semantics.Tree, node));
         if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
         return match;
     }
 
-    /// <summary>Evaluates a check once and formats its message only for a reported diagnostic.</summary>
-    public SemanticDiagnostic? Diagnose(FileSemantics semantics, int node)
+    public bool Holds(FileSemantics semantics, int node)
+        => Pattern is null ? condition(semantics, node) : !Match(semantics, node).Matched;
+
+    public string Message(FileSemantics semantics, int node)
+    {
+        if (_patternMessage is null) return message(semantics, node);
+        var match = Match(semantics, node);
+        if (!match.Matched) throw new InvalidOperationException("A pattern message requires a successful match.");
+        return _patternMessage(semantics, node, new(semantics, match.Captures));
+    }
+
+    internal SemanticDiagnostic? Evaluate(FileSemantics semantics, int node)
     {
         string text;
+        TextSpan span;
         if (Pattern is null)
         {
             if (condition(semantics, node)) return null;
+            span = Span(semantics, node);
             text = message(semantics, node);
         }
         else
         {
             var match = Match(semantics, node);
             if (!match.Matched) return null;
-            text = matchedMessage is null ? message(semantics, node) : matchedMessage(semantics, node, match.Captures);
+            span = Span(semantics, node);
+            text = _patternMessage is null ? message(semantics, node)
+                : _patternMessage(semantics, node, new(semantics, match.Captures));
         }
-        return new SemanticDiagnostic(Code, Span(semantics, node), text) { Severity = Severity };
-    }
-
-    public string Message(FileSemantics semantics, int node)
-    {
-        if (Pattern is null || matchedMessage is null) return message(semantics, node);
-        var match = Match(semantics, node);
-        if (!match.Matched) throw new InvalidOperationException("A match diagnostic has no message for nonmatching syntax.");
-        return matchedMessage(semantics, node, match.Captures);
+        return new SemanticDiagnostic(Code, span, text) { Severity = Severity };
     }
 
     /// <summary>Where the diagnostic sits: the child <c>at</c> names, else the node (issue 241).</summary>

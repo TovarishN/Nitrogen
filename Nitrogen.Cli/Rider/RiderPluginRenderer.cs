@@ -405,6 +405,7 @@ class NitrogenLspSupport : LspIntegrationProvider {
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
         override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in setOf({{string.Join(", ", request.Model.Extensions.Select(x => "\"" + EscapeKotlin(x.TrimStart('.')) + "\""))}})
         override fun createCommandLine(): GeneralCommandLine = commandLine()
+        override fun createInitializationOptions(): Any = mapOf("paletteTokens" to true)
         override val lspCustomization: LspCustomization = NitrogenCustomization()
     }
 }
@@ -447,6 +448,7 @@ class NitrogenLspSupport : LspIntegrationProvider {
     private class NitrogenClientDescriptor(project: Project) : ProjectWideLspClientDescriptor(project, "{{EscapeKotlin(request.Model.DisplayName)}}") {
         override fun isSupportedFile(file: VirtualFile): Boolean = file.extension in extensions
         override fun createCommandLine(): GeneralCommandLine = commandLine()
+        override fun createInitializationOptions(): Any = mapOf("paletteTokens" to true)
         override val lspCustomization: LspCustomization = NitrogenCustomization()
     }
 }

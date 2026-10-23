@@ -25,6 +25,9 @@ public unsafe ref partial struct ParserState
     /// <summary>A template parse's holes: hole name → qualified rule (spec: quasiquote rewrites). Null in a normal parse, so a normal parse never matches one.</summary>
     internal IReadOnlyDictionary<string, QuoteHole>? Holes { get; init; }
 
+    internal bool PatternMode { get; init; }
+    internal Action<TextSpan, PatternHoleSite>? PatternHoleProbe { get; init; }
+
     /// <summary>The extension point a template parse starts at, when its category is an extensible rule.</summary>
     internal ExtensionPointDecl? TemplateStart { get; init; }
 
@@ -46,10 +49,14 @@ public unsafe ref partial struct ParserState
         if (at >= _text.Length || _text[at] != '$') return false;
         int end = at + 1;
         while (end < _text.Length && IsIdentifierPart(_text[end])) end++;
-        if (Holes is PatternHoleContracts && _text[(at + 1)..end].SequenceEqual("_"))
+        if (PatternMode && _text[(at + 1)..end].SequenceEqual("_"))
         {
             Position = at;
             PushLeaf(SyntaxKinds.Hole, end);
+            int node = Arena.ChildStack[Arena.ChildStackCount - 1];
+            var site = new PatternHoleSite(rule, false);
+            (Arena.PatternHoleSites ??= new())[node] = site;
+            PatternHoleProbe?.Invoke(new(at, end - at), site);
             return true;
         }
         if (end == at + 1 || !Holes!.TryGetValue(_text[(at + 1)..end].ToString(), out var holeRule) || (holeRule.IsList || holeRule.Category != rule)) return false;

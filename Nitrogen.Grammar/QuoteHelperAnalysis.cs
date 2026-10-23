@@ -65,22 +65,22 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
                 var captures = new Dictionary<string, QuoteParameter>(StringComparer.Ordinal);
                 foreach (var capture in arm.Captures)
                 {
-                    if (parameters.ContainsKey(capture.Name.Name) || captures.ContainsKey(capture.Name.Name))
-                        report(GrammarCodes.QuoteMatchCapture, $"capture '{capture.Name.Name}' is duplicated or shadows a helper parameter", capture.Name.Span, module);
+                    if (capture.Name.Name == "_" || parameters.ContainsKey(capture.Name.Name) || captures.ContainsKey(capture.Name.Name))
+                        report(GrammarCodes.QuoteMatchCapture, $"capture '{capture.Name.Name}' is reserved, duplicated or shadows a helper parameter", capture.Name.Span, module);
                     else captures.Add(capture.Name.Name, capture);
                     Category(capture.Category, module, report);
                 }
-                CheckQuote(arm.Pattern, captures, selector is null ? null : Category(selector.Category, module));
+                CheckQuote(arm.Pattern, captures, selector is null ? null : Category(selector.Category, module), pattern: true);
                 var scope = new Dictionary<string, QuoteParameter>(parameters, StringComparer.Ordinal);
                 foreach (var capture in captures) scope[capture.Key] = capture.Value;
                 CheckQuote(arm.Result, scope);
             }
 
-            void CheckQuote(QuoteText quote, IReadOnlyDictionary<string, QuoteParameter> scope, GrammarSymbol? quoteCategory = null)
+            void CheckQuote(QuoteText quote, IReadOnlyDictionary<string, QuoteParameter> scope, GrammarSymbol? quoteCategory = null, bool pattern = false)
             {
                 foreach (var hole in QuotationWriter.Holes(quote.Text, analysis, quoteCategory ?? category))
                 {
-                    if (quoteCategory is not null && hole.Name == "_") continue;
+                    if (pattern && hole.Name == "_") continue;
                     var span = new GrammarSpan(quote.Span.Start + hole.Start, hole.Length);
                     if (!scope.TryGetValue(hole.Name, out var parameter))
                         report(GrammarCodes.UnknownHole, $"'${hole.Name}' is not in this quote's scope", span, module);

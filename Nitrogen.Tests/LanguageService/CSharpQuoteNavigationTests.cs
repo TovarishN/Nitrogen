@@ -45,6 +45,53 @@ public sealed class CSharpQuoteNavigationTests : IDisposable
         return service;
     }
 
+    [Fact]
+    public void Pattern_discards_have_typed_hover_and_no_binding_navigation()
+    {
+        string helper = Helper("\"f(..$_, $Value, $_, ..$Args)\"", "language.CompilePattern").Replace("holes:", "captures:");
+        using var service = Service(helper);
+        Assert.DoesNotContain(service.Diagnostics(Uri("Helper.cs")), d => d.Code.StartsWith("NQP"));
+        var hover = service.Hover(Uri("Helper.cs"), At(helper, "..$_", 3));
+        Assert.NotNull(hover);
+        Assert.Contains("QuoteLists.Expr", hover.Markdown);
+        Assert.Contains("list", hover.Markdown);
+        Assert.Empty(service.Definition(Uri("Helper.cs"), At(helper, "..$_", 3)));
+        Assert.Empty(service.References(Uri("Helper.cs"), At(helper, "..$_", 3), true));
+        Assert.Throws<RenameRefusedException>(() => service.PrepareRename(Uri("Helper.cs"), At(helper, "..$_", 3)));
+        Assert.Equal(At(helper, "[\"Value\"]"), Assert.Single(service.Definition(Uri("Helper.cs"), At(helper, "$Value", 2))).Range.Start);
+        Assert.Contains(service.Completion(Uri("Helper.cs"), At(helper, "..$_", 4)), item => item.Label == "_");
+    }
+
+    [Fact]
+    public void Incomplete_opaque_token_dollar_text_has_no_discard_completion()
+    {
+        string helper = Helper("\"@$_\"", "language.CompilePattern").Replace("holes:", "captures:");
+        using var service = Service(helper);
+        const string grammar = "syntax module QuoteLists { token Dollar=\"@$_\"; syntax Program=Expr; syntax Expr=Dollar \"!\"; }";
+        service.Open(Uri("QuoteLists.ngr"), 1, grammar);
+        Assert.DoesNotContain(service.Completion(Uri("Helper.cs"), At(helper, "@$_", 3)), item => item.Label == "_");
+    }
+
+    [Theory]
+    [InlineData("f(1 /* ..$ */)")]
+    [InlineData("f(1 /* ..$")]
+    public void Pattern_comments_do_not_offer_discard_completion(string pattern)
+    {
+        string helper = Helper("\"" + pattern + "\"", "language.CompilePattern").Replace("holes:", "captures:");
+        using var service = Service(helper);
+        Assert.DoesNotContain(service.Completion(Uri("Helper.cs"), At(helper, "..$", 3)), item => item.Label == "_");
+    }
+
+    [Theory]
+    [InlineData("f(..$", "..$", "_")]
+    [InlineData("f(..$_, requ)", "requ", "required")]
+    public void Pattern_completion_works_while_the_quote_is_incomplete(string pattern, string marker, string expected)
+    {
+        string helper = Helper("\"" + pattern + "\"", "language.CompilePattern").Replace("holes:", "captures:");
+        using var service = Service(helper);
+        Assert.Contains(service.Completion(Uri("Helper.cs"), At(helper, marker, marker.Length)), item => item.Label == expected);
+    }
+
     [Theory]
     [InlineData("\"f(..$Args, $Value)\"")]
     [InlineData("@\"f(..$Args, $Value)\"")]
@@ -149,7 +196,7 @@ public sealed class CSharpQuoteNavigationTests : IDisposable
     [Fact]
     public void Pattern_diagnostics_map_to_the_host_string()
     {
-        string helper=Helper("\"f(..$Args, ..$Args, $Value)\"","language.CompilePattern").Replace("holes:","captures:");
+        string helper=Helper("\"tokenlist(..$Args, $Value)\"","language.CompilePattern").Replace("holes:","captures:");
         using var service=Service(helper);
         var diagnostic=Assert.Single(service.Diagnostics(Uri("Helper.cs")),error=>error.Code=="NQP0003");
         Assert.Equal(At(helper,"..$Args"),diagnostic.Range.Start);

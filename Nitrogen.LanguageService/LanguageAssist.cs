@@ -26,7 +26,7 @@ public interface ILanguageAssist
 /// <param name="Catalog">The semantic catalog the document's text refers to: for a grammar of a workspace language, that language's last good catalog; null otherwise.</param>
 public sealed record AssistDocument(string Uri, string Text, SyntaxTree Tree, SemanticCatalog? Catalog);
 
-public readonly record struct AssistToken(TextSpan Span, TokenType Type);
+public readonly record struct AssistToken(TextSpan Span, TokenType Type, string? Palette = null);
 
 public sealed record AssistCompletion(string Label, CompletionKind Kind, string Detail, TextSpan Replace);
 

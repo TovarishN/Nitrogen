@@ -67,7 +67,7 @@ class NitrogenCSharpClient(
 
     override fun createCommandLine(): GeneralCommandLine = commandLine()
 
-    override fun createInitializationOptions(): Any = mapOf("skipLanguages" to skipLanguages())
+    override fun createInitializationOptions(): Any = mapOf("skipLanguages" to skipLanguages(), "paletteTokens" to true)
 
     override val lspCustomization: LspCustomization = object : NitrogenCustomization() {
         override val documentSymbolCustomizer: LspDocumentSymbolCustomizer = LspDocumentSymbolDisabled

@@ -141,6 +141,28 @@ public sealed class RiderPluginGenerationTests
     }
 
     [Fact]
+    public void Rendered_plugin_maps_palette_types_to_rider_colours()
+    {
+        using var dir = new TempDirectory();
+        string config = dir.Write("nitrogen.json", """
+            { "languages": [{ "name": "Calc", "extensions": [".calc"], "grammars": ["a.ngr"], "start": "Calc.Program" }] }
+            """);
+        var request = RiderPluginInput.ParseRequest(
+            new[] { "generate", "rider", "--config", config, "--output", Path.Combine(dir.Path, "out") }, out string error);
+        Assert.Equal("", error);
+        RiderPluginRenderer.Render(request!, request!.OutputDirectory, CancellationToken.None);
+        string highlighting = File.ReadAllText(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenHighlighting.kt"));
+
+        Assert.Contains("override fun getTextAttributesKey(tokenType: String, modifiers: List<String>): TextAttributesKey?", highlighting, StringComparison.Ordinal);
+        foreach (var entry in Nitrogen.LanguageService.Palette.Entries.Where(e => !e.Name.StartsWith("ngr", StringComparison.Ordinal)))
+            Assert.Contains($"\"{entry.Name}\"", highlighting, StringComparison.Ordinal);
+        Assert.Contains("\"paletteTokens\" to true",
+            File.ReadAllText(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenCSharpStrings.kt")), StringComparison.Ordinal);
+        Assert.Contains("override fun createInitializationOptions(): Any = mapOf(\"paletteTokens\" to true)",
+            File.ReadAllText(Path.Combine(request.OutputDirectory, "src/main/kotlin/org/nitrogen/rider/NitrogenLspSupport.kt")), StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Rendered_build_uses_the_template_plugins_and_platform_api()
     {
         using var dir = new TempDirectory();

@@ -10,11 +10,34 @@ dotnet run --project Nitrogen.Cli -- check examples/XmlPatterns/sample.xml
 
 ```ngr
 match (pass: Text)
-  <[ <credentials ..$_> ..$_ <password ..$_> $pass </password> ..$_ </credentials> ]>
-  => warning XML1001 : "A password is stored directly inside credentials; use a secret-ref instead. {pass}";
+  <[ <credentials ..$_>..$_<password ..$_>$pass</password>..$_</credentials> ]>
+  => warning XML1001 :
+    $"A password is stored directly inside credentials; use a secret-ref instead. {pass}";
 ```
 
-The pattern matches the current syntax node. Each `..$_` independently ignores zero or more items in its list: attributes inside opening tags, and sibling nodes before or after the password. The expected syntax category is inferred from the grammar position. `$pass` remains a declared, typed `Text` capture, so this rule requires a password containing one text node; empty or mixed-content passwords do not match. Literal tag names and nesting must match. Every paired element is checked automatically. Matching does not rewrite the tree or inspect raw XML text.
+The pattern matches the current syntax node. Each `..$_` ignores zero or more items of the category
+required by its grammar position: attributes or child nodes. These are independent typed wildcards,
+not bindings or input XML. Literal tag names and nesting must match; a paired password can occur
+anywhere among the credentials element's direct children. Every paired element is checked
+automatically, so surrounding structure can vary. Matching does not rewrite the tree or inspect raw
+XML text.
+
+`pass` is a scalar syntax view. Its `.Text` property can be used explicitly in the message:
+
+```ngr
+match (pass: Text)
+  <[ <credentials ..$_>..$_<password ..$_>$pass</password>..$_</credentials> ]>
+  => warning XML1001 :
+    $"A password is stored directly inside credentials; use a secret-ref instead. {pass.Text}";
+```
+
+This variant requires exactly one text node inside password. `pass.Text` is its source text;
+`{pass}` uses the same view's text conversion. For empty or mixed contents, use `(content: Node*)`
+and `..$content`; the message can access `content.Count` and enumerate its typed syntax views.
+Each capture is visible only in its own message, and messages are skipped on mismatch. This scalar
+example does not report empty passwords or passwords containing nested elements; those require a
+list pattern such as `<[ <credentials ..$_>..$_<password ..$_>..$content</password>..$_</credentials> ]>`
+with `(content: Node*)`.
 
 The sample produces one diagnostic:
 

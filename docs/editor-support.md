@@ -137,6 +137,46 @@ these settings requires a window reload; subsequent grammar saves do not. Turn
 development mode off and reload to return to the packaged grammar. Rider plugins
 continue to use their bundled configuration.
 
+## Coloring: the TextMate palette
+
+The server colors with a theme's TextMate palette, so its semantic tokens look like a TextMate grammar's and a file
+keeps the colors it opened with when the server answers. A client that sends `initializationOptions.paletteTokens:
+true` gets one semantic token type per palette category, each named for a scope: `declarationKeyword` is
+`storage.type`, `blockBracket` is `punctuation.section.block`, and so on (`Nitrogen.LanguageService/Palette.cs`). The
+VS Code extensions map each type to its scope (`contributes.semanticTokenScopes`), and the Rider plugins map it to a
+Rider color. Other clients get the standard token types, as before.
+
+Each token gets the most precise color the server knows, in this order:
+
+1. language assistance (the `.ngr` assist, grammar functions);
+2. declared and resolved names, by the language's symbol styles;
+3. lowering: a word of a rule that `lowers` to an operation, outside its arguments, is a function;
+4. the literal's place in its rule: a word that starts a rule that `declares` something is a declaration keyword, a
+   word that starts any other rule a section keyword, a word after an earlier element a modifier, one of several bare
+   word alternatives a constant; brackets, terminators, separators and operators by spelling;
+5. numbers, strings and comments.
+
+A generated extension also carries a TextMate grammar built from the language's grammars with the same
+classification, so the first frame is painted before the server starts. For another extension, generate it with:
+
+```sh
+dotnet Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll generate textmate --config nitrogen.json --language <name> --id <language id> --output syntaxes/<language id>.tmLanguage.json
+dotnet Nitrogen.Cli/bin/Release/net10.0/nitrogen.dll generate palette --merge package.json
+```
+
+The second command writes the palette's `semanticTokenTypes` and `semanticTokenScopes` into an extension's
+`package.json`. The generated grammar also paints what follows a keyword where the rule says what it is: the name a
+rule declares or references, or a choice of constant words. A word that is a keyword in one rule and a name or
+constant in another cannot be told apart by a TextMate grammar; the server's color shows there.
+
+`.ngr` keeps its hand-written grammar, and the server matches its scopes exactly (`NgrStyles` in
+`Nitrogen.Cli/LspCommand.cs`). Languages served only through the generic extension's `nitrogen.json` support get the
+palette but no first-frame grammar: VS Code takes grammars from an extension's `package.json` only.
+
+`nitrogen tokens <file> [--config nitrogen.json]` prints the scope the server gives each token. `eng/check-palette.sh`
+compares it with the TextMate grammars for `Nitrogen.Ngr/Nitrogen.ngr`, `examples/DateCalc/DateCalc.ngr` and the
+DateCalc sample (run `npm ci` in `editors/vscode` first); accepted differences are listed in `eng/palette/`.
+
 ## Helper sources
 
 A language's helper sources can also carry its semantics. Every public static `ModuleDescriptor` or
@@ -230,6 +270,10 @@ quotation navigation and completion for constant category/text and explicit capt
 Regular, verbatim, raw and concatenated constant strings retain their C# source locations. Pattern
 compilation diagnostics appear at those locations. Unrelated methods with the same name and dynamic
 patterns receive no guessed assistance. Native C# diagnostics and navigation remain available.
+
+Pattern discards `$_` and `..$_` have category/shape hover and completion in C# and grammar helper
+patterns. They have no declaration, references or rename target. Named captures alongside discards
+retain their navigation and rename behavior; dollar text in strings/comments remains opaque.
 
 Every match arm is checked, including unused ones; development mode refreshes consumers after edits.
 Use [DateCalc's match helper](../examples/DateCalc/DateCalc.ngr) and

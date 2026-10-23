@@ -107,6 +107,40 @@ public sealed unsafe class ScopesModule : SyntaxModule
         _ => false,
     };
 
+    public override global::Nitrogen.LiteralRole? GetLiteralRole(int localKind, string literal) => (localKind, literal) switch
+    {
+        (6, "unit") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (6, "{") => global::Nitrogen.LiteralRole.BlockBracket,
+        (6, "}") => global::Nitrogen.LiteralRole.BlockBracket,
+        (7, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (7, "=") => global::Nitrogen.LiteralRole.Operator,
+        (7, "seq") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (8, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (8, "=") => global::Nitrogen.LiteralRole.Operator,
+        (8, "seqexport") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (9, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (9, "global") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (10, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (10, "globalgen") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (11, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (11, "=") => global::Nitrogen.LiteralRole.Operator,
+        (11, "let") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (12, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (12, "use") => global::Nitrogen.LiteralRole.SectionKeyword,
+        (13, "block") => global::Nitrogen.LiteralRole.SectionKeyword,
+        (13, "{") => global::Nitrogen.LiteralRole.BlockBracket,
+        (13, "}") => global::Nitrogen.LiteralRole.BlockBracket,
+        (14, ";") => global::Nitrogen.LiteralRole.Terminator,
+        (14, "gen") => global::Nitrogen.LiteralRole.DeclarationKeyword,
+        (15, "$") => global::Nitrogen.LiteralRole.Operator,
+        (18, "(") => global::Nitrogen.LiteralRole.Parenthesis,
+        (18, ")") => global::Nitrogen.LiteralRole.Parenthesis,
+        (18, ",") => global::Nitrogen.LiteralRole.Separator,
+        (19, ".") => global::Nitrogen.LiteralRole.Operator,
+        (20, "+") => global::Nitrogen.LiteralRole.Operator,
+        _ => null,
+    };
+
     public override global::System.Collections.Generic.IReadOnlyList<string> QuoteCategoryNames => new string[] { "Scopes.File", "Scopes.Unit", "Scopes.Item", "Scopes.Sequential", "Scopes.SequentialExport", "Scopes.Global", "Scopes.GlobalGen", "Scopes.Let", "Scopes.Use", "Scopes.Block", "Scopes.Gen", "Scopes.GenName", "Scopes.Expr" };
 
     public override global::System.Collections.Generic.IReadOnlyList<string> GetQuoteCategories(int localKind) => localKind switch
