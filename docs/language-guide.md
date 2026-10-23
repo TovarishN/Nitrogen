@@ -17,9 +17,17 @@ syntax Paired = "<" Open:Name Attributes:Attribute* ">" Children:Node* "</" Clos
 Use `warning` or `error` after `=>`. A match reports at the current node; a mismatch produces no diagnostic.
 The capture list is optional for a literal pattern. Captures have syntax categories, with `*` for lists,
 and use the same structural matching rules as syntax-function match arms: exact token spelling and
-nesting, trivia ignored, and at most one variable-length capture per physical list. These statements
+nesting, trivia ignored, and at most one named variable-length capture per physical list. These statements
 do not construct replacements and need no fallback. Their message expression uses the containing
 rule's semantic fields; pattern captures are used for recognition, not introduced as C# message variables.
+
+Read-only patterns also support anonymous discards: `$_` ignores one syntax node and `..$_` ignores
+zero or more items at a list site. Their category comes from the grammar position, so they need no
+capture declaration. Each occurrence is independent and returns no capture. Multiple list discards
+may surround a fixed structure, for example `<[ <credentials ..$_> ..$_ <password ..$_> $pass </password> ..$_ </credentials> ]>`
+with `pass: Text`. Matching tries the shortest prefix first and restores captures when retrying a
+candidate. Discards cannot construct replacement syntax; named captures retain their declared types
+and repeated-name equality checks.
 
 All diagnostic patterns are validated when the language is composed, including ones no input reaches.
 Warnings are preserved by the CLI and language service and do not block lowering; errors do. See the

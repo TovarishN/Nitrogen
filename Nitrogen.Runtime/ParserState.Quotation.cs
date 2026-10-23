@@ -10,6 +10,12 @@ public unsafe ref partial struct ParserState
         if (!_text[at..].StartsWith("..$")) return false;
         int end = at + 3;
         while (end < _text.Length && IsIdentifierPart(_text[end])) end++;
+        if (Holes is PatternHoleContracts && _text[(at + 3)..end].SequenceEqual("_"))
+        {
+            Position = at;
+            PushLeaf(SyntaxKinds.ListHole, end);
+            return true;
+        }
         if (end == at + 3 || !Holes.TryGetValue(_text[(at + 3)..end].ToString(), out var hole) ||
             !hole.IsList || hole.Category != category) return false;
         Position = at;

@@ -13,8 +13,8 @@ syntax module Xml
   syntax Paired = "<" Open:Name Attributes:Attribute* ">" Children:Node* "</" Close:Name ">"
   {
     check XML0001 Open.Text == Close.Text : $"closing tag '{Close.Text}' does not match '{Open.Text}'" at Close;
-    match (Attrs: Attribute*, PasswordAttrs: Attribute*, Content: Node*, _: Node*, _1: Node*)
-      <[ <credentials ..$Attrs>..$_<password ..$PasswordAttrs>..$Content</password></credentials>]>
+    match (pass: Text)
+      <[ <credentials ..$_> ..$_ <password ..$_> $pass </password> ..$_ </credentials> ]>
       => warning XML1001 : "A password is stored directly inside credentials; use a secret-ref instead.";
   }
   syntax Attribute = Name "=" Quoted;

@@ -9,12 +9,12 @@ dotnet run --project Nitrogen.Cli -- check examples/XmlPatterns/sample.xml
 `sample.xml` contains an ordinary XML configuration with nested services, attributes, comments, text and self-closing elements. `Xml.ngr` defines both the XML syntax and the warning rule, inside the `Paired` syntax rule's semantics block:
 
 ```ngr
-match (Attrs: Attribute*, PasswordAttrs: Attribute*, Content: Node*)
-  <[ <credentials ..$Attrs><password ..$PasswordAttrs>..$Content</password></credentials> ]>
+match (pass: Text)
+  <[ <credentials ..$_> ..$_ <password ..$_> $pass </password> ..$_ </credentials> ]>
   => warning XML1001 : "A password is stored directly inside credentials; use a secret-ref instead.";
 ```
 
-The pattern matches the current syntax node. `..$Attrs`, `..$PasswordAttrs` and `..$Content` capture typed lists; they are pattern syntax, not input XML. Attributes and password contents can vary. Literal tag names, nesting and child order must match. The password must be the credentials element's only child apart from whitespace. Every paired element is checked automatically, so surrounding structure can vary. Matching does not rewrite the tree or inspect raw XML text.
+The pattern matches the current syntax node. Each `..$_` independently ignores zero or more items in its list: attributes inside opening tags, and sibling nodes before or after the password. The expected syntax category is inferred from the grammar position. `$pass` remains a declared, typed `Text` capture, so this rule requires a password containing one text node; empty or mixed-content passwords do not match. Literal tag names and nesting must match. Every paired element is checked automatically. Matching does not rewrite the tree or inspect raw XML text.
 
 The sample produces one diagnostic:
 

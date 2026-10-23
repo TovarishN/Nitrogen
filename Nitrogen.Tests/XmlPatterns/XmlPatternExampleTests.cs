@@ -25,8 +25,8 @@ public sealed class XmlPatternExampleTests
         project.Set("input.xml", parsed.Tree);
         return new ProjectSemantics(project)["input.xml"].Diagnostics();
     }
-    static string Example(string file) => Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "../../../../examples/XmlPatterns", file));
+    static string Example(string file, [System.Runtime.CompilerServices.CallerFilePath] string sourcePath = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourcePath)!, "../../examples/XmlPatterns", file));
 
     [Fact]
     public void Sample_reports_one_warning_at_the_credentials_element()
@@ -41,13 +41,15 @@ public sealed class XmlPatternExampleTests
 
     [Theory]
     [InlineData("<credentials><password>demo</password></credentials>", 1)]
-    [InlineData("<root><credentials mode='local'><password a='1' b=\"2\">some <b>text</b></password></credentials></root>", 1)]
-    [InlineData("<root><credentials><password></password></credentials><credentials><password>x</password></credentials></root>", 2)]
+    [InlineData("<root><credentials mode='local'><password a='1' b=\"2\">some text</password></credentials></root>", 1)]
+    [InlineData("<root><credentials><password></password></credentials><credentials><password>x</password></credentials></root>", 1)]
     [InlineData("<credentials><secret-ref key='password' /></credentials>", 0)]
     [InlineData("<root><password>demo</password></root>", 0)]
     [InlineData("<Credentials><password>demo</password></Credentials>", 0)]
     [InlineData("<credentials><wrapper><password>demo</password></wrapper></credentials>", 0)]
-    [InlineData("<credentials><user>alice</user><password>demo</password></credentials>", 0)]
+    [InlineData("<credentials><user>alice</user><password>demo</password></credentials>", 1)]
+    [InlineData("<credentials><before/><password>demo</password><after/></credentials>", 1)]
+    [InlineData("<credentials><password>some <b>text</b></password></credentials>", 0)]
     [InlineData("<credentials><password /></credentials>", 0)]
     [InlineData("<root><!-- <credentials><password>x</password></credentials> --></root>", 0)]
     public void Rule_matches_structure_with_typed_list_captures(string source, int count)

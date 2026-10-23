@@ -80,6 +80,7 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
             {
                 foreach (var hole in QuotationWriter.Holes(quote.Text, analysis, quoteCategory ?? category))
                 {
+                    if (quoteCategory is not null && hole.Name == "_") continue;
                     var span = new GrammarSpan(quote.Span.Start + hole.Start, hole.Length);
                     if (!scope.TryGetValue(hole.Name, out var parameter))
                         report(GrammarCodes.UnknownHole, $"'${hole.Name}' is not in this quote's scope", span, module);
