@@ -19,7 +19,11 @@ The capture list is optional for a literal pattern. Captures have syntax categor
 and use the same structural matching rules as syntax-function match arms: exact token spelling and
 nesting, trivia ignored, and at most one named variable-length capture per physical list. These statements
 do not construct replacements and need no fallback. Their message expression uses the containing
-rule's semantic fields; pattern captures are used for recognition, not introduced as C# message variables.
+rule's semantic fields and the named captures of this match. Scalar captures are semantic node views:
+`"Matched {pass}"` inserts the captured source text, `{pass.Text}` accesses it explicitly, and captures
+whose categories declare semantic fields expose those fields too. List captures are read-only lists
+of those views, with `.Count` and indexing. Captures are local to this match's message, which runs only
+after a successful match; discarded `$_`/`..$_` positions introduce no variables.
 
 Read-only patterns also support anonymous discards: `$_` ignores one syntax node and `..$_` ignores
 zero or more items at a list site. Their category comes from the grammar position, so they need no

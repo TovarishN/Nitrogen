@@ -11,7 +11,7 @@ dotnet run --project Nitrogen.Cli -- check examples/XmlPatterns/sample.xml
 ```ngr
 match (pass: Text)
   <[ <credentials ..$_> ..$_ <password ..$_> $pass </password> ..$_ </credentials> ]>
-  => warning XML1001 : "A password is stored directly inside credentials; use a secret-ref instead.";
+  => warning XML1001 : "A password is stored directly inside credentials; use a secret-ref instead. {pass}";
 ```
 
 The pattern matches the current syntax node. Each `..$_` independently ignores zero or more items in its list: attributes inside opening tags, and sibling nodes before or after the password. The expected syntax category is inferred from the grammar position. `$pass` remains a declared, typed `Text` capture, so this rule requires a password containing one text node; empty or mixed-content passwords do not match. Literal tag names and nesting must match. Every paired element is checked automatically. Matching does not rewrite the tree or inspect raw XML text.
@@ -19,7 +19,7 @@ The pattern matches the current syntax node. Each `..$_` independently ignores z
 The sample produces one diagnostic:
 
 ```text
-sample.xml(6,5): warning XML1001: A password is stored directly inside credentials; use a secret-ref instead.
+sample.xml(6,5): warning XML1001: A password is stored directly inside credentials; use a secret-ref instead. example-only-password
 ```
 
 The secret reference and the password outside credentials do not match. Warnings leave the CLI exit code at zero. Malformed syntax and mismatched closing names are errors. Change `warning` to `error` to make the matched structure fail validation.

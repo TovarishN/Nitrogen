@@ -64,7 +64,8 @@ public sealed class SemanticsSymbol<T>(SymbolProperty<T> property, Func<FileSema
 /// <summary>A <c>check</c>: when the condition is false, the message is reported at the node under the code.</summary>
 public sealed class SemanticsCheck(string code, Func<FileSemantics, int, bool> condition, Func<FileSemantics, int, string> message,
     Func<FileSemantics, int, TextSpan>? at = null, DiagnosticSeverity severity = DiagnosticSeverity.Error,
-    SyntaxDiagnosticPattern? pattern = null)
+    SyntaxDiagnosticPattern? pattern = null,
+    Func<FileSemantics, int, IReadOnlyDictionary<string, QuoteArgument>, string>? matchedMessage = null)
 {
     public string Code { get; } = code;
     public DiagnosticSeverity Severity { get; } = severity;
@@ -73,14 +74,44 @@ public sealed class SemanticsCheck(string code, Func<FileSemantics, int, bool> c
     public bool Holds(FileSemantics semantics, int node)
     {
         if (Pattern is null) return condition(semantics, node);
+        return !Match(semantics, node).Matched;
+    }
+
+    QuoteMatchResult Match(FileSemantics semantics, int node)
+    {
+        if (Pattern is null) throw new InvalidOperationException("This check has no syntax pattern.");
         var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern);
         if (!compiled.Success) throw new InvalidOperationException(string.Join("; ", compiled.Diagnostics));
         var match = compiled.Pattern!.Match(new(semantics.Tree, node));
         if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
-        return !match.Matched;
+        return match;
     }
 
-    public string Message(FileSemantics semantics, int node) => message(semantics, node);
+    /// <summary>Evaluates a check once and formats its message only for a reported diagnostic.</summary>
+    public SemanticDiagnostic? Diagnose(FileSemantics semantics, int node)
+    {
+        string text;
+        if (Pattern is null)
+        {
+            if (condition(semantics, node)) return null;
+            text = message(semantics, node);
+        }
+        else
+        {
+            var match = Match(semantics, node);
+            if (!match.Matched) return null;
+            text = matchedMessage is null ? message(semantics, node) : matchedMessage(semantics, node, match.Captures);
+        }
+        return new SemanticDiagnostic(Code, Span(semantics, node), text) { Severity = Severity };
+    }
+
+    public string Message(FileSemantics semantics, int node)
+    {
+        if (Pattern is null || matchedMessage is null) return message(semantics, node);
+        var match = Match(semantics, node);
+        if (!match.Matched) throw new InvalidOperationException("A match diagnostic has no message for nonmatching syntax.");
+        return matchedMessage(semantics, node, match.Captures);
+    }
 
     /// <summary>Where the diagnostic sits: the child <c>at</c> names, else the node (issue 241).</summary>
     public TextSpan Span(FileSemantics semantics, int node) => at is null ? semantics.Tree.Span(node) : at(semantics, node);

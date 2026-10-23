@@ -211,7 +211,8 @@ internal sealed class SemanticsWriter
         var checks = block.Statements.Where(s => s is CheckStatement or MatchDiagnosticStatement)
             .Select((statement, i) => statement is MatchDiagnosticStatement match
                 ? $"new {Ns}SemanticsCheck({CSharpText.Literal(match.Code.Name)}, static (s, n) => true, "
-                    + $"static (s, n) => new {view}(s, n).Message_{i}(), severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")}, pattern: s_match_{kind.Name}_{i})"
+                    + $"static (s, n) => \"\", severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")}, pattern: s_match_{kind.Name}_{i}, "
+                    + $"matchedMessage: static (s, n, c) => new {view}(s, n).Message_{i}({string.Join(", ", match.Captures.Select(capture => $"{Ns}MatchDiagnosticCaptures.{(capture.IsList ? "List" : "Node")}<{CaptureType(capture)}>(s, c, {CSharpText.Literal(capture.Name.Name)})"))}))"
                 : statement is CheckStatement check ? $"new {Ns}SemanticsCheck({CSharpText.Literal(check.Code?.Name ?? "NS0100")}, "
                 + $"static (s, n) => new {view}(s, n).Check_{i}(), static (s, n) => new {view}(s, n).Message_{i}()"
                 + (check.At is { } at ? $", static (s, n) => new {view}(s, n).{CSharpText.Identifier(at.Name)}.Span" : "")
@@ -302,12 +303,20 @@ internal sealed class SemanticsWriter
             }
             else if (statement is MatchDiagnosticStatement match)
             {
-                b.Append($"    internal string Message_{check}() =>\n");
+                b.Append($"    internal string Message_{check}({string.Join(", ", match.Captures.Select(capture => (capture.IsList ? $"global::System.Collections.Generic.IReadOnlyList<{CaptureType(capture)}>" : CaptureType(capture)) + " " + CSharpText.Identifier(capture.Name.Name)))}) =>\n");
                 Fragment(b, match.Message, match.Message.Text.StartsWith("\"", StringComparison.Ordinal) ? "$" : "");
                 b.Append("        ;\n\n");
                 check++;
             }
         }
+    }
+
+    string CaptureType(QuoteParameter capture)
+    {
+        var category = _model.Analysis.Helpers.Category(capture.Category, _info.Module)!;
+        return StructOf(category.Rule) is { } name
+            ? _model.Info(category.Module).TypeRef(_info, name)
+            : Ns + "SemanticNode";
     }
 
     void WriteSymbolView(StringBuilder b)

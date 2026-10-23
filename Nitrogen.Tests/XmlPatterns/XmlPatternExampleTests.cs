@@ -35,6 +35,7 @@ public sealed class XmlPatternExampleTests
         var issue = Assert.Single(Analyze(source));
         Assert.Equal("XML1001", issue.Code);
         Assert.Equal(DiagnosticSeverity.Warning, issue.Severity);
+        Assert.Contains("example-only-password", issue.Message);
         Assert.Equal(source.IndexOf("<credentials source", StringComparison.Ordinal), issue.Span.Start);
         Assert.StartsWith("<credentials", source.Substring(issue.Span.Start, issue.Span.Length));
     }
@@ -86,7 +87,11 @@ public sealed class XmlPatternExampleTests
         var warning = Assert.Single(service.Diagnostics(uri));
         Assert.Equal("XML1001", warning.Code);
         Assert.Equal(ServiceSeverity.Warning, warning.Severity);
+        Assert.Contains("example-only-password", warning.Message);
         Assert.Equal(5, warning.Range.Start.Line);
+        service.Change(grammarUri, 2, File.ReadAllText(Example("Xml.ngr")).Replace("{pass}", "{pass.Text}"));
+        Assert.Empty(service.Diagnostics(grammarUri));
+        Assert.Contains("example-only-password", Assert.Single(service.Diagnostics(uri)).Message);
         service.Change(uri, 2, "<root></wrong>");
         Assert.Contains(service.Diagnostics(uri), diagnostic => diagnostic.Code == "XML0001");
     }
@@ -98,5 +103,6 @@ public sealed class XmlPatternExampleTests
         int code = await NitrogenCli.RunAsync(["check", Example("sample.xml")], output, CancellationToken.None);
         Assert.Equal(0, code);
         Assert.Contains("(6,5): warning XML1001:", output.ToString());
+        Assert.Contains("example-only-password", output.ToString());
     }
 }
