@@ -106,6 +106,18 @@ public sealed class VsCodeGenerationTests : IDisposable
     }
 
     [Fact]
+    public void GeneratedExtensionYieldsToNitride()
+    {
+        var request = Request();
+        VsCodeRenderer.Render(request, CancellationToken.None);
+        string extension = Read(request, "src/extension.ts");
+
+        int check = extension.IndexOf("getExtension('nitride.nitride')", StringComparison.Ordinal);
+        Assert.True(check >= 0, "the generated extension checks for Nitride");
+        Assert.True(check < extension.IndexOf("new LanguageClient(", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Extension_starts_the_bundled_server_with_its_config()
     {
         var request = Request();
