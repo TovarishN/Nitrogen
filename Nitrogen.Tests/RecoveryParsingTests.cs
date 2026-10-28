@@ -19,6 +19,34 @@ public unsafe class RecoveryParsingTests
     const string X1 = "(Field Name:\"x\" \"=\" Number:\"1\" \";\")";
 
     [Theory]
+    [InlineData("item a a { x = 1; y = 2; } item b { z = 3; }")]
+    [InlineData("item a a /* comment */ { x = 1; y = 2; } item b { z = 3; }")]
+    public void A_duplicate_header_name_does_not_consume_the_body(string text)
+    {
+        using var result = Parse(text);
+        var file = SyntaxView.Cast<FileNode>(result.Tree, result.Tree.Root);
+        Assert.Equal(2, file.Items.Count);
+        Assert.Equal(2, file.Items[0].Fields.Count);
+        Assert.Equal("x", file.Items[0].Fields[0].Key.Text.ToString());
+        Assert.Equal("y", file.Items[0].Fields[1].Key.Text.ToString());
+        Assert.Equal("z", file.Items[1].Fields[0].Key.Text.ToString());
+        Assert.Equal(new[] { new TextSpan(7, 1) }, result.Tree.SkippedSpans.ToArray());
+        Assert.Single(result.Diagnostics.ToArray());
+    }
+
+    [Fact]
+    public void A_repeated_name_that_starts_a_field_is_not_deleted()
+    {
+        using var result = Parse("item a a = 1; }");
+        var file = SyntaxView.Cast<FileNode>(result.Tree, result.Tree.Root);
+        Assert.Equal(1, file.Items.Count);
+        Assert.Equal(1, file.Items[0].Fields.Count);
+        Assert.Equal("a", file.Items[0].Fields[0].Key.Text.ToString());
+        Assert.Empty(result.Tree.SkippedSpans.ToArray());
+        Assert.True(new SyntaxNode(result.Tree, result.Tree.Child(file.Items[0].Index, 2)).IsMissing);
+    }
+
+    [Theory]
     [InlineData("item a { x = 1; item b { y = 2; }")]
     [InlineData("item a { item b { y = 2; }")]
     public void Missing_closing_brace_preserves_the_next_declaration(string text)
