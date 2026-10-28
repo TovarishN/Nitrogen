@@ -10,6 +10,8 @@ namespace Nitrogen.Tests.Mini;
 
 public sealed unsafe class MiniModule : SyntaxModule
 {
+    public override bool SupportsRecoverySeeding => true;
+
     public static readonly MiniModule Instance = new();
 
     public const int LWord = 1;
@@ -325,7 +327,7 @@ public sealed unsafe class MiniModule : SyntaxModule
         new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(2, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -347,7 +349,7 @@ public sealed unsafe class MiniModule : SyntaxModule
         new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, true),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") })),
         });
 
     static bool P1(ref ParserState s)

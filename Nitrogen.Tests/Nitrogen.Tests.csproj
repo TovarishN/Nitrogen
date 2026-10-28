@@ -35,6 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="..\docs\recovery-quality-baseline.json" Link="RecoveryQuality\baseline.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Grammars\**\*.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\Nitrogen.ngr" Link="Grammars\Nitrogen.ngr" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Nitrogen.Ngr\GrammarSemantics.cs" Link="NavigationSources\GrammarSemantics.cs" CopyToOutputDirectory="PreserveNewest" />
@@ -64,6 +65,7 @@
     <AdditionalFiles Include="Grammars\Mini.ngr" Namespace="Nitrogen.Tests.Mini" />
     <AdditionalFiles Include="Grammars\Lexical.ngr" Namespace="Nitrogen.Tests.Lexical" />
     <AdditionalFiles Include="Grammars\Recovery.ngr" Namespace="Nitrogen.Tests.Recovery" />
+    <AdditionalFiles Include="Grammars\RecoveryCSharp.ngr" Namespace="Nitrogen.Tests.RecoveryCSharp" />
     <AdditionalFiles Include="Grammars\Lists.ngr" Namespace="Nitrogen.Tests.Lists" />
     <AdditionalFiles Include="Grammars\Divide.ngr" Namespace="Nitrogen.Tests.Divide" />
     <AdditionalFiles Include="Grammars\Base.ngr" Namespace="Nitrogen.Tests.Base" />

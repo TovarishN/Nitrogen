@@ -448,6 +448,8 @@ internal sealed class SyntaxCodeWriter
         var literals = new List<string>();
         var keywords = new List<string>();
         var tokens = new List<string>();
+        var tokenStarts = new List<string>();
+        var firstSets = new FirstSets(_model);
         bool end = false;
         foreach (var terminal in lookahead.Items)
         {
@@ -460,6 +462,7 @@ internal sealed class SyntaxCodeWriter
                 {
                     var (rule, owner) = _model.Commits.Token(terminal.Value);
                     tokens.Add($"&{_model.Info(owner).ClassPrefix(_info)}Match{rule.Name}");
+                    tokenStarts.Add(firstSets.OfSequence(new[] { rule.Body }, 0, owner, null).ToAsciiSetCode());
                     break;
                 }
                 case TerminalKind.End:
@@ -469,7 +472,8 @@ internal sealed class SyntaxCodeWriter
             }
         }
         return $"new LookaheadSet(new string[] {{ {string.Join(", ", literals)} }}, new string[] {{ {string.Join(", ", keywords)} }}, "
-            + $"new delegate*<ReadOnlySpan<char>, int, int>[] {{ {string.Join(", ", tokens)} }}, {(end ? "true" : "false")})";
+            + $"new delegate*<ReadOnlySpan<char>, int, int>[] {{ {string.Join(", ", tokens)} }}, {(end ? "true" : "false")}"
+            + (tokens.Count == 0 ? ")" : $", new AsciiSet[] {{ {string.Join(", ", tokenStarts)} }})");
     }
 
     /// <summary>An element as a diagnostic phrase.</summary>

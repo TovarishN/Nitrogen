@@ -10,6 +10,8 @@ namespace Nitrogen.Tests.Calc;
 
 public sealed unsafe class CalcModule : SyntaxModule
 {
+    public override bool SupportsRecoverySeeding => true;
+
     public static readonly CalcModule Instance = new();
 
     public const int LNumber = 1;
@@ -519,18 +521,18 @@ public sealed unsafe class CalcModule : SyntaxModule
     }
 
     static readonly RepairSite s_repair0 = new(1, "';'",
-        new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, true),
+        new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, true, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair1 = new(1, "'('",
-        new LookaheadSet(new string[] { "(", ")", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false),
+        new LookaheadSet(new string[] { "(", ")", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "(" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -565,14 +567,14 @@ public sealed unsafe class CalcModule : SyntaxModule
         new SyncPoint[]
         {
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 
     static readonly RepairSite s_repair3 = new(1, "Expr",
         new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(2, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -587,28 +589,28 @@ public sealed unsafe class CalcModule : SyntaxModule
         new LookaheadSet(new string[] { ")", "*", "+", ",", "-", ";", "=", "^" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 
     static readonly RepairSite s_repair6 = new(2, "Expr",
         new LookaheadSet(new string[] { ")", "*", "+", ",", "-", ";", "=", "^" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 
     static readonly RepairSite s_repair7 = new(2, "Expr",
         new LookaheadSet(new string[] { ")", "*", "+", ",", "-", ";", "=", "^" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 
     static readonly RepairSite s_repair8 = new(2, "Expr",
         new LookaheadSet(new string[] { ")", "*", "+", ",", "-", ";", "=", "^" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchIdentifier, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 }
 

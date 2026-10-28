@@ -567,8 +567,7 @@ public unsafe ref partial struct ParserState
         }
         if (c is '"' or '\'')
         {
-            int close = _text.Slice(Position + 1).IndexOf(c);
-            Position = close < 0 ? _text.Length : Position + close + 2;
+            Position = SkipQuoted(Position);
             return 0;
         }
         if (IsIdentifierPart(c))
@@ -582,6 +581,21 @@ public unsafe ref partial struct ParserState
     }
 
     static bool IsCloser(char c) => c is ')' or ']' or '}';
+
+    // Recovery's lexical fallback must keep escaped delimiters inside the quoted unit, both
+    // while skipping damage and while reconstructing the surrounding bracket stack.
+    int SkipQuoted(int start)
+    {
+        char quote = _text[start];
+        int i = start + 1;
+        while (i < _text.Length)
+        {
+            char c = _text[i++];
+            if (c == quote) return i;
+            if (c == '\\' && i < _text.Length) i++;
+        }
+        return i;
+    }
 
     /// <summary>
     /// A closer at <paramref name="position"/> ends the current scope only when it closes the
@@ -631,8 +645,7 @@ public unsafe ref partial struct ParserState
             }
             else if (c is '"' or '\'')
             {
-                int close = _text.Slice(i + 1).IndexOf(c);
-                i = close < 0 ? _text.Length : i + close + 2;
+                i = SkipQuoted(i);
             }
             else
             {

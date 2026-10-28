@@ -153,6 +153,47 @@ public unsafe class RecoveryRuntimeTests
         Assert.Equal("(Group~ \"x\" !Literal \"1\" \";\")", SyntaxDumper.Dump(result.Tree));
     }
 
+    [Theory]
+    [InlineData("\"escaped \\\"; still quoted\"")]
+    [InlineData("'escaped \\'; still quoted'")]
+    [InlineData("\"escaped \\\\ end\"")]
+    public void Recovery_does_not_resume_inside_escaped_quoted_text(string quoted)
+    {
+        string text = "x = 1 " + quoted + " ;";
+        using var result = Language.Parse(text, Field);
+        Assert.Equal("(Group~ \"x\" \"=\" \"1\" \";\")", SyntaxDumper.Dump(result.Tree));
+        Assert.Equal(new[] { new TextSpan(6, quoted.Length) }, result.Tree.SkippedSpans.ToArray());
+        Assert.Single(result.Diagnostics.ToArray());
+    }
+
+    const string QuotedPrefix = "\"escaped \\\" } still quoted\"";
+    static readonly Rule QuotedBlock = new("QuotedBlock", &ParseQuotedBlock);
+
+    static bool ParseQuotedBlock(ref ParserState s)
+    {
+        var start = s.Mark();
+        s.Open(SyntaxKinds.Group);
+        if (!s.MatchLiteral("{")) return Fail(ref s, start);
+        s.SkipTrivia();
+        if (!s.MatchLiteral(QuotedPrefix) || !ParseField(ref s)) return Fail(ref s, start);
+        s.SkipTrivia();
+        if (!s.MatchLiteral("}")) return Fail(ref s, start);
+        s.Close();
+        return true;
+    }
+
+    [Fact]
+    public void Escaped_quotes_do_not_hide_the_enclosing_scope_from_recovery()
+    {
+        string text = "{ " + QuotedPrefix + " x = 1 }";
+        using var result = Language.Parse(text, QuotedBlock);
+        Assert.False(result.Success);
+        Assert.Empty(result.Tree.SkippedSpans.ToArray());
+        Assert.Single(result.Diagnostics.ToArray());
+        Assert.Contains("!Literal", SyntaxDumper.Dump(result.Tree));
+        Assert.EndsWith("\"}\")", SyntaxDumper.Dump(result.Tree));
+    }
+
     [Fact]
     public void A_closer_that_closes_no_open_bracket_is_skipped_like_other_input()
     {

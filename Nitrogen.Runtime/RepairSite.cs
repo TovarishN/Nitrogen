@@ -11,13 +11,23 @@ public sealed unsafe class LookaheadSet
     readonly string[] _keywords;
     readonly delegate*<ReadOnlySpan<char>, int, int>[] _tokens;
     readonly bool _end;
+    readonly AsciiSet[]? _tokenStarts;
 
     public LookaheadSet(string[] literals, string[] keywords, delegate*<ReadOnlySpan<char>, int, int>[] tokens, bool end)
+        : this(literals, keywords, tokens, end, null)
     {
+    }
+
+    /// <summary>Optional conservative start filters, one per token. Unknown starts use <see cref="AsciiSet.Any"/>.</summary>
+    public LookaheadSet(string[] literals, string[] keywords, delegate*<ReadOnlySpan<char>, int, int>[] tokens, bool end, AsciiSet[]? tokenStarts)
+    {
+        if (tokenStarts is not null && tokenStarts.Length != tokens.Length)
+            throw new ArgumentException("A start filter is required for each token.", nameof(tokenStarts));
         _literals = literals;
         _keywords = keywords;
         _tokens = tokens;
         _end = end;
+        _tokenStarts = tokenStarts;
     }
 
     public bool Matches(ReadOnlySpan<char> text, int position)
@@ -30,7 +40,10 @@ public sealed unsafe class LookaheadSet
             if (rest.StartsWith(keyword) && (rest.Length == keyword.Length || !ParserState.IsIdentifierPart(rest[keyword.Length])))
                 return true;
         for (int i = 0; i < _tokens.Length; i++)
+        {
+            if (_tokenStarts is not null && !_tokenStarts[i].Matches(text[position])) continue;
             if (_tokens[i](text, position) > position) return true;
+        }
         return false;
     }
 }
