@@ -62,6 +62,33 @@ automatically.
 
 ## Current Nitrogen behavior
 
+Root-list follow-up: a start rule whose entire body is a zero-or-more repetition
+can now skip leading/inter-declaration damage and resume at the next item's
+grammar-derived FIRST set. This permission applies only with the root-rule and
+list frames open; calls nested inside another rule keep ordinary termination.
+Balanced skipped units are scanned with the existing lexical fallback. If no
+later item starts, the original trailing-input handling and tree shape remain.
+The existing repair cap applies when committing a resumed item.
+
+Reviewed changes to the 413-mutation baseline:
+
+| Family | Preservation before | Preservation after | Diagnostics before / after |
+|---|---:|---:|---:|
+| C# delete | 80/90 | 81/90 | 45 / 45 |
+| C# duplicate | 71/90 | 72/90 | 61 / 61 |
+| C# insert | 81/90 | 90/90 | 44 / 44 |
+| C# swap | 51/74 | 61/74 | 65 / 70 |
+| Local delete | 60/66 | 62/66 | 41 / 41 |
+| Local duplicate | 56/66 | 58/66 | 41 / 41 |
+| Local insert | 61/66 | 66/66 | 38 / 38 |
+| Local swap | 46/58 | 53/58 | 71 / 75 |
+
+Other families are unchanged. The higher swap diagnostic ceilings are an explicit
+trade-off for continued parsing; no claim of reduced cascades is made for this
+change. The frozen baseline retains every remaining lost-item edit for replay.
+Root-list scanning adds linear work over skipped input, including unsuccessful
+search for a later declaration. It is not enabled on the successful strict path.
+
 Failed-pass seeding now reuses successful extensible-rule recognition inside
 the same parse when every module declares the generated seeding contract.
 Repair flags and precedence remain part of memo identity; failures are rerun.

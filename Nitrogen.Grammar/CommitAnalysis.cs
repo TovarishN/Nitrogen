@@ -922,6 +922,8 @@ internal sealed class CommitAnalysis
 
     // ---- repair data ----
 
+    internal Lookahead RecoveryFirst(Expr expr) => ConcreteFirst(expr);
+
     Lookahead Insert(SequenceExpr sequence, int index)
     {
         int count = sequence.Items.Count;

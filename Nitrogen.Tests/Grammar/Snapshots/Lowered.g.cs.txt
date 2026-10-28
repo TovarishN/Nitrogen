@@ -242,7 +242,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         var start = s.Mark();
         s.Open(LoweredKinds.File);
         s.SkipTrivia();
-        if (!P1(ref s)) return Fail(ref s, start);
+        if (!P2(ref s)) return Fail(ref s, start);
         s.Close();
         return true;
     }
@@ -969,7 +969,11 @@ public sealed unsafe class LoweredModule : SyntaxModule
         return p;
     }
 
-    static bool P1(ref ParserState s)
+    static readonly RepairSite s_rootList1 = new(1, "Item",
+        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, true),
+        new SyncPoint[] { new SyncPoint(0, new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })) });
+
+    static bool P2(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
         while (true)
@@ -980,6 +984,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
             if (!(s.InTemplate && s.TryListHole("Lowered.Item") || ParseItem(ref s)) || s.Position == before)
             {
                 s.Reset(m);
+                if (s.Recovering && s.RecoverInRootList(s_rootList1)) continue;
                 break;
             }
         }
