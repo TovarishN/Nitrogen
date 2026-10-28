@@ -274,7 +274,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         var start = s.Mark();
         s.Open(ScopesKinds.File);
         s.SkipTrivia();
-        if (!P1(ref s)) return Fail(ref s, start);
+        if (!P2(ref s)) return Fail(ref s, start);
         s.Close();
         return true;
     }
@@ -353,7 +353,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         }
     e3:
         s.SkipTrivia();
-        if (!P2(ref s)) return Fail(ref s, start);
+        if (!P3(ref s)) return Fail(ref s, start);
     e4:
         s.SkipTrivia();
         if (!s.MatchLiteral("}"))
@@ -927,7 +927,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         }
     e2:
         s.SkipTrivia();
-        if (!P3(ref s)) return Fail(ref s, start);
+        if (!P4(ref s)) return Fail(ref s, start);
     e3:
         s.SkipTrivia();
         if (!s.MatchLiteral("}"))
@@ -1103,7 +1103,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
         }
     e2:
         s.SkipTrivia();
-        if (!P4(ref s)) return false;
+        if (!P5(ref s)) return false;
     e3:
         s.SkipTrivia();
         if (!s.MatchLiteral(")"))
@@ -1205,7 +1205,11 @@ public sealed unsafe class ScopesModule : SyntaxModule
         }
     }
 
-    static bool P1(ref ParserState s)
+    static readonly RepairSite s_rootList1 = new(1, "Unit",
+        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, true),
+        new SyncPoint[] { new SyncPoint(0, new LookaheadSet(new string[] {  }, new string[] { "unit" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)) });
+
+    static bool P2(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
         while (true)
@@ -1216,6 +1220,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
             if (!(s.InTemplate && s.TryListHole("Scopes.Unit") || ParseUnit(ref s)) || s.Position == before)
             {
                 s.Reset(m);
+                if (s.Recovering && s.RecoverInRootList(s_rootList1)) continue;
                 break;
             }
         }
@@ -1250,7 +1255,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static bool P2(ref ParserState s)
+    static bool P3(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
         while (true)
@@ -1433,7 +1438,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "block", "gen", "global", "globalgen", "let", "seq", "seqexport", "use" }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static bool P3(ref ParserState s)
+    static bool P4(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
         while (true)
@@ -1491,7 +1496,7 @@ public sealed unsafe class ScopesModule : SyntaxModule
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
-    static bool P4(ref ParserState s)
+    static bool P5(ref ParserState s)
     {
         s.Open(SyntaxKinds.List);
         if ((s.InTemplate && s.TryListHole("Scopes.Expr") || s.ParseExtensible(Instance.Expr, 0)))

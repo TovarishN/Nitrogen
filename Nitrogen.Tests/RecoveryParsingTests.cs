@@ -5,7 +5,7 @@ using Xunit;
 namespace Nitrogen.Tests;
 
 /// <summary>Generated recovery (issue 235) on Recovery.ngr, end to end.</summary>
-public class RecoveryParsingTests
+public unsafe class RecoveryParsingTests
 {
     static readonly Language Recovery = new LanguageBuilder().Add(RecoveryModule.Instance).Build();
 
@@ -17,6 +17,50 @@ public class RecoveryParsingTests
     static string Item(string name, string fields) => $"(Item \"item\" Name:\"{name}\" \"{{\" {fields} \"}}\")";
 
     const string X1 = "(Field Name:\"x\" \"=\" Number:\"1\" \";\")";
+
+    static readonly Rule WrappedFile = new("WrappedFile", &ParseWrappedFile);
+
+    static bool ParseWrappedFile(ref ParserState s)
+    {
+        var mark = s.Mark();
+        s.Open(SyntaxKinds.Group);
+        if (s.MatchKeyword("outer"))
+        {
+            s.SkipTrivia();
+            var parse = RecoveryModule.File.Parse;
+            if (parse(ref s))
+            {
+                s.SkipTrivia();
+                if (s.MatchKeyword("end")) { s.Close(); return true; }
+            }
+        }
+        s.Reset(mark);
+        return false;
+    }
+
+    [Fact]
+    public void Root_list_reentry_is_disabled_when_the_rule_is_called_inside_another_rule()
+    {
+        using var valid = Recovery.Parse("outer item a { } end", WrappedFile);
+        Assert.True(valid.Success);
+        using var nested = Recovery.Parse("outer item a { } ?? item b { } end", WrappedFile);
+        Assert.Equal(SyntaxKinds.Error, nested.Tree.Kind(nested.Tree.Root));
+    }
+
+    [Theory]
+    [InlineData("?? item a { } item b { }")]
+    [InlineData("item a { } ?? item b { }")]
+    [InlineData("item a { } (junk { nested }) item b { }")]
+    public void Damage_in_a_root_list_preserves_later_declarations(string text)
+    {
+        using var result = Parse(text);
+        var file = SyntaxView.Cast<FileNode>(result.Tree, result.Tree.Root);
+        Assert.Equal(2, file.Items.Count);
+        Assert.Equal("a", file.Items[0].Name.Text.ToString());
+        Assert.Equal("b", file.Items[1].Name.Text.ToString());
+        Assert.Single(result.Diagnostics.ToArray());
+        Assert.Single(result.Tree.SkippedSpans.ToArray());
+    }
 
     [Fact]
     public void A_missing_semicolon_is_inserted_before_the_closing_brace()

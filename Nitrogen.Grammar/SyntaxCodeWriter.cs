@@ -64,7 +64,18 @@ internal sealed class SyntaxCodeWriter
         }
         b.Append("        var start = s.Mark();\n")
             .Append($"        s.Open({_info.KindsName}.{CSharpText.Identifier(rule.Name)});\n");
-        WriteElements(b, rule.Body as SequenceExpr, elements, module, null);
+        var sole = rule.Body is LabeledExpr labeledBody ? labeledBody.Inner : rule.Body;
+        if (sole is RepeatExpr { Kind: RepeatKind.ZeroOrMore } rootList)
+        {
+            string site = "s_rootList" + (++_counter);
+            _helpers.Append($"    static readonly RepairSite {site} = new(1, {CSharpText.Literal(Describe(rootList.Inner))},\n")
+                .Append($"        {LookaheadCode(Lookahead.Of(Terminal.End))},\n")
+                .Append($"        new SyncPoint[] {{ new SyncPoint(0, {LookaheadCode(_model.Commits.RecoveryFirst(rootList.Inner))}) }});\n\n");
+            string match = Element(rule.Body, module, null, 0, site, rootOnly: true);
+            b.Append($"        s.SkipTrivia();\n        if (!{match}) return Fail(ref s, start);\n")
+                .Append("        s.Close();\n        return true;\n");
+        }
+        else WriteElements(b, rule.Body as SequenceExpr, elements, module, null);
         b.Append("    }\n\n");
     }
 
@@ -132,12 +143,12 @@ internal sealed class SyntaxCodeWriter
         return element is ReferenceExpr reference && _model.Resolve(reference.Name, module, implicitModule).Key == point.Key;
     }
 
-    string Element(Expr expr, ModuleDecl module, string? implicitModule, int minPrecedence, string? listRepair = null)
+    string Element(Expr expr, ModuleDecl module, string? implicitModule, int minPrecedence, string? listRepair = null, bool rootOnly = false)
     {
         switch (expr)
         {
             case LabeledExpr labeled:
-                return Element(labeled.Inner, module, implicitModule, minPrecedence, listRepair);
+                return Element(labeled.Inner, module, implicitModule, minPrecedence, listRepair, rootOnly);
             case LiteralExpr literal:
                 return IsKeywordLike(literal.Value)
                     ? $"s.MatchKeyword({CSharpText.Literal(literal.Value)})"
@@ -162,7 +173,7 @@ internal sealed class SyntaxCodeWriter
             case AnyCharExpr:
                 return $"s.MatchToken(SyntaxKinds.Literal, {TokenCall(_tokens.MatcherMethod(expr, module, implicitModule))}, \"character\")";
             default:
-                return Helper(expr, module, implicitModule, listRepair) + "(ref s)";
+                return Helper(expr, module, implicitModule, listRepair, rootOnly) + "(ref s)";
         }
     }
 
@@ -224,7 +235,7 @@ internal sealed class SyntaxCodeWriter
         }
     }
 
-    string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null)
+    string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null, bool rootOnly = false)
     {
         string name = "P" + (++_counter);
         var body = new StringBuilder();
@@ -247,7 +258,7 @@ internal sealed class SyntaxCodeWriter
                     .Append("            var m = s.Mark();\n            s.SkipTrivia();\n            int before = s.Position;\n")
                     .Append($"            if (!{item} || s.Position == before)\n")
                     .Append("            {\n                s.Reset(m);\n")
-                    .Append(listRepair is null ? "" : $"                if (s.Recovering && s.RecoverInList({listRepair})) continue;\n")
+                    .Append(listRepair is null ? "" : $"                if (s.Recovering && s.{(rootOnly ? "RecoverInRootList" : "RecoverInList")}({listRepair})) continue;\n")
                     .Append("                break;\n            }\n        }\n")
                     .Append($"        {close}\n        return true;\n");
                 break;

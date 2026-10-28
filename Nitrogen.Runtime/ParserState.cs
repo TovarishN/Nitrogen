@@ -494,6 +494,39 @@ public unsafe ref partial struct ParserState
         }
     }
 
+    /// <summary>Re-enter a root rule's sole repetition after damage; nested calls retain ordinary list termination.</summary>
+    public bool RecoverInRootList(RepairSite site)
+    {
+        if (Arena.FrameCount != 2) return false;
+        int original = Position;
+        SkipTrivia();
+        int from = Position, depth = 0;
+        while (Position < _text.Length)
+        {
+            depth = Math.Max(0, depth + SkipUnit());
+            int skippedEnd = Position;
+            SkipTrivia();
+            if (depth != 0 || Position >= _text.Length) continue;
+            foreach (var point in site.Sync)
+            {
+                if (point.Element != site.Element - 1 || !point.First.Matches(_text, Position)) continue;
+                var a = Arena;
+                a.HasRecovery = true;
+                int text = a.AddRepairText(site.Expected);
+                if (++a.RepairCount > BuildArena.MaxRepairs)
+                {
+                    GiveUp(from, text);
+                    return false;
+                }
+                Skipped(from, skippedEnd, text);
+                return true;
+            }
+        }
+        // No later declaration: retain the existing trailing-input handling and tree shape.
+        Position = original;
+        return false;
+    }
+
     /// <summary>
     /// A separated list's separator failed (recovery pass). True, with the diagnostic pending for
     /// the next Missing node, when another item starts here and the element after the list does not:

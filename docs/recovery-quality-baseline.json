@@ -6,7 +6,7 @@
     "csharp-subset/delete": {
       "Cases": 44,
       "Eligible": 90,
-      "Preserved": 80,
+      "Preserved": 81,
       "Diagnostics": 45,
       "ErrorRoots": 0,
       "RoslynPreserved": 74,
@@ -15,7 +15,7 @@
     "csharp-subset/duplicate": {
       "Cases": 44,
       "Eligible": 90,
-      "Preserved": 71,
+      "Preserved": 72,
       "Diagnostics": 61,
       "ErrorRoots": 0,
       "RoslynPreserved": 82,
@@ -24,7 +24,7 @@
     "csharp-subset/insert": {
       "Cases": 44,
       "Eligible": 90,
-      "Preserved": 81,
+      "Preserved": 90,
       "Diagnostics": 44,
       "ErrorRoots": 0,
       "RoslynPreserved": 74,
@@ -42,8 +42,8 @@
     "csharp-subset/swap": {
       "Cases": 40,
       "Eligible": 74,
-      "Preserved": 51,
-      "Diagnostics": 65,
+      "Preserved": 61,
+      "Diagnostics": 70,
       "ErrorRoots": 0,
       "RoslynPreserved": 68,
       "RoslynDiagnostics": 120
@@ -60,7 +60,7 @@
     "local/delete": {
       "Cases": 38,
       "Eligible": 66,
-      "Preserved": 60,
+      "Preserved": 62,
       "Diagnostics": 41,
       "ErrorRoots": 0,
       "RoslynPreserved": 0,
@@ -69,7 +69,7 @@
     "local/duplicate": {
       "Cases": 38,
       "Eligible": 66,
-      "Preserved": 56,
+      "Preserved": 58,
       "Diagnostics": 41,
       "ErrorRoots": 0,
       "RoslynPreserved": 0,
@@ -78,7 +78,7 @@
     "local/insert": {
       "Cases": 38,
       "Eligible": 66,
-      "Preserved": 61,
+      "Preserved": 66,
       "Diagnostics": 38,
       "ErrorRoots": 0,
       "RoslynPreserved": 0,
@@ -96,8 +96,8 @@
     "local/swap": {
       "Cases": 36,
       "Eligible": 58,
-      "Preserved": 46,
-      "Diagnostics": 71,
+      "Preserved": 53,
+      "Diagnostics": 75,
       "ErrorRoots": 0,
       "RoslynPreserved": 0,
       "RoslynDiagnostics": 0
@@ -128,62 +128,6 @@
       "Length": 4,
       "Replacement": "",
       "ItemStart": 16
-    },
-    {
-      "Fixture": "items",
-      "Family": "delete",
-      "Start": 0,
-      "Length": 4,
-      "Replacement": "",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 9
-    },
-    {
-      "Fixture": "items",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 16
-    },
-    {
-      "Fixture": "items",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 6,
-      "Replacement": "a item",
-      "ItemStart": 9
-    },
-    {
-      "Fixture": "items",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 6,
-      "Replacement": "a item",
-      "ItemStart": 16
-    },
-    {
-      "Fixture": "items",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 6,
-      "Replacement": "a item",
-      "ItemStart": 34
     },
     {
       "Fixture": "items",
@@ -259,26 +203,10 @@
     },
     {
       "Fixture": "items",
-      "Family": "swap",
-      "Start": 21,
-      "Length": 3,
-      "Replacement": "} ;",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
       "Family": "delete",
       "Start": 23,
       "Length": 1,
       "Replacement": "",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
-      "Family": "duplicate",
-      "Start": 23,
-      "Length": 0,
-      "Replacement": "} ",
       "ItemStart": 34
     },
     {
@@ -307,22 +235,6 @@
     },
     {
       "Fixture": "items",
-      "Family": "insert",
-      "Start": 25,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
-      "Family": "swap",
-      "Start": 25,
-      "Length": 6,
-      "Replacement": "b item",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
       "Family": "duplicate",
       "Start": 30,
       "Length": 0,
@@ -346,46 +258,6 @@
       "ItemStart": 34
     },
     {
-      "Fixture": "lists",
-      "Family": "delete",
-      "Start": 0,
-      "Length": 3,
-      "Replacement": "",
-      "ItemStart": 17
-    },
-    {
-      "Fixture": "lists",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 17
-    },
-    {
-      "Fixture": "lists",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 5,
-      "Replacement": "a set",
-      "ItemStart": 17
-    },
-    {
-      "Fixture": "lists",
-      "Family": "swap",
-      "Start": 14,
-      "Length": 2,
-      "Replacement": ";)",
-      "ItemStart": 17
-    },
-    {
-      "Fixture": "lists",
-      "Family": "duplicate",
-      "Start": 15,
-      "Length": 0,
-      "Replacement": "; ",
-      "ItemStart": 17
-    },
-    {
       "Fixture": "csharp-siblings",
       "Family": "delete",
       "Start": 0,
@@ -408,78 +280,6 @@
       "Length": 5,
       "Replacement": "",
       "ItemStart": 36
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "delete",
-      "Start": 0,
-      "Length": 5,
-      "Replacement": "",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 21
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 36
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 7,
-      "Replacement": "C class",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 7,
-      "Replacement": "C class",
-      "ItemStart": 21
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 7,
-      "Replacement": "C class",
-      "ItemStart": 36
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 7,
-      "Replacement": "C class",
-      "ItemStart": 57
     },
     {
       "Fixture": "csharp-siblings",
@@ -595,26 +395,10 @@
     },
     {
       "Fixture": "csharp-siblings",
-      "Family": "swap",
-      "Start": 43,
-      "Length": 3,
-      "Replacement": "} ;",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
       "Family": "delete",
       "Start": 45,
       "Length": 1,
       "Replacement": "",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "duplicate",
-      "Start": 45,
-      "Length": 0,
-      "Replacement": "} ",
       "ItemStart": 57
     },
     {
@@ -639,22 +423,6 @@
       "Start": 47,
       "Length": 5,
       "Replacement": "",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "insert",
-      "Start": 47,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "swap",
-      "Start": 47,
-      "Length": 7,
-      "Replacement": "D class",
       "ItemStart": 57
     },
     {
@@ -695,38 +463,6 @@
       "Start": 13,
       "Length": 5,
       "Replacement": "",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "csharp-unicode",
-      "Family": "insert",
-      "Start": 13,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 23
-    },
-    {
-      "Fixture": "csharp-unicode",
-      "Family": "insert",
-      "Start": 13,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "csharp-unicode",
-      "Family": "swap",
-      "Start": 13,
-      "Length": 7,
-      "Replacement": "C class",
-      "ItemStart": 23
-    },
-    {
-      "Fixture": "csharp-unicode",
-      "Family": "swap",
-      "Start": 13,
-      "Length": 7,
-      "Replacement": "C class",
       "ItemStart": 34
     },
     {
@@ -795,22 +531,6 @@
     },
     {
       "Fixture": "nitride-csharp4-grammar-0",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "nitride-csharp4-grammar-0",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 7,
-      "Replacement": "C class",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "nitride-csharp4-grammar-0",
       "Family": "duplicate",
       "Start": 6,
       "Length": 0,
@@ -839,22 +559,6 @@
       "Start": 0,
       "Length": 5,
       "Replacement": "",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "nitride-csharp4-grammar-2",
-      "Family": "insert",
-      "Start": 0,
-      "Length": 0,
-      "Replacement": "?? ",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "nitride-csharp4-grammar-2",
-      "Family": "swap",
-      "Start": 0,
-      "Length": 7,
-      "Replacement": "C class",
       "ItemStart": 10
     },
     {
