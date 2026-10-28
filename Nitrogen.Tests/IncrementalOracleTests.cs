@@ -105,8 +105,10 @@ public class IncrementalOracleTests
                 previous.Dispose();
                 previous = reparsed;
                 using var full = c.Language.Parse(next, c.Start);
+                using var unseeded = c.Language.ParseUnseeded(next, c.Start);
                 try
                 {
+                    TreeAssert.Same(unseeded, full);
                     TreeAssert.Same(full, reparsed);
                 }
                 catch (Exception e)

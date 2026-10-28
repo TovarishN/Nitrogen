@@ -10,6 +10,8 @@ namespace Nitrogen.Tests.Lowered;
 
 public sealed unsafe class LoweredModule : SyntaxModule
 {
+    public override bool SupportsRecoverySeeding => true;
+
     public static readonly LoweredModule Instance = new();
 
     public const int LDigits = 1;
@@ -989,18 +991,18 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ":" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(2, new LookaheadSet(new string[] { ":" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair1 = new(2, "':'",
-        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false),
+        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") }),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { ":" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1008,12 +1010,12 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(3, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair3 = new(4, "';'",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(4, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
@@ -1023,12 +1025,12 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair5 = new(2, "';'",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
@@ -1038,32 +1040,32 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz") })),
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair7 = new(2, "';'",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair8 = new(1, "';'",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "fixed", "input", "plain", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, true, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair9 = new(1, "'('",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "(" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { "," }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(5, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1071,18 +1073,18 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { "," }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { "," }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(5, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
     static readonly RepairSite s_repair11 = new(3, "','",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(3, new LookaheadSet(new string[] { "," }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(5, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1090,7 +1092,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(4, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(5, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1102,11 +1104,11 @@ public sealed unsafe class LoweredModule : SyntaxModule
         });
 
     static readonly RepairSite s_repair14 = new(1, "'('",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "(" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1114,7 +1116,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1126,11 +1128,11 @@ public sealed unsafe class LoweredModule : SyntaxModule
         });
 
     static readonly RepairSite s_repair17 = new(1, "'('",
-        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false),
+        new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "(" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -1138,7 +1140,7 @@ public sealed unsafe class LoweredModule : SyntaxModule
         new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] { "add", "turn", "wrap" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchName, &MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 

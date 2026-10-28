@@ -25,6 +25,12 @@ public abstract class SyntaxModule
 
     public int KindBase { get; }
 
+    /// <summary>
+    /// Successful strict recognition at calls without repair permission is unchanged in recovery.
+    /// Generated modules declare this contract; handwritten and older modules default to no seeding.
+    /// </summary>
+    public virtual bool SupportsRecoverySeeding => false;
+
     public abstract string GetKindName(int localKind);
 
     /// <summary>Declares this module's extension points and adds its extensions (to its own or other modules' points).</summary>

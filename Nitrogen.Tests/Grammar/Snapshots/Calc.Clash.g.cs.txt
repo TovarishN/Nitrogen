@@ -10,6 +10,8 @@ namespace Nitrogen.Tests.Calc;
 
 public sealed unsafe class ClashModule : SyntaxModule
 {
+    public override bool SupportsRecoverySeeding => true;
+
     public static readonly ClashModule Instance = new();
 
     public const int LInvoke = 1;
@@ -113,11 +115,11 @@ public sealed unsafe class ClashModule : SyntaxModule
     }
 
     static readonly RepairSite s_repair0 = new(1, "'('",
-        new LookaheadSet(new string[] { "(", ")", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false),
+        new LookaheadSet(new string[] { "(", ")", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "(" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
         });
 
@@ -152,7 +154,7 @@ public sealed unsafe class ClashModule : SyntaxModule
         new SyncPoint[]
         {
             new SyncPoint(3, new LookaheadSet(new string[] { ")" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 }
 

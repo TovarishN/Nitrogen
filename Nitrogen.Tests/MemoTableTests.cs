@@ -6,6 +6,26 @@ namespace Nitrogen.Tests;
 public class MemoTableTests
 {
     [Fact]
+    public void Recovery_seed_copies_successes_and_discards_failures_and_old_generations()
+    {
+        var source = new MemoTable();
+        var seed = new MemoTable();
+        source.Set(1, 0, 10, 5, 8);
+        source.Clear();
+        source.Set(2, 4, 11, 9, 12);
+        source.Set(3, 4, -1, -1, 13);
+        seed.Set(9, 0, 20, 5);
+        source.CopySuccessesTo(seed);
+        Assert.Equal(1, seed.Count);
+        Assert.True(seed.TryGet(2, 4, out int node, out int end, out int examined));
+        Assert.Equal((11, 9, 12), (node, end, examined));
+        Assert.False(seed.TryGet(1, 0, out _, out _));
+        Assert.False(seed.TryGet(3, 4, out _, out _));
+        Assert.False(seed.TryGet(2 | (1 << 8), 4, out _, out _)); // Repair flags require a distinct result.
+        Assert.False(seed.TryGet(9, 0, out _, out _));
+    }
+
+    [Fact]
     public void Set_then_get_round_trips()
     {
         var memo = new MemoTable();
