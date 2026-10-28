@@ -18,6 +18,32 @@ public unsafe class RecoveryParsingTests
 
     const string X1 = "(Field Name:\"x\" \"=\" Number:\"1\" \";\")";
 
+    [Theory]
+    [InlineData("item a { x = 1; item b { y = 2; }")]
+    [InlineData("item a { item b { y = 2; }")]
+    public void Missing_closing_brace_preserves_the_next_declaration(string text)
+    {
+        using var result = Parse(text);
+        var file = SyntaxView.Cast<FileNode>(result.Tree, result.Tree.Root);
+        Assert.Equal(2, file.Items.Count);
+        Assert.Equal("b", file.Items[1].Name.Text.ToString());
+        Assert.Equal("y", file.Items[1].Fields[0].Key.Text.ToString());
+        Assert.Empty(result.Tree.SkippedSpans.ToArray());
+        Assert.Single(result.Diagnostics.ToArray());
+        Assert.Contains("'}'", result.FormatMessage(result.Diagnostics[0]));
+        Assert.True(new SyntaxNode(result.Tree, result.Tree.Child(file.Items[0].Index, 4)).IsMissing);
+    }
+
+    [Fact]
+    public void A_malformed_following_declaration_reports_its_missing_name()
+    {
+        using var result = Parse("item a { x = 1; y = 2; item } b { z = 3; }");
+        var file = SyntaxView.Cast<FileNode>(result.Tree, result.Tree.Root);
+        Assert.Equal(2, file.Items.Count);
+        Assert.True(file.Items[1].Name.IsMissing);
+        Assert.Contains(result.Diagnostics.ToArray(), diagnostic => result.FormatMessage(diagnostic) == "expected Name");
+    }
+
     static readonly Rule WrappedFile = new("WrappedFile", &ParseWrappedFile);
 
     static bool ParseWrappedFile(ref ParserState s)

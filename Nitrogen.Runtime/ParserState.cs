@@ -563,6 +563,9 @@ public unsafe ref partial struct ParserState
 
     readonly bool Continues(RepairSite site, int position)
     {
+        // Input following the required delimiter also ends the list: the caller can insert
+        // that delimiter here instead of consuming the next declaration as a bad list item.
+        if (site.Insert.Matches(_text, position)) return true;
         foreach (var point in site.Sync)
             if (point.Element >= site.Element && point.First.Matches(_text, position)) return true;
         return false;

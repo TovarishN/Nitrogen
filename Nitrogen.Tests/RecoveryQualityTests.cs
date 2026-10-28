@@ -122,6 +122,8 @@ public class RecoveryQualityTests(ITestOutputHelper output)
     {
         var scores = new SortedDictionary<string, Score>();
         var losses = new List<object>();
+        string? diagnosticPath = Environment.GetEnvironmentVariable("NITROGEN_RECOVERY_DIAGNOSTICS");
+        var diagnosticCases = diagnosticPath is { Length: > 0 } ? new List<object>() : null;
         foreach (var f in Fixtures)
         {
             if (Environment.GetEnvironmentVariable("NITROGEN_RECOVERY_TRACE") is { Length: > 0 } fixtureTrace)
@@ -140,6 +142,8 @@ public class RecoveryQualityTests(ITestOutputHelper output)
                     File.WriteAllText(trace, JsonSerializer.Serialize(new { f.Id, Edit = edit }));
                 string text = edit.Apply(f.Text);
                 using var parsed = f.Language.Parse(text, f.Start);
+                diagnosticCases?.Add(new { Fixture = f.Id, edit.Family, edit.Start, edit.Length, edit.Replacement,
+                    Source = text, Diagnostics = parsed.Diagnostics.ToArray().Select(d => parsed.FormatMessage(d) + " " + d.Span).ToArray() });
                 using var unseeded = f.Language.ParseUnseeded(text, f.Start);
                 TreeAssert.Same(unseeded, parsed);
                 using var repeat = f.Language.Parse(text, f.Start);
@@ -178,6 +182,7 @@ public class RecoveryQualityTests(ITestOutputHelper output)
         }
         string report = JsonSerializer.Serialize(new { Schema = 1, Roslyn = "4.12.0", LanguageVersion = "CSharp4", Scores = scores, Losses = losses }, new JsonSerializerOptions { WriteIndented = true });
         output.WriteLine(report);
+        if (diagnosticCases is not null) File.WriteAllText(diagnosticPath!, JsonSerializer.Serialize(diagnosticCases, new JsonSerializerOptions { WriteIndented = true }));
         if (Environment.GetEnvironmentVariable("NITROGEN_RECOVERY_REPORT") is { Length: > 0 } path) File.WriteAllText(path, report);
         Assert.Equal(12, scores.Count);
         Assert.All(scores.Values, s => Assert.True(s.Cases > 0 && s.Eligible > 0));
