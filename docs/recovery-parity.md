@@ -62,6 +62,35 @@ automatically.
 
 ## Current Nitrogen behavior
 
+Missing-delimiter follow-up: list termination now also recognizes the insertion
+continuation of the required element after the list. For example, at `item b` in
+`item a { x = 1; item b { y = 2; }`, the fields list ends and the enclosing rule
+inserts its missing `}`. Previously the fields list consumed the next declaration
+as damaged input. No delimiter is consumed or invented from source spelling.
+
+The 413-case baseline changes from the root-list checkpoint as follows:
+
+| Family | Preservation before / after | Diagnostics before / after |
+|---|---:|---:|
+| C# delete | 81/90 / 82/90 | 45 / 44 |
+| C# duplicate | 72/90 / 73/90 | 61 / 60 |
+| C# missing closer | 11/12 / 12/12 | 6 / 5 |
+| Local delete | 62/66 / 63/66 | 41 / 40 |
+| Local duplicate | 58/66 / 59/66 | 41 / 40 |
+| Local missing closer | 7/8 / 8/8 | 5 / 4 |
+
+Preservation in the other families is unchanged. C# swap diagnostics increase
+70 to 71 and local swap diagnostics 75 to 76. Per-case comparison against the
+previous runtime identifies the exact sources: `class } D` and `item } b` in
+swapped headers. Continued parsing now reports `expected Name` at those headers,
+in addition to the existing first diagnostic and trailing skipped span. The
+missing-name state is explicitly tested. Total corpus diagnostics decrease by
+four; these scores do not claim arbitrary-input parity.
+
+Set `NITROGEN_RECOVERY_DIAGNOSTICS` to an absolute JSON path to export each
+mutation's source, edit identity and diagnostic messages/spans for such reviews.
+This export is optional and separate from the frozen aggregate baseline.
+
 Root-list follow-up: a start rule whose entire body is a zero-or-more repetition
 can now skip leading/inter-declaration damage and resume at the next item's
 grammar-derived FIRST set. This permission applies only with the root-rule and
