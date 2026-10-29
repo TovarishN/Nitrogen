@@ -13,7 +13,13 @@ public sealed record ModuleDecl(
     EquatableArray<SymbolPropertyDecl> SymbolProperties = default,
     EquatableArray<QuoteHelperDecl> Helpers = default,
     EquatableArray<GrammarFunctionDecl> Functions = default,
-    EquatableArray<NamedPatternDecl> Patterns = default);
+    EquatableArray<NamedPatternDecl> Patterns = default)
+{
+    public EquatableArray<NameDecl> Contexts { get; init; }
+}
+
+public sealed record ContextTestExpr(NameDecl Context, GrammarSpan Span) : Expr(Span);
+public sealed record ContextScopeExpr(NameDecl Context, bool Value, Expr Inner, GrammarSpan Span) : Expr(Span);
 
 public sealed record QuoteText(string Text, GrammarSpan Span);
 /// <param name="IsDescendant"><c>name: ..Pattern</c>: search at or below the hole for the named pattern.</param>

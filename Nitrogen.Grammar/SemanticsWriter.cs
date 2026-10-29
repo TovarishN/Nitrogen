@@ -366,7 +366,7 @@ internal sealed class SemanticsWriter
                 int item = 0;
                 foreach (var e in group.Items.Select(Unlabel))
                 {
-                    if (e is PredicateExpr) continue;
+                    if (GrammarContextSyntax.NoNode(e)) continue;
                     if (e is ReferenceExpr r && _model.Resolve(r.Name, _info.Module, kind.ImplicitModule).Rule is SyntaxRule or ExtensibleRule)
                         found.Add((r, item));
                     item++;
@@ -424,7 +424,7 @@ internal sealed class SemanticsWriter
         };
     }
 
-    static Expr Unlabel(Expr expr) => expr is LabeledExpr labeled ? labeled.Inner : expr;
+    static Expr Unlabel(Expr expr) => GrammarContextSyntax.Unwrap(expr is LabeledExpr labeled ? labeled.Inner : expr);
 
     /// <summary>C# from the grammar on lines of its own, mapped back to its .ngr span by #line (issue 239).</summary>
     void Fragment(StringBuilder b, CodeText code, string prefix)

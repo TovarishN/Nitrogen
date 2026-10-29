@@ -78,6 +78,12 @@ public static partial class GrammarFunctions
 
         // ---- rules ----
 
+        NameDecl QualifiedContext(NameDecl name,ModuleDecl module)
+        {
+            var resolved=registry.Analysis.ResolveContext(name,module,null) ?? throw Error($"unknown context '{name.Name}'");
+            return name with { Name=resolved.Module.Name+"."+resolved.Name.Name };
+        }
+
         Expr Build(Expr expr, Scope<Value>? scope, ModuleDecl module)
         {
             if (++_nodes > MaxNodes) throw Limit($"the expansion exceeds {MaxNodes} nodes");
@@ -88,6 +94,10 @@ public static partial class GrammarFunctions
                 case ReferenceExpr reference:
                     if (Scope<Value>.TryFind(scope, reference.Name, out var value)) return AsRule(value);
                     return new ReferenceExpr((registry.ResolveRule(reference.Name, module) ?? throw Error($"unknown rule '{reference.Name}'")).Key, default);
+                case ContextTestExpr context:
+                    return context with { Context = QualifiedContext(context.Context,module) };
+                case ContextScopeExpr context:
+                    return context with { Context = QualifiedContext(context.Context,module), Inner = Build(context.Inner,scope,module) };
                 case LabeledExpr labeled:
                     return new LabeledExpr(labeled.Label, Build(labeled.Inner, scope, module), default);
                 case RepeatExpr repeat:
@@ -394,6 +404,7 @@ public static partial class GrammarFunctions
                 SequenceExpr s => Flat(s.Items.Select(Factor), isChoice: false) is var items && items.Count == 1
                     ? items[0] : new SequenceExpr(items.ToArray(), default),
                 ChoiceExpr c => Group(Flat(c.Alternatives.Select(Factor), isChoice: true)),
+                ContextScopeExpr c => c with { Inner = Factor(c.Inner) },
                 LabeledExpr l => new LabeledExpr(l.Label, Factor(l.Inner), default),
                 RepeatExpr r => new RepeatExpr(r.Kind, Factor(r.Inner), default),
                 SeparatedListExpr l => new SeparatedListExpr(Factor(l.Item), Factor(l.Separator), l.AtLeastOne, default),
@@ -475,6 +486,8 @@ public static partial class GrammarFunctions
                 ReferenceExpr r => "R" + r.Name,
                 SequenceExpr s => "S(" + string.Join(",", s.Items.Select(Id)) + ")",
                 ChoiceExpr c => "O(" + string.Join(",", c.Alternatives.Select(Id)) + ")",
+                ContextTestExpr c => "CTX"+c.Context.Name,
+                ContextScopeExpr c => "WITH"+c.Context.Name+c.Value+Id(c.Inner),
                 LabeledExpr l => "B" + l.Label + ":" + Id(l.Inner),
                 RepeatExpr r => "P" + (int)r.Kind + ":" + Id(r.Inner),
                 SeparatedListExpr l => "T" + (l.AtLeastOne ? "+" : "*") + Id(l.Item) + "," + Id(l.Separator),
@@ -499,6 +512,8 @@ public static partial class GrammarFunctions
             {
                 SequenceExpr s => new SequenceExpr(s.Items.Select(Visit).ToArray(), span),
                 ChoiceExpr c => new ChoiceExpr(c.Alternatives.Select(Visit).ToArray(), span),
+                ContextTestExpr c => c with { Span = span },
+                ContextScopeExpr c => c with { Inner = Visit(c.Inner), Span = span },
                 LabeledExpr l => new LabeledExpr(l.Label, Visit(l.Inner), span),
                 RepeatExpr r => new RepeatExpr(r.Kind, Visit(r.Inner), span),
                 SeparatedListExpr l => new SeparatedListExpr(Visit(l.Item), Visit(l.Separator), l.AtLeastOne, span),

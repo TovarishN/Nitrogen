@@ -42,7 +42,7 @@ internal delegate void GrammarReport(string code, string message, GrammarSpan sp
 /// rules (first declaration wins), every extension point's alternatives across all modules, name
 /// resolution, and nullability.
 /// </summary>
-internal sealed class GrammarAnalysis
+internal sealed partial class GrammarAnalysis
 {
     readonly List<ModuleDecl> _modules;
     readonly Dictionary<string, ModuleDecl> _byName = new(StringComparer.Ordinal);
@@ -132,6 +132,8 @@ internal sealed class GrammarAnalysis
         LabeledExpr l => IsNullable(l.Inner, module, implicitModule),
         RepeatExpr r => r.Kind != RepeatKind.OneOrMore || IsNullable(r.Inner, module, implicitModule),
         SeparatedListExpr l => !l.AtLeastOne || IsNullable(l.Item, module, implicitModule),
+        ContextScopeExpr c => IsNullable(c.Inner, module, implicitModule),
+        ContextTestExpr => true,
         PredicateExpr => true,
         ReferenceExpr r => Resolve(r.Name, r.Span, module, implicitModule) is { } symbol && _nullable.Contains(symbol.Key),
         _ => false,

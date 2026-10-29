@@ -69,6 +69,11 @@ public static partial class GrammarExtraction
             Problem("A rule dependency could not be resolved: " + name.Name.Name, name.Source.Uri, name.Name.Span);
         if (problems.Count > 0) return Failed();
 
+        foreach(var file in files)
+            foreach(var module in file.Parsed.File!.Modules)
+                foreach(var context in analysis.ContextOccurrences(module))
+                    if(IsMoved(file.Source.Uri,context.Name.Span))
+                        Replace(file.Source.Uri,context.Name.Span,context.Symbol.Module.Name+"."+context.Symbol.Name.Name);
         var consumers = new HashSet<string>(names.Where(n => !IsMoved(n.Source.Uri, n.Name.Span) && Mapped(n.Target!.Key) != n.Target.Key)
             .Select(n => n.Module.Name), StringComparer.Ordinal);
         var destinationDeclaration = new ModuleDecl(destinationModule,
@@ -168,6 +173,7 @@ public static partial class GrammarExtraction
     {
         SequenceExpr sequence => sequence.Items,
         ChoiceExpr choice => choice.Alternatives,
+        ContextScopeExpr context => new[] { context.Inner },
         LabeledExpr labeled => new[] { labeled.Inner },
         RepeatExpr repeat => new[] { repeat.Inner },
         SeparatedListExpr list => new[] { list.Item, list.Separator },

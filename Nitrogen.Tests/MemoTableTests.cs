@@ -6,6 +6,18 @@ namespace Nitrogen.Tests;
 public class MemoTableTests
 {
     [Fact]
+    public void Recovery_seed_preserves_opposite_context_successes_at_the_same_rule_and_position()
+    {
+        var source=new MemoTable();var seed=new MemoTable();
+        source.Set(2,4,11,9,12,0);source.Set(2,4,21,19,22,1UL<<63);
+        source.Set(2,5,-1,-1,23,1UL<<63);source.CopySuccessesTo(seed);
+        Assert.Equal(2,seed.Count);
+        Assert.True(seed.TryGet(2,4,out int low,out _,out _,0));Assert.Equal(11,low);
+        Assert.True(seed.TryGet(2,4,out int high,out _,out _,1UL<<63));Assert.Equal(21,high);
+        Assert.False(seed.TryGet(2,5,out _,out _,out _,1UL<<63));
+    }
+
+    [Fact]
     public void Recovery_seed_copies_successes_and_discards_failures_and_old_generations()
     {
         var source = new MemoTable();

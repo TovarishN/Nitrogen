@@ -358,6 +358,11 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
             items = functions.Concat(items.Where(i => !names.Contains(i.Label)))
                 .Select((item, i) => item with { SortText = i.ToString("D4", System.Globalization.CultureInfo.InvariantCulture) }).ToList();
         }
+        if(GrammarContextCompletion(document,offset) is {Count:>0} contexts)
+        {
+            var names=contexts.Select(c=>c.Label).ToHashSet(StringComparer.Ordinal);
+            items=contexts.Concat(items.Where(i=>!names.Contains(i.Label))).ToList();
+        }
         if (AssistOf(document) is not { } assisted) return items;
         var assistedItems = document.Language.Assist!.Completion(assisted, offset)
             .Select(i => new CompletionItem(i.Label, i.Kind, i.Detail, document.Lines.RangeOf(i.Replace)))

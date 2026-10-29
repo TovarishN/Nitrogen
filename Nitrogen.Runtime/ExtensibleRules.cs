@@ -31,7 +31,7 @@ public static unsafe class ExtensibleRules
         int ruleKey = (decl.GlobalId << 10) | ((callFlags & arena.CallFlagMask) << 8) | minPrecedence;
         int start = s.Position;
 
-        if (s.Memo.TryGet(ruleKey, start, out int memoNode, out int memoEnd, out int memoExamined))
+        if (s.Memo.TryGet(ruleKey, start, out int memoNode, out int memoEnd, out int memoExamined, s.GrammarContext))
         {
             arena.MemoHits++;
             // The result depends on what its computation read; a tracked caller must count that too.
@@ -44,7 +44,7 @@ public static unsafe class ExtensibleRules
         arena.MemoMisses++;
         if (s.Reuse is not null && s.TryReuse(ReuseRecord.ExtensibleTag | (uint)ruleKey, out int reusedExamined))
         {
-            s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position, reusedExamined);
+            s.Memo.Set(ruleKey, start, arena.ChildStack[arena.ChildStackCount - 1], s.Position, reusedExamined, s.GrammarContext);
             arena.MemoWrites++;
             return true;
         }
@@ -67,16 +67,16 @@ public static unsafe class ExtensibleRules
             // A failure that ran no candidate is as cheap to rediscover as to look up.
             if (triedCandidate)
             {
-                s.Memo.Set(ruleKey, start, -1, -1, examined);
+                s.Memo.Set(ruleKey, start, -1, -1, examined, s.GrammarContext);
                 arena.MemoWrites++;
             }
             return false;
         }
         int node = arena.ChildStack[arena.ChildStackCount - 1];
-        s.Memo.Set(ruleKey, start, node, s.Position, examined);
+        s.Memo.Set(ruleKey, start, node, s.Position, examined, s.GrammarContext);
         arena.MemoWrites++;
         if (arena.Tracking)
-            arena.AddRecord(new ReuseRecord(ReuseRecord.ExtensibleTag | (uint)ruleKey, start, s.Position, examined, node));
+            arena.AddRecord(new ReuseRecord(ReuseRecord.ExtensibleTag | (uint)ruleKey, start, s.Position, examined, node, s.GrammarContext));
         return true;
     }
 

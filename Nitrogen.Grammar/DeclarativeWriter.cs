@@ -57,7 +57,7 @@ internal static class DeclarativeWriter
                 var strides = lowers.Arguments.Select(a =>
                 {
                     if (a.SequenceElementType is null && !a.InferSequence) return 1;
-                    var source = elements.OfType<LabeledExpr>().First(e => e.Label == a.Name).Inner;
+                    var source = GrammarContextSyntax.Unwrap(elements.OfType<LabeledExpr>().First(e => e.Label == a.Name).Inner);
                     return source is SeparatedListExpr ? 2 : 1;
                 });
                 var textArguments = lowers.Arguments.Select(a => a.AsText ? "true" : "false");
@@ -78,7 +78,7 @@ internal static class DeclarativeWriter
             arguments = Ints(lowers.Kind == BindingClauseKind.LowersTemplate
                 ? new[] { BindingWriter.ChildIndex(elements, lowers.Field), BindingWriter.ChildIndex(elements, list) }
                 : new[] { BindingWriter.ChildIndex(elements, list) });
-            if (elements.OfType<LabeledExpr>().First(element => element.Label == list).Inner is SeparatedListExpr) sequenceStride = 2;
+            if (GrammarContextSyntax.Unwrap(elements.OfType<LabeledExpr>().First(element => element.Label == list).Inner) is SeparatedListExpr) sequenceStride = 2;
         }
         else if (lowers is { Kind: BindingClauseKind.Rewrites })
         {
@@ -130,15 +130,15 @@ internal static class DeclarativeWriter
             if (lowers.Kind == BindingClauseKind.LowersRepeat)
             {
                 arguments = Ints(lowers.Arguments.Select(argument => BindingWriter.ChildIndex(elements, argument.Name)));
-                var source = elements.OfType<LabeledExpr>().First(element => element.Label == lowers.Arguments[2].Name).Inner;
-                if (source is SeparatedListExpr) sequenceStride = 2;
+                var source = GrammarContextSyntax.Unwrap(elements.OfType<LabeledExpr>().First(element => element.Label == lowers.Arguments[2].Name).Inner);
+                if (GrammarContextSyntax.Unwrap(source) is SeparatedListExpr) sequenceStride = 2;
             }
             if (lowers.Kind == BindingClauseKind.LowersSequence)
             {
                 var source = lowers.Field == "this"
                     ? kind.Alternative?.Body ?? ((SyntaxRule)kind.Rule!).Body
                     : elements.OfType<LabeledExpr>().First(element => element.Label == lowers.Field).Inner;
-                if (source is SeparatedListExpr) sequenceStride = 2;
+                if (GrammarContextSyntax.Unwrap(source) is SeparatedListExpr) sequenceStride = 2;
             }
             if (lowers.Kind is BindingClauseKind.LowersValue or BindingClauseKind.LowersReference)
             {

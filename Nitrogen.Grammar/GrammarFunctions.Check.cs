@@ -61,6 +61,13 @@ public static partial class GrammarFunctions
                     else if (registry.ResolveRule(reference.Name, _module) is null)
                         Report(GrammarCodes.FunctionType, UnknownName(reference.Name), reference.Span);
                     break;
+                case ContextTestExpr context:
+                    registry.Analysis.ResolveContext(context.Context,_module,null,(code,message,span,module)=>Report(code,message,span));
+                    break;
+                case ContextScopeExpr context:
+                    registry.Analysis.ResolveContext(context.Context,_module,null,(code,message,span,module)=>Report(code,message,span));
+                    CheckRule(context.Inner,scope);
+                    break;
                 case GrammarCallExpr call:
                     CheckCall(call.Name, call.Arguments, scope);
                     break;

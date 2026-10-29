@@ -80,7 +80,7 @@ internal static class BindingWriter
         foreach (var element in elements)
         {
             var bare = element is LabeledExpr l ? l.Inner : element;
-            if (bare is PredicateExpr) continue;
+            if (GrammarContextSyntax.NoNode(bare)) continue;
             if (element is LabeledExpr labeled && labeled.Label == field) return child;
             child++;
         }

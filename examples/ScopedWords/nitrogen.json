@@ -1,0 +1,11 @@
+{
+  "languages": [
+    {
+      "name": "ScopedWords",
+      "extensions": [".scopedwords"],
+      "grammars": ["ScopedWords.ngr"],
+      "start": "ScopedWords.Document",
+      "namespace": "Nitrogen.Examples.ScopedWords"
+    }
+  ]
+}

@@ -34,7 +34,7 @@ syntax module Nitrogen
 
   // Binding (issue 238): modules and rules, for outlines and colour. References are optional: a
   // qualified or used name from another module simply stays unresolved and unreported.
-  symbols { module rule property }
+  symbols { module rule property contextFlag }
 
   syntax File           = Languages:LanguageDeclaration? Modules:Module*  lowers Grammar.File(sequence Grammar.Module Modules, optional Grammar.LanguageDeclaration Languages);
   syntax LanguageDeclaration = "language" Name:Identifier "{" Settings:LanguageSetting* "}"
@@ -53,7 +53,7 @@ syntax module Nitrogen
                           lowers Grammar.LanguagePresentationSetting(text Kind, text Name, text Value);
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
                           lowers Grammar.Module(text Name, sequence Grammar.Member Members);
-  syntax Member         = NamedPattern / QuoteMatchHelper / QuoteHelper / GrammarFunction / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax Member         = ContextDeclaration / NamedPattern / QuoteMatchHelper / QuoteHelper / GrammarFunction / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
   syntax QuoteHelper = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:TemplateString ";"
                        lowers Grammar.QuoteHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, text Body);
   syntax QuoteMatchHelper = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:QuoteMatchBody ";"
@@ -84,6 +84,9 @@ syntax module Nitrogen
                           lowers Grammar.Builtin(text SymbolKind, optional Core.Text Within, sequence Core.Text Names);
   syntax BuiltinName    = Value:QualifiedName  lowers text Core.Text Value;
   syntax InKind         = "in" Name:Identifier  lowers text Core.Text Name;
+  syntax ContextDeclaration = "context" Name:Identifier ";" declares contextFlag Name
+                          lowers Grammar.ContextDeclaration(text Name);
+  syntax ContextName = Name:QualifiedName references? contextFlag Name lowers text Core.Text Name;
   syntax Using          = "using" Module:QualifiedName ";"  references? module Module  lowers Grammar.Using(text Module);
   syntax TokenRule      = "token" Name:Identifier "=" Body:Expression Except:ExceptList? ";"  declares rule Name
                           lowers Grammar.TokenRule(text Name, Body, optional Grammar.Except Except);
@@ -178,14 +181,17 @@ syntax module Nitrogen
   syntax PredicateOp    = "!" / "&"  lowers text Core.Text this;
   syntax Postfix        = Body:Primary Operators:RepeatOp*  lowers Grammar.Postfix(Body, sequence Core.Text Operators);
   syntax RepeatOp       = "?" / "*" / "+"  lowers text Core.Text this;
-  syntax Primary        = Conditional / Comprehension / Call / EmptyGroup / StringLiteral / CharClass / Any / Parenthesized / Reference;
+  syntax Primary        = ContextScope / ContextTest / Conditional / Comprehension / Call / EmptyGroup / StringLiteral / CharClass / Any / Parenthesized / Reference;
+  syntax ContextTest = "context" "(" Name:ContextName ")" lowers Grammar.ContextTest(Name);
+  syntax ContextScope = "with" "(" Name:ContextName "=" Value:("true" / "false") ")" Body:Unary
+                          lowers Grammar.ContextScope(Name, text Value, Body);
   syntax Conditional    = "if" Condition:Value "then" Then:Expression "else" Else:Expression  lowers Grammar.If(Condition, Then, Else);
   syntax Comprehension  = Kind:("choice" / "seq") Variable:Identifier "in" From:Value To:RangeTo? Block:Block
                           lowers Grammar.Comprehension(text Kind, text Variable, From, optional Grammar.Value To, Block);
   syntax RangeTo        = ".." Bound:Value  lowers Grammar.RangeTo(Bound);
   syntax Block          = "{" Lets:LetBinding* Where:WhereClause? Body:Expression "}"  lowers Grammar.Block(sequence Grammar.Let Lets, optional Grammar.Value Where, Body);
   syntax WhereClause    = "where" Condition:Value ":"  lowers Grammar.Where(Condition);
-  syntax Call           = Head:CallHead Arguments:(Value; ",")* ")"  lowers Grammar.Call(text Head, sequence Grammar.Value Arguments);
+  syntax Call           = !("context" / "with") Head:CallHead Arguments:(Value; ",")* ")"  lowers Grammar.Call(text Head, sequence Grammar.Value Arguments);
   syntax EmptyGroup     = "(" ")"  lowers Grammar.Empty();
   syntax StringLiteral  = Value:String  lowers Grammar.Literal(text Value);
   syntax Any            = "."  lowers Grammar.Any();

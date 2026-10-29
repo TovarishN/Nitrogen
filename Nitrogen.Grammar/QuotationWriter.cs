@@ -124,6 +124,8 @@ internal static class QuotationWriter
             {
                 case ReferenceExpr reference:
                     return analysis.Resolve(reference.Name, reference.Span, module, implicitModule) is { } symbol ? RuleEnds(symbol, position) : new();
+                case ContextTestExpr: return new HashSet<int> { position };
+                case ContextScopeExpr context: return Ends(context.Inner,module,implicitModule,position);
                 case LabeledExpr labeled: return Ends(labeled.Inner, module, implicitModule, position);
                 case SequenceExpr sequence:
                     var positions = new HashSet<int> { position };
@@ -346,6 +348,7 @@ internal static class QuotationWriter
     /// <summary>The single elements a transparent alternative's body may leave in its place.</summary>
     static IEnumerable<Expr> StandIns(Expr body) => body switch
     {
+        ContextScopeExpr context => StandIns(context.Inner),
         LabeledExpr labeled => StandIns(labeled.Inner),
         ChoiceExpr choice => choice.Alternatives.SelectMany(StandIns),
         GrammarCallExpr { Expansion: { } expansion } => StandIns(expansion),

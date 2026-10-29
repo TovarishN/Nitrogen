@@ -80,6 +80,10 @@ public static class GrammarCodes
     public const string DuplicateNamedPattern = "NGR0164";
     public const string ContextCaptureCollision = "NGR0165";
     public const string InvalidPatternCapture = "NGR0166";
+    public const string UnknownContext = "NGR0167";
+    public const string DuplicateContext = "NGR0168";
+    public const string ContextInToken = "NGR0169";
+    public const string NullableContextRepeat = "NGR0170";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

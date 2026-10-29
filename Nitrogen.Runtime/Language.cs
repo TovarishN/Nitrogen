@@ -14,6 +14,7 @@ public sealed unsafe partial class Language
     internal Language(SyntaxModule[] modules, ExtensionPoint?[] points, delegate*<ReadOnlySpan<char>, int, int> trivia, AsciiSet triviaStart, SemanticCatalog semanticCatalog,
         DeclarativeLowering declarative)
     {
+        ComposeContexts(modules);
         Modules = modules;
         _supportsRecoverySeeding = modules.All(m => m.SupportsRecoverySeeding);
         SemanticCatalog = semanticCatalog;

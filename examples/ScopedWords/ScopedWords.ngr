@@ -1,0 +1,14 @@
+// Identical payload words receive different typed owners under explicit lexical scopes.
+syntax module ScopedWords
+{
+    context Loud;
+    syntax Document = Blocks:Block*;
+    syntax Block = LoudBlock / QuietBlock;
+    syntax LoudBlock = "loud" "{" Words:with(Loud = true) Word* "}";
+    syntax QuietBlock = "quiet" "{" Words:with(Loud = false) Word* "}";
+    extensible syntax Word
+    {
+        | LoudWord = context(Loud) "bang"
+        | QuietWord = !context(Loud) "bang"
+    }
+}

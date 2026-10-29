@@ -66,10 +66,11 @@ internal sealed class ViewWriter
     {
         var slots = new List<(Expr Element, int Child)>();
         int child = 0;
-        foreach (var element in elements)
+        foreach (var original in elements)
         {
+            var element = GrammarContextSyntax.Unwrap(original);
             var bare = element is LabeledExpr labeled ? labeled.Inner : element;
-            if (bare is PredicateExpr) continue; // predicates push no node
+            if (GrammarContextSyntax.NoNode(bare)) continue; // predicates push no node
             slots.Add((element, child++));
         }
 
@@ -114,6 +115,8 @@ internal sealed class ViewWriter
     {
         switch (expr)
         {
+            case ContextScopeExpr context:
+                return TypeOf(context.Inner,implicitModule);
             case LabeledExpr labeled:
                 return TypeOf(labeled.Inner, implicitModule);
             case LiteralExpr:
@@ -145,7 +148,7 @@ internal sealed class ViewWriter
 
     string ItemType(Expr expr, string? implicitModule)
     {
-        var bare = expr is LabeledExpr labeled ? labeled.Inner : expr;
+        var bare = GrammarContextSyntax.Unwrap(expr is LabeledExpr labeled ? labeled.Inner : expr);
         return bare is RepeatExpr or SeparatedListExpr ? "SyntaxNode" : TypeOf(bare, implicitModule);
     }
 

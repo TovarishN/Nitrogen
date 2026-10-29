@@ -1,0 +1,41 @@
+syntax module GrammarContext
+{
+    context Enabled;
+    syntax External = with(GrammarContext.Flags.External = true) ExternalBody;
+    syntax ExternalBody = context(GrammarContext.Flags.External) "z";
+    syntax File = Items:Item*;
+    syntax Item = Async / Ordinary;
+    syntax Async = "a" Body:with(Enabled = true) Expr;
+    syntax Ordinary = "n" Body:Expr;
+    syntax List = "l" Items:with(Enabled = true) Expr* ";";
+    syntax MaybeList = "o" Values:(with(Enabled = true) Expr+)? ";";
+    syntax Maybe = "m" Value:with(Enabled = true) Expr? ";";
+    syntax ForceOff = with(Enabled = true) Off;
+    syntax Off = with(Enabled = false) Expr;
+    syntax ViaEntry = Entry;
+    extensible syntax Entry { | transparent Scoped = with(Enabled = true) Expr }
+    token Mode = "a" / "n";
+    syntax Selected = (&"a" with(Enabled = true) (Header:Mode Body:Expr)) / (!"a" (Header:Mode Body:Expr));
+    syntax Unlabeled = "u" with(Enabled = true) Expr;
+    syntax UnlabeledPair = "p" with(Enabled = true) Expr Expr;
+    syntax SelectedEntry = Selection;
+    extensible syntax Selection {
+        | SelectedBranch = with(Enabled = true) (&"a" Header:Mode Body:with(Enabled = false) Expr) / (!"a" Header:Mode Body:Expr)
+    }
+    syntax ScopedPair = with(Enabled = true) (Left:Expr "," Right:Expr);
+    syntax ScopedPointEntry = ScopedPoint;
+    extensible syntax ScopedPoint { | Pair = with(Enabled = true) (Left:Expr "," Right:Expr) }
+    syntax ScopedLiteral = with(Enabled = true) ("z" / "y");
+    syntax ScopedAlias = with(Enabled = true) Expr;
+    syntax Speculative = &(with(Enabled = true) Expr) Body:Expr;
+    extensible syntax Expr
+    {
+        | Enabled = context(Enabled) "x"
+        | Disabled = !context(Enabled) "x"
+        | Group = "[" Item "]"
+        | Neg = (context(Enabled) "-" Arg:Expr) / (!context(Enabled) "-" Arg:Expr) precedence 20
+        | Add = Expr "+" Right:with(Enabled = true) Expr precedence 10 left
+    }
+}
+
+syntax module GrammarContext.Flags { context External; }

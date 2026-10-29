@@ -68,6 +68,8 @@ public unsafe ref partial struct ParserState
     /// <summary>Current input position. Generated code may read it; it should move it only through the Match/Push methods.</summary>
     public int Position;
 
+    internal ulong GrammarContext { get; private set; }
+
     internal ParserState(ReadOnlySpan<char> text, BuildArena arena, MemoTable memo,
         delegate*<ReadOnlySpan<char>, int, int> trivia, AsciiSet triviaStart = default)
     {
@@ -145,7 +147,7 @@ public unsafe ref partial struct ParserState
         var reuse = Reuse!;
         int position = Position;
         if (!reuse.TryMapToOld(position, out int old)) return false;
-        int i = reuse.Table.Find(rule, old);
+        int i = reuse.Table.Find(rule, old, GrammarContext);
         if (i < 0) return false;
         var entry = reuse.Table[i];
         if (reuse.Touches(entry.Start, entry.ExaminedEnd)) return false;
@@ -156,7 +158,7 @@ public unsafe ref partial struct ParserState
         Position = entry.End + delta;
         examined = entry.ExaminedEnd + delta;
         Reads.Read(examined - 1);
-        a.AddRecord(new ReuseRecord(rule, position, Position, examined, graft));
+        a.AddRecord(new ReuseRecord(rule, position, Position, examined, graft, GrammarContext));
         return true;
     }
 
@@ -164,7 +166,7 @@ public unsafe ref partial struct ParserState
     public void EndRule(long rule, int start, int outer, bool parsed)
     {
         int examined = EndExamined(outer);
-        if (parsed) Arena.AddRecord(new ReuseRecord(rule, start, Position, examined, Arena.ChildStack[Arena.ChildStackCount - 1]));
+        if (parsed) Arena.AddRecord(new ReuseRecord(rule, start, Position, examined, Arena.ChildStack[Arena.ChildStackCount - 1], GrammarContext));
     }
 
     public bool AtEnd

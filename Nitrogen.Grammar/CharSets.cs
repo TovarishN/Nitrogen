@@ -97,6 +97,10 @@ internal sealed class FirstSets
             case AnyCharExpr:
                 set.AddAny();
                 break;
+            case ContextTestExpr:
+                break;
+            case ContextScopeExpr context:
+                return Of(context.Inner,module,implicitModule,visiting);
             case LabeledExpr labeled:
                 return Of(labeled.Inner, module, implicitModule, visiting);
             case RepeatExpr repeat:

@@ -1,7 +1,7 @@
 namespace Nitrogen;
 
 /// <summary>
-/// The rule results an incremental parse recorded, keyed by <c>(rule, start)</c> and sorted by start: what an
+/// The rule results an incremental parse recorded, keyed by <c>(rule, start, grammar context)</c> and sorted by start: what an
 /// incremental reparse may reuse. Each entry's node is an index into the result's tree. A syntax rule's key is
 /// its kind and an extensible call's is its memo key with <see cref="ReuseRecord.ExtensibleTag"/>, so the key
 /// carries the call context (minimum precedence) a result depends on. Results are keyed by rule, not read off
@@ -93,7 +93,7 @@ internal sealed class ReuseTable
                 while (next < recordedCount && recorded[next].Start <= start) entries[count++] = recorded[next++];
                 sorted &= start >= lastStart;
                 lastStart = start;
-                entries[count++] = new ReuseRecord(e.Key, start, e.End + posDelta, e.ExaminedEnd + posDelta, e.Node + indexDelta);
+                entries[count++] = new ReuseRecord(e.Key, start, e.End + posDelta, e.ExaminedEnd + posDelta, e.Node + indexDelta, e.Context);
             }
         }
         while (next < recordedCount) entries[count++] = recorded[next++];
@@ -124,11 +124,11 @@ internal sealed class ReuseTable
     }
 
     /// <summary>The index of the entry for <paramref name="key"/> at <paramref name="start"/>, or -1.</summary>
-    public int Find(long key, int start)
+    public int Find(long key, int start, ulong context = 0)
     {
         int found = -1;
         for (int i = FirstAtOrAfter(start); i < _count && _entries[i].Start == start; i++)
-            if (_entries[i].Key == key) found = i;
+            if (_entries[i].Key == key && _entries[i].Context == context) found = i;
         return found;
     }
 }

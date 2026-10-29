@@ -31,6 +31,9 @@ public static class GrammarValidator
                 if (!_analysis.HasModule(u.Module))
                     Report(GrammarCodes.UnknownModule, $"unknown module '{u.Module}'", u.Span, module);
 
+            var contextNames = new HashSet<string>(StringComparer.Ordinal);
+            foreach(var context in module.Contexts)
+                if(!contextNames.Add(context.Name)) Report(GrammarCodes.DuplicateContext,$"duplicate context '{context.Name}'",context.Span,module);
             CheckSymbols(module);
             _analysis.Helpers.CheckDeclarations(module, Report);
 
@@ -126,6 +129,7 @@ public static class GrammarValidator
         /// <summary>A literal, character class, rule reference or grammar call, labeled or not, or a choice of them.</summary>
         static bool YieldsOneNode(Expr expr) => expr switch
         {
+            ContextScopeExpr context => YieldsOneNode(context.Inner),
             LabeledExpr labeled => YieldsOneNode(labeled.Inner),
             ChoiceExpr choice => choice.Alternatives.All(YieldsOneNode),
             GrammarCallExpr call => call.Expansion is not { } expansion || YieldsOneNode(expansion),
@@ -383,7 +387,7 @@ public static class GrammarValidator
 
             var kinds = SymbolKinds(module);
             var labels = new HashSet<string>(
-                SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>().Where(l => l.Inner is not PredicateExpr).Select(l => l.Label),
+                SyntaxCodeWriter.Elements(body).OfType<LabeledExpr>().Where(l => !GrammarContextSyntax.NoNode(l.Inner)).Select(l => l.Label),
                 StringComparer.Ordinal);
             var seen = new HashSet<BindingClauseKind>();
             foreach (var clause in clauses)
@@ -528,6 +532,18 @@ public static class GrammarValidator
             _ => "dynamic",
         };
 
+        bool ContainsContext(Expr expr,ModuleDecl module,string? implicitModule,HashSet<string>? visited=null)
+        {
+            if(expr is ContextTestExpr or ContextScopeExpr)return true;
+            visited??=new(StringComparer.Ordinal);
+            if(expr is ReferenceExpr reference && _analysis.Resolve(reference.Name,reference.Span,module,implicitModule) is {} symbol && visited.Add(symbol.Key))
+            {
+                if(symbol.Rule is SyntaxRule syntax)return ContainsContext(syntax.Body,symbol.Module,null,visited);
+                if(symbol.Rule is ExtensibleRule)return _analysis.Point(symbol.Key).Any(p=>ContainsContext(p.Alternative.Body,p.Module,p.ImplicitModule,visited));
+            }
+            return GrammarExtraction.Children(expr).Any(child=>ContainsContext(child,module,implicitModule,visited));
+        }
+
         void CheckExpr(Expr expr, ModuleDecl module, string? implicitModule, bool inToken)
         {
             switch (expr)
@@ -550,10 +566,24 @@ public static class GrammarValidator
                 case LabeledExpr labeled:
                     CheckExpr(labeled.Inner, module, implicitModule, inToken);
                     break;
+                case ContextScopeExpr context:
+                    _analysis.ResolveContext(context.Context, module, implicitModule, Report);
+                    if(inToken) Report(GrammarCodes.ContextInToken,"grammar context operations require syntax rules",context.Span,module);
+                    CheckExpr(context.Inner,module,implicitModule,inToken);
+                    break;
+                case ContextTestExpr context:
+                    _analysis.ResolveContext(context.Context, module, implicitModule, Report);
+                    if(inToken) Report(GrammarCodes.ContextInToken,"grammar context operations require syntax rules",context.Span,module);
+                    break;
                 case RepeatExpr repeat:
+                    if(repeat.Kind != RepeatKind.Optional && _analysis.IsNullable(repeat.Inner,module,implicitModule) && ContainsContext(repeat.Inner,module,implicitModule))
+                        Report(GrammarCodes.NullableContextRepeat,"a repeated context expression must consume input",repeat.Span,module);
                     CheckExpr(repeat.Inner, module, implicitModule, inToken);
                     break;
                 case SeparatedListExpr list:
+                    if(_analysis.IsNullable(list.Item,module,implicitModule) && _analysis.IsNullable(list.Separator,module,implicitModule)
+                        && (ContainsContext(list.Item,module,implicitModule) || ContainsContext(list.Separator,module,implicitModule)))
+                        Report(GrammarCodes.NullableContextRepeat,"a repeated context list must consume input",list.Span,module);
                     CheckExpr(list.Item, module, implicitModule, inToken);
                     CheckExpr(list.Separator, module, implicitModule, inToken);
                     break;
@@ -669,6 +699,9 @@ public static class GrammarValidator
                     break;
                 case ChoiceExpr choice:
                     foreach (var alternative in choice.Alternatives) AddFirsts(alternative, module, implicitModule, firsts);
+                    break;
+                case ContextScopeExpr context:
+                    AddFirsts(context.Inner,module,implicitModule,firsts);
                     break;
                 case LabeledExpr labeled:
                     AddFirsts(labeled.Inner, module, implicitModule, firsts);
