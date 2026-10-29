@@ -85,12 +85,11 @@ public sealed class MatchContextTests
     public void Deep_context_walk_stays_cheap()
     {
         // Ancestor validity is computed once per file, so walking every ancestor of every <a> stays linear per check.
+        // Revalidating each ancestor's subtree instead exhausts the work limit here and reports NS0002 checks.
         const int depth = 600;
         string input = string.Concat(Enumerable.Repeat("<a>", depth)) + string.Concat(Enumerable.Repeat("</a>", depth));
         var snapshot = CompileOnce("""match <[ <a>..$_</a> ]> inside <[ <never>..$_</never> ]> => warning XP2007 : "p";""");
-        var watch = System.Diagnostics.Stopwatch.StartNew();
         Assert.Empty(Diagnostics(snapshot, input));
-        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), watch.Elapsed.ToString());
     }
 
     [Fact]
