@@ -62,6 +62,26 @@ automatically.
 
 ## Current Nitrogen behavior
 
+Exact-duplicate follow-up: when recovery could insert a required element before
+a word, it first checks a narrow alternative. If that word exactly repeats the
+preceding non-missing leaf in the current frame and the required element starts
+immediately after it and trivia, skip only the duplicate and retry the required
+element. For example, `item a a { x = 1; }` now keeps the body instead of inserting
+`{` before the extra `a` and misreading that word as a field. Comments between the
+duplicate and the required element remain ordinary trivia. Arbitrary words,
+brackets, strings, composite nodes, and synthetic leaves are not deleted by this
+rule. If the required element is not visible, position is restored and ordinary
+insertion proceeds. In particular, `item a a = 1; }` retains the field named `a`.
+
+Measured 413-mutation baseline: C# duplicate preservation improves 73/90 to 82/90
+and diagnostics decrease 60 to 46. Local duplicate preservation improves 59/66 to
+63/66 and diagnostics decrease 40 to 38. Every other family is unchanged. The C#
+duplicate aggregate now equals the pinned Roslyn comparator's preservation for
+these fixtures; that does not establish per-case or whole-language parity.
+The extra work is limited to one repeated word, trivia, and the existing FIRST
+checks during an otherwise applicable insertion repair; no search queue or
+additional parse pass is introduced.
+
 Missing-delimiter follow-up: list termination now also recognizes the insertion
 continuation of the required element after the list. For example, at `item b` in
 `item a { x = 1; item b { y = 2; }`, the fields list ends and the enclosing rule

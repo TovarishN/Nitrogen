@@ -53,7 +53,22 @@ internal static class NgrProjector
     static QuoteParameter QuoteParameter(HirNode node)
     {
         var parts = Expect(node, "QuoteParameter").Arguments;
-        return new(Name(parts[0]), Name(parts[1]), Value(parts[2]) is not null, Span(node));
+        return new(Name(parts[0]), Name(parts[1]), Value(parts[2]) is not null, Span(node), Value(parts[3]) is not null);
+    }
+
+    static EquatableArray<QuoteParameter> Captures(HirNode optional) => Value(optional) is { } captureList
+        ? Items(Expect(captureList, "QuoteCaptures").Arguments[0]).Select(QuoteParameter).ToArray()
+        : Array.Empty<QuoteParameter>();
+
+    static NamedPatternDecl NamedPattern(HirOperation member)
+    {
+        var a = member.Arguments;
+        var alternatives = Items(a[2]).Select(alternative =>
+        {
+            var parts = Expect(alternative, "NamedPatternAlternative").Arguments;
+            return new NamedPatternAlternativeDecl(Captures(parts[0]), Quote(parts[1]), Span(alternative));
+        }).ToArray();
+        return new(Name(a[0]), Name(a[1]), alternatives, Span(member));
     }
 
     static QuoteText Quote(HirNode node)
@@ -74,6 +89,7 @@ internal static class NgrProjector
         var helpers = new List<QuoteHelperDecl>();
         var functions = new List<GrammarFunctionDecl>();
         var contexts = new List<NameDecl>();
+        var patterns = new List<NamedPatternDecl>();
         foreach (var item in Items(module.Arguments[1]))
         {
             var member = (HirOperation)item;
@@ -82,6 +98,9 @@ internal static class NgrProjector
                 throw new NgrMappingException("a quote helper cannot return Grammar.Rule; give it a grammar body", Span(a[2]));
             switch (Kind(member))
             {
+                case "NamedPattern":
+                    patterns.Add(NamedPattern(member));
+                    break;
                 case "GrammarFunction":
                     if (Text(a[2]) != GrammarFunctions.RuleType)
                         throw new NgrMappingException("a function with a grammar body must return Grammar.Rule", Span(a[2]));
@@ -153,7 +172,7 @@ internal static class NgrProjector
             }
         }
         return new ModuleDecl(Text(module.Arguments[0]), usings.ToArray(), rules.ToArray(), extends.ToArray(), Span(module),
-            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray()) { Contexts = contexts.ToArray() };
+            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray(), patterns.ToArray()) { Contexts = contexts.ToArray() };
     }
 
     static EquatableArray<Alternative> Alternatives(HirNode list)
@@ -413,8 +432,15 @@ internal static class NgrProjector
                     var captures = Value(a[0]) is { } captureList
                         ? Items(Expect(captureList, "QuoteCaptures").Arguments[0]).Select(QuoteParameter).ToArray()
                         : Array.Empty<QuoteParameter>();
+                    MatchContext? context = null;
+                    if (Value(a[5]) is { } contextNode)
+                    {
+                        var parts = Expect(contextNode, "MatchContext").Arguments;
+                        context = new(Text(parts[0]) == "parent", Value(parts[1]) is { } category ? Name(category) : null,
+                            Captures(parts[2]), Quote(parts[3]), Span(contextNode));
+                    }
                     statements.Add(new MatchDiagnosticStatement(captures, Quote(a[1]), Name(a[3]),
-                        Text(a[2]) == "warning", Code(a[4]), Span(statement)));
+                        Text(a[2]) == "warning", Code(a[4]), Span(statement), context));
                     break;
                 default:
                     throw Unexpected(statement);

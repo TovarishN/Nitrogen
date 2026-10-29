@@ -225,6 +225,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
             ?? (CSharpNameAt(csharp, position) is { } quoteName
                 ? new HoverInfo(quoteName.Description, csharp.Host.Lines.RangeOf(quoteName.Span)) : null);
         if (QuoteHelperIndex(uri, position)?.DiscardHover(new Uri(uri).LocalPath, position) is { } discard) return discard;
+        if (QuoteHelperIndex(uri, position)?.PatternHover(new Uri(uri).LocalPath, position) is { } pattern) return pattern;
         if (QuoteAt(uri, position) is { } quote)
             return QuoteNameAt(quote, quote.Document.Lines.OffsetOf(position)) is { } name
                 ? new HoverInfo(name.Description, quote.Document.Lines.RangeOf(name.Span)) : null;
@@ -374,7 +375,7 @@ public sealed partial class NitrogenLanguageService(LanguageRegistry registry) :
     /// <summary>The name a rename at <paramref name="position"/> would change; throws <see cref="RenameRefusedException"/> when it cannot.</summary>
     public DocumentRange PrepareRename(string uri, DocumentPosition position)
     {
-        if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is { Kind: "helper" or "parameter" } helper)
+        if (QuoteHelperIndex(uri, position) is { } helperIndex && helperIndex.At(new Uri(uri).LocalPath, position) is { Kind: "helper" or "parameter" or "pattern" } helper)
             return new LineMap(TextOf(uri)!).RangeOf(new(helper.Span.Start, helper.Span.Length));
         if (_hosts.ContainsKey(uri))
             return Into(uri, position) is { } inner ? OutOf(inner.Uri, PrepareRename(inner.Uri, inner.Position))

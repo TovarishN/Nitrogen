@@ -11,10 +11,10 @@ public class GrammarContextCompilerTests
         string code=Assert.Single(result.Sources).Code;Assert.Contains("TestContext",code);Assert.Contains("ParseWithContext",code);Assert.Contains("GrammarContextDecl",code);
     }
     [Theory]
-    [InlineData("syntax module A { syntax Root = context(Missing) \"x\"; }","NGR0163")]
-    [InlineData("syntax module A { context F; context F; syntax Root = \"x\"; }","NGR0164")]
-    [InlineData("syntax module A { context F; token X = context(F) \"x\"; syntax Root = X; }","NGR0165")]
-    [InlineData("syntax module A { context F; token X = with(F = true) \"x\"; syntax Root = X; }","NGR0165")]
+    [InlineData("syntax module A { syntax Root = context(Missing) \"x\"; }","NGR0167")]
+    [InlineData("syntax module A { context F; context F; syntax Root = \"x\"; }","NGR0168")]
+    [InlineData("syntax module A { context F; token X = context(F) \"x\"; syntax Root = X; }","NGR0169")]
+    [InlineData("syntax module A { context F; token X = with(F = true) \"x\"; syntax Root = X; }","NGR0169")]
     public void Invalid_contexts_fail_before_emission_with_authored_locations(string text,string code)
     {
         var result=Compile(text);Assert.True(result.HasErrors);Assert.Empty(result.Sources);
@@ -29,7 +29,7 @@ public class GrammarContextCompilerTests
     [Fact] public void Unqualified_ambiguous_contexts_are_rejected()
     {
         var result=Compile("syntax module A { context F; } syntax module B { context F; } syntax module C { using A; using B; syntax Root = context(F) \"x\"; }");
-        Assert.Contains(result.Diagnostics,d=>d.Diagnostic.Code=="NGR0163"&&d.Diagnostic.Message.Contains("ambiguous"));
+        Assert.Contains(result.Diagnostics,d=>d.Diagnostic.Code=="NGR0167"&&d.Diagnostic.Message.Contains("ambiguous"));
     }
     [Fact] public void Context_predicates_cannot_hide_nullable_repetition_or_left_recursion()
     {
@@ -44,7 +44,7 @@ public class GrammarContextCompilerTests
         var imported=Compile("syntax module A { context F; } syntax module B { using A; function Wrap(r: Grammar.Rule): Grammar.Rule = with(F = true) r; } syntax module C { using B; syntax Root = Wrap(\"x\"); }");
         Assert.False(imported.HasErrors,string.Join(";",imported.Diagnostics.Select(d=>d.Diagnostic.Message)));
         var bad=Compile("syntax module A { function Wrap(r: Grammar.Rule): Grammar.Rule = with(Missing = true) r; syntax Root = \"x\"; }");
-        Assert.Contains(bad.Diagnostics,d=>d.Diagnostic.Code=="NGR0163");
+        Assert.Contains(bad.Diagnostics,d=>d.Diagnostic.Code=="NGR0167");
     }
     [Theory]
     [InlineData("syntax module A { context F; syntax Root = with(F = true) context(F) \"x\"; }")]
@@ -91,7 +91,7 @@ public class GrammarContextCompilerTests
     public void Nullable_context_separated_lists_are_rejected_before_emission(string body)
     {
         var result=Compile("syntax module A { context F; syntax Guard=context(F); syntax Root=with(F = true) "+body+"; }");
-        Assert.True(result.HasErrors);Assert.Empty(result.Sources);Assert.Contains(result.Diagnostics,d=>d.Diagnostic.Code=="NGR0166");
+        Assert.True(result.HasErrors);Assert.Empty(result.Sources);Assert.Contains(result.Diagnostics,d=>d.Diagnostic.Code=="NGR0170");
     }
     [Fact]public void Scoped_unlabeled_references_keep_the_existing_names_and_duplicate_numbering()
     {

@@ -417,6 +417,11 @@ public unsafe ref partial struct ParserState
         if (++a.RepairCount > BuildArena.MaxRepairs) return GiveUp(from, text);
         if (site.Insert.Matches(_text, from))
         {
+            if (SkipDuplicateBeforeRequired(site, from, out int duplicateEnd))
+            {
+                Skipped(from, duplicateEnd, text);
+                return site.Element;
+            }
             a.PendingRepairText = text;
             return site.Element + 1;
         }
@@ -448,6 +453,29 @@ public unsafe ref partial struct ParserState
             depth = Math.Max(0, depth + SkipUnit());
             skippedEnd = Position;
         }
+    }
+
+    // Prefer deleting an exact duplicate leaf over inserting the required element before it,
+    // but only when that required element is visible immediately after the duplicate and trivia.
+    bool SkipDuplicateBeforeRequired(RepairSite site, int from, out int duplicateEnd)
+    {
+        duplicateEnd = from;
+        var a = Arena;
+        if (from >= _text.Length || !IsIdentifierPart(_text[from]) || a.FrameCount == 0
+            || a.ChildStackCount <= a.FrameChildBase[a.FrameCount - 1]) return false;
+        int previous = a.ChildStack[a.ChildStackCount - 1];
+        if (previous < 0 || a.ChildCount[previous] != 0 || a.Flags[previous] != NodeFlags.None) return false;
+        do duplicateEnd++;
+        while (duplicateEnd < _text.Length && IsIdentifierPart(_text[duplicateEnd]));
+        int length = duplicateEnd - from;
+        if (a.Length[previous] != length
+            || !_text.Slice(a.Start[previous], length).SequenceEqual(_text.Slice(from, length))) return false;
+        Position = duplicateEnd;
+        SkipTrivia();
+        foreach (var point in site.Sync)
+            if (point.Element == site.Element && point.First.Matches(_text, Position)) return true;
+        Position = from;
+        return false;
     }
 
     /// <summary>

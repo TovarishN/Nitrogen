@@ -59,13 +59,29 @@ public sealed unsafe class LanguageBuilder
             if (catalog is null) return false;
         }
         var composed = BuildSyntax(catalog, declarative!);
+        var namedErrors = composed.NamedPatternTable.Errors.Select(error =>
+            new CompositionDiagnostic(error.Diagnostic.Code, new[] { error.Pattern }, $"pattern {error.Pattern}: {error.Diagnostic.Message}")
+            {
+                Location = new(error.Source.Path, new(error.Source.Start + error.Diagnostic.Span.Start,
+                    error.Diagnostic.Span.Length > 0 ? error.Diagnostic.Span.Length : error.Source.Length))
+            }).ToArray();
+        if (namedErrors.Length > 0)
+        {
+            diagnostics = namedErrors;
+            return false;
+        }
         var patternErrors = composed.Modules.SelectMany(module => module.DiagnosticPatterns)
             .SelectMany(pattern => composed.DiagnosticPattern(pattern).Diagnostics.Select(diagnostic =>
                 new CompositionDiagnostic(diagnostic.Code, new[] { pattern.Category }, diagnostic.Message)
                 {
                     Location = new(pattern.Source.Path, new(pattern.Source.Start + diagnostic.Span.Start,
                         diagnostic.Span.Length > 0 ? diagnostic.Span.Length : pattern.Source.Length))
-                })).ToArray();
+                }).Concat(pattern.Context is not { } context ? [] : composed.DiagnosticContextPattern(context).Diagnostics.Select(diagnostic =>
+                new CompositionDiagnostic(diagnostic.Code, new[] { context.Category }, diagnostic.Message)
+                {
+                    Location = new(context.Source.Path, new(context.Source.Start + diagnostic.Span.Start,
+                        diagnostic.Span.Length > 0 ? diagnostic.Span.Length : context.Source.Length))
+                }))).ToArray();
         if (patternErrors.Length > 0)
         {
             diagnostics = patternErrors;

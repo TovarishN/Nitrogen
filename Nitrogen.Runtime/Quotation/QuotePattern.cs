@@ -9,11 +9,19 @@ public sealed class QuotePattern
     readonly IReadOnlyDictionary<int, QuotePatternList> _lists;
     bool _disposed;
 
-    internal QuotePattern(ParseResult parsed, string category, IReadOnlyDictionary<string, QuoteHole> captures)
+    internal QuotePattern(ParseResult parsed, string category, IReadOnlyDictionary<string, QuoteHole> captures,
+        IReadOnlyDictionary<string, NamedPatternDefinition>? references = null)
     {
         _parsed = parsed;
         _category = category;
         _captures = captures;
+        References = references ?? new Dictionary<string, NamedPatternDefinition>(StringComparer.Ordinal);
+        // A whole-pattern hole naming a pattern matches the same node again: a non-consuming reference.
+        int root = parsed.Tree.Root;
+        while (parsed.Tree.Kind(root) == SyntaxKinds.Group && parsed.Tree.ChildCount(root) == 1) root = parsed.Tree.Child(root, 0);
+        if (parsed.Tree.Kind(root) == SyntaxKinds.Hole &&
+            References.TryGetValue(parsed.Tree.GetText(root)[1..].ToString(), out var target))
+            RootReference = target;
         var lists = new Dictionary<int, QuotePatternList>();
         // A template list is a List node, or a list hole standing alone as its collapsed one-item list.
         foreach (var (node, shape) in parsed.Tree.TemplateLists)
@@ -27,6 +35,20 @@ public sealed class QuotePattern
         _lists = lists;
     }
 
+    internal SyntaxTree Tree => _parsed.Tree;
+    internal IReadOnlyDictionary<string, QuoteHole> Contracts => _captures;
+    internal IReadOnlyDictionary<int, QuotePatternList> Lists => _lists;
+
+    /// <summary>Named patterns required at holes, by capture name.</summary>
+    internal IReadOnlyDictionary<string, NamedPatternDefinition> References { get; }
+
+    /// <summary>The named pattern when this whole pattern is one reference hole; it consumes no syntax.</summary>
+    internal NamedPatternDefinition? RootReference { get; }
+
+    bool _hideCaptures;
+
+    internal void HideCaptures() => _hideCaptures = true;
+
     internal void DisposeStorage()
     {
         if (_disposed) return;
@@ -37,6 +59,18 @@ public sealed class QuotePattern
     public QuoteMatchResult Match(QuoteNode input) => Match(input, new QuoteMatchOptions());
 
     public QuoteMatchResult Match(QuoteNode input, QuoteMatchOptions options) => MatchCore(input, null, options);
+
+    /// <summary>Matches under a caller's budget, letting its exhaustion propagate; invalid input returns NQP0004.</summary>
+    internal QuoteMatchResult MatchWithBudget(QuoteNode input, QuoteMatchBudget budget) => MatchChecked(input, null, budget);
+
+    /// <summary>Matches input whose subtree the caller already validated, under the caller's budget.</summary>
+    internal QuoteMatchResult MatchPrevalidated(QuoteNode input, QuoteMatchBudget budget)
+    {
+        if (_disposed) return QuotePatternMatcher.Invalid("NQP0004", "The pattern compilation has been disposed.");
+        if (!_parsed.Tree.Language!.AcceptsQuoteNode(_category, input.Tree, input.Node))
+            return new(false, new Dictionary<string, QuoteArgument>().AsReadOnly(), []);
+        return Published(new QuotePatternMatcher(this, null, budget).Match(input));
+    }
 
     internal QuoteMatchResult MatchResolved(QuoteNode input, Func<QuoteNode, QuoteNode> resolve, QuoteMatchOptions? options = null)
         => MatchCore(input, resolve, options ?? new QuoteMatchOptions());
@@ -65,7 +99,55 @@ public sealed class QuotePattern
         if (invalid is not null) return invalid;
         if (!language.AcceptsQuoteNode(_category, input.Tree, input.Node))
             return QuotePatternMatcher.Invalid("NQP0005", "Input category does not match.");
-        return new QuotePatternMatcher(_parsed.Tree, _captures, _lists, resolve, budget).Match(input);
+        return Published(new QuotePatternMatcher(this, resolve, budget).Match(input));
+    }
+
+    QuoteMatchResult Published(QuoteMatchResult result) => _hideCaptures && result.Captures.Count > 0
+        ? result with { Captures = new System.Collections.ObjectModel.ReadOnlyDictionary<string, QuoteArgument>(new Dictionary<string, QuoteArgument>()) }
+        : result;
+
+    /// <summary>
+    /// Matches every node at or below <paramref name="root"/> in preorder, document order, including nested matches.
+    /// Nodes whose own subtree has recovered or ambiguous syntax are skipped. One work limit covers the whole search.
+    /// </summary>
+    public QuoteFindResult FindAll(QuoteNode root, QuoteMatchOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        options ??= new QuoteMatchOptions();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxWorkSteps);
+        options.CancellationToken.ThrowIfCancellationRequested();
+        var matches = new List<QuoteFoundMatch>();
+        if (_disposed) return Incomplete("NQP0004", "The pattern compilation has been disposed.");
+        if (root.Tree is null || root.Tree.IsDisposed || (uint)root.Node >= (uint)root.Tree.NodeCount)
+            return Incomplete("NQP0004", "Invalid or disposed input syntax.");
+        var language = _parsed.Tree.Language!;
+        if (!ReferenceEquals(root.Tree.Language, language)) return Incomplete("NQP0005", "Input language snapshot does not match.");
+        var budget = new QuoteMatchBudget(options);
+        try
+        {
+            var invalid = QuotePatternMatcher.InvalidSubtrees(root, budget);
+            var work = new Stack<int>();
+            work.Push(root.Node);
+            while (work.TryPop(out int node))
+            {
+                budget.Step();
+                var tree = root.Tree;
+                for (int i = tree.ChildCount(node) - 1; i >= 0; i--)
+                    if (tree.Child(node, i) is var child && child != SyntaxTree.NoNode) work.Push(child);
+                if (invalid.Contains(node)) continue;
+                var candidate = new QuoteNode(tree, node, root.Origin);
+                var result = MatchPrevalidated(candidate, budget);
+                if (result.Matched) matches.Add(new(candidate, result.Captures));
+            }
+        }
+        catch (QuoteMatchLimitException)
+        {
+            return Incomplete("NQP0006", "The syntax-pattern search exceeded its work limit.");
+        }
+        return new(matches.AsReadOnly(), true, []);
+
+        QuoteFindResult Incomplete(string code, string message) =>
+            new(matches.AsReadOnly(), false, [new QuoteDiagnostic(code, default, message)]);
     }
 }
 

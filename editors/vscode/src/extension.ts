@@ -7,6 +7,7 @@ import { languagesOfOtherExtensions, workspaceFileExtensions } from './otherExte
 import { SignatureRouting } from './signatureRouting';
 import { serverCommand } from './server';
 import { registerGrammarExtraction } from './extractGrammar';
+import { nitrideInstalled } from './nitride';
 
 let client: LanguageClient | undefined;
 let strings: CSharpStrings | undefined;
@@ -21,6 +22,7 @@ function workspaceExtensions(claimedLanguages: readonly string[]): string[] {
 }
 
 export async function activate(context: ExtensionContext): Promise<void> {
+  if (nitrideInstalled(id => extensions.getExtension(id))) return;
   const settings = workspace.getConfiguration('nitrogen');
   const server = serverCommand({
     serverPath: settings.get<string>('server.path') ?? '',

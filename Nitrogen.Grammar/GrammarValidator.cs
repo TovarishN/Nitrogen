@@ -268,8 +268,17 @@ public static class GrammarValidator
                     {
                         if (capture.Name.Name == "_" || !captures.Add(capture.Name.Name))
                             Report(GrammarCodes.QuoteMatchCapture, $"reserved or duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
-                        _analysis.Helpers.Category(capture.Category, module, Report);
                     }
+                    _analysis.Helpers.CheckPatternCaptures(match.Captures, match.Pattern, null, module, Report);
+                    if (match.Context is not { } context) continue;
+                    if (context.Category is { } contextCategory) _analysis.Helpers.Category(contextCategory, module, Report);
+                    var contextCaptures = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var capture in context.Captures)
+                        if (capture.Name.Name == "_" || !contextCaptures.Add(capture.Name.Name))
+                            Report(GrammarCodes.QuoteMatchCapture, $"reserved or duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
+                        else if (captures.Contains(capture.Name.Name))
+                            Report(GrammarCodes.ContextCaptureCollision, $"capture '{capture.Name.Name}' is already a capture of the matched pattern; rename one", capture.Name.Span, module);
+                    _analysis.Helpers.CheckPatternCaptures(context.Captures, context.Pattern, null, module, Report);
                 }
             }
 

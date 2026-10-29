@@ -12,7 +12,8 @@ public sealed record ModuleDecl(
     EquatableArray<BuiltinDecl> Builtins = default,
     EquatableArray<SymbolPropertyDecl> SymbolProperties = default,
     EquatableArray<QuoteHelperDecl> Helpers = default,
-    EquatableArray<GrammarFunctionDecl> Functions = default)
+    EquatableArray<GrammarFunctionDecl> Functions = default,
+    EquatableArray<NamedPatternDecl> Patterns = default)
 {
     public EquatableArray<NameDecl> Contexts { get; init; }
 }
@@ -21,7 +22,12 @@ public sealed record ContextTestExpr(NameDecl Context, GrammarSpan Span) : Expr(
 public sealed record ContextScopeExpr(NameDecl Context, bool Value, Expr Inner, GrammarSpan Span) : Expr(Span);
 
 public sealed record QuoteText(string Text, GrammarSpan Span);
-public sealed record QuoteParameter(NameDecl Name, NameDecl Category, bool IsList, GrammarSpan Span);
+/// <param name="IsDescendant"><c>name: ..Pattern</c>: search at or below the hole for the named pattern.</param>
+public sealed record QuoteParameter(NameDecl Name, NameDecl Category, bool IsList, GrammarSpan Span, bool IsDescendant = false);
+
+/// <summary><c>pattern Name : Category = | alt | alt;</c>: ordered alternatives, each with private captures.</summary>
+public sealed record NamedPatternDecl(NameDecl Name, NameDecl Category, EquatableArray<NamedPatternAlternativeDecl> Alternatives, GrammarSpan Span);
+public sealed record NamedPatternAlternativeDecl(EquatableArray<QuoteParameter> Captures, QuoteText Pattern, GrammarSpan Span);
 public sealed record QuoteHelperDecl(NameDecl Name, EquatableArray<QuoteParameter> Parameters,
     NameDecl ReturnCategory, QuoteText Body, GrammarSpan Span)
 {
@@ -283,7 +289,11 @@ public sealed record CheckStatement(NameDecl? Code, CodeText Condition, CodeText
 
 /// <summary>A structural match on the current syntax node that reports a diagnostic.</summary>
 public sealed record MatchDiagnosticStatement(EquatableArray<QuoteParameter> Captures, QuoteText Pattern,
-    NameDecl Code, bool IsWarning, CodeText Message, GrammarSpan Span) : SemanticStatement(Span);
+    NameDecl Code, bool IsWarning, CodeText Message, GrammarSpan Span, MatchContext? Context = null) : SemanticStatement(Span);
+
+/// <summary><c>inside</c>/<c>parent [Category] [captures] &lt;[ … ]&gt;</c>: an ancestor of the matched node must match too.</summary>
+/// <param name="Category">The ancestor's category; null means the category of the rule the diagnostic belongs to.</param>
+public sealed record MatchContext(bool ParentOnly, NameDecl? Category, EquatableArray<QuoteParameter> Captures, QuoteText Pattern, GrammarSpan Span);
 
 /// <summary>The <c>{ … }</c> after a syntax rule or an alternative (issue 239).</summary>
 public sealed record SemanticsBlock(EquatableArray<PropertyDecl> Properties, EquatableArray<SemanticStatement> Statements, GrammarSpan Span);
