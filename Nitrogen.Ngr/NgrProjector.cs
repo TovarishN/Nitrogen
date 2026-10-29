@@ -73,6 +73,7 @@ internal static class NgrProjector
         var symbolProperties = new List<SymbolPropertyDecl>();
         var helpers = new List<QuoteHelperDecl>();
         var functions = new List<GrammarFunctionDecl>();
+        var contexts = new List<NameDecl>();
         foreach (var item in Items(module.Arguments[1]))
         {
             var member = (HirOperation)item;
@@ -105,6 +106,9 @@ internal static class NgrProjector
                     { Match = new(Name(body.Arguments[0]), arms, Span(body)) });
                     break;
                 }
+                case "ContextDeclaration":
+                    contexts.Add(Name(a[0]));
+                    break;
                 case "Using":
                     usings.Add(new UsingDecl(Text(a[0]), Span(member)));
                     break;
@@ -149,7 +153,7 @@ internal static class NgrProjector
             }
         }
         return new ModuleDecl(Text(module.Arguments[0]), usings.ToArray(), rules.ToArray(), extends.ToArray(), Span(module),
-            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray());
+            symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray()) { Contexts = contexts.ToArray() };
     }
 
     static EquatableArray<Alternative> Alternatives(HirNode list)
@@ -538,6 +542,13 @@ internal static class NgrProjector
                 var tail = (HirOperation)primary.Arguments[1];
                 if (Kind(tail) != "SeparatorTail") return inner; // a plain group keeps the inner span
                 return new SeparatedListExpr(inner, Expression(tail.Arguments[0]), Text(tail.Arguments[1]) == "+", Span(primary));
+            }
+            case "ContextTest":
+                return new ContextTestExpr(Name(primary.Arguments[0]),Span(primary));
+            case "ContextScope":
+            {
+                var a=primary.Arguments;var inner=Unary(a[2]);
+                return new ContextScopeExpr(Name(a[0]),Text(a[1])=="true",inner,GrammarSpan.FromBounds(Span(primary).Start,inner.Span.End));
             }
             case "Reference":
                 return new ReferenceExpr(Text(primary.Arguments[0]), Span(primary.Arguments[0]));

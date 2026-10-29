@@ -69,7 +69,7 @@ internal sealed class ViewWriter
         foreach (var element in elements)
         {
             var bare = element is LabeledExpr labeled ? labeled.Inner : element;
-            if (bare is PredicateExpr) continue; // predicates push no node
+            if (GrammarContextSyntax.NoNode(bare)) continue; // predicates push no node
             slots.Add((element, child++));
         }
 
@@ -114,6 +114,8 @@ internal sealed class ViewWriter
     {
         switch (expr)
         {
+            case ContextScopeExpr context:
+                return TypeOf(context.Inner,implicitModule);
             case LabeledExpr labeled:
                 return TypeOf(labeled.Inner, implicitModule);
             case LiteralExpr:

@@ -1,0 +1,23 @@
+syntax module GrammarContext
+{
+    context Enabled;
+    syntax External = with(GrammarContext.Flags.External = true) ExternalBody;
+    syntax ExternalBody = context(GrammarContext.Flags.External) "z";
+    syntax File = Items:Item*;
+    syntax Item = Async / Ordinary;
+    syntax Async = "a" Body:with(Enabled = true) Expr;
+    syntax Ordinary = "n" Body:Expr;
+    syntax List = "l" Items:with(Enabled = true) Expr* ";";
+    syntax Maybe = "m" Value:with(Enabled = true) Expr? ";";
+    syntax ScopedAlias = with(Enabled = true) Expr;
+    syntax Speculative = &(with(Enabled = true) Expr) Body:Expr;
+    extensible syntax Expr
+    {
+        | Enabled = context(Enabled) "x"
+        | Disabled = !context(Enabled) "x"
+        | Group = "[" Item "]"
+        | Add = Expr "+" Right:with(Enabled = true) Expr precedence 10 left
+    }
+}
+
+syntax module GrammarContext.Flags { context External; }

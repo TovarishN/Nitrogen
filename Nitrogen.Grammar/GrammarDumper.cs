@@ -19,6 +19,7 @@ public static class GrammarDumper
         foreach (var builtin in module.Builtins)
             builder.Append(" (builtin ").Append(builtin.Kind.Name).Append(builtin.Scope is { } scope ? " in " + scope.Name : "").Append(' ')
                 .Append(string.Join(" ", builtin.Names.Select(n => n.Name))).Append(')');
+        foreach(var context in module.Contexts) builder.Append(" (context ").Append(context.Name).Append(')');
         foreach (var property in module.SymbolProperties) builder.Append(SymbolProperty(property));
         foreach (var helper in module.Helpers)
         {
@@ -138,6 +139,8 @@ public static class GrammarDumper
         IfExpr i => $"(if {Dump(i.Condition)} {Dump(i.Then)} {Dump(i.Else)})",
         ComprehensionExpr c => $"({(c.IsChoice ? "choice" : "seq")} {c.Variable.Name} {Dump(c.From)}" + (c.To is { } to ? " " + Dump(to) : "") + " " + Dump(c.Block) + ")",
         ValueClassExpr c => "(value-class " + (c.Negated ? "^ " : "") + string.Join(" ", c.Items.Select(Dump)) + ")",
+        ContextTestExpr c => "(context " + c.Context.Name + ")",
+        ContextScopeExpr c => "(with " + c.Context.Name + " " + (c.Value ? "true" : "false") + " " + Dump(c.Inner) + ")",
         ReferenceExpr r => $"(ref {r.Name})",
         PredicateExpr p => $"({(p.Kind == PredicateKind.Not ? "not" : "and")} {Dump(p.Inner)})",
         _ => throw new ArgumentOutOfRangeException(nameof(expr)),

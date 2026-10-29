@@ -159,6 +159,7 @@ public static class GrammarParser
             var symbolProperties = new List<SymbolPropertyDecl>();
             var helpers = new List<QuoteHelperDecl>();
             var functions = new List<GrammarFunctionDecl>();
+            var contexts = new List<NameDecl>();
             while (!At(TokenKind.RBrace))
             {
                 if (AtKeyword("function") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.LParen)
@@ -172,6 +173,10 @@ public static class GrammarParser
                     string module = ExpectName("a module name");
                     var semicolon = Expect(TokenKind.Semicolon, "';'");
                     usings.Add(new UsingDecl(module, GrammarSpan.FromBounds(keyword.Start, semicolon.End)));
+                }
+                else if (AtKeyword("context"))
+                {
+                    Advance();contexts.Add(Name(Expect(TokenKind.Identifier, "a context name")));Expect(TokenKind.Semicolon, "';'");
                 }
                 else if (AtKeyword("symbols"))
                 {
@@ -259,7 +264,7 @@ public static class GrammarParser
             }
             var close = Advance();
             return new ModuleDecl(name, usings.ToArray(), rules.ToArray(), extends.ToArray(),
-                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray());
+                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray()) { Contexts = contexts.ToArray() };
         }
 
         (string Name, Expr Body, EquatableArray<BindingClause> Clauses, SemanticsBlock? Semantics, int End) ParseRuleBody()
@@ -417,8 +422,25 @@ public static class GrammarParser
             }
         }
 
+        GrammarToken AdvanceName(string what)
+        {
+            if (Current.Kind is not (TokenKind.Identifier or TokenKind.QualifiedName)) throw Error("expected " + what);
+            return Advance();
+        }
+
         Expr ParsePrimary()
         {
+            if (AtKeyword("context") && Next.Kind == TokenKind.LParen)
+            {
+                int start=Advance().Start;Advance();var name=Name(AdvanceName("a context name"));var end=Expect(TokenKind.RParen,"')'");
+                return new ContextTestExpr(name,GrammarSpan.FromBounds(start,end.End));
+            }
+            if (AtKeyword("with") && Next.Kind == TokenKind.LParen)
+            {
+                int start=Advance().Start;Advance();var name=Name(AdvanceName("a context name"));Expect(TokenKind.Equals,"'='");
+                bool value=AtKeyword("true");if(!value&&!AtKeyword("false"))throw Error("expected true or false");Advance();Expect(TokenKind.RParen,"')'");
+                var inner=ParseUnary();return new ContextScopeExpr(name,value,inner,GrammarSpan.FromBounds(start,inner.Span.End));
+            }
             switch (Current.Kind)
             {
                 case TokenKind.String:

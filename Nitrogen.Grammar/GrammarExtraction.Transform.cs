@@ -168,6 +168,7 @@ public static partial class GrammarExtraction
     {
         SequenceExpr sequence => sequence.Items,
         ChoiceExpr choice => choice.Alternatives,
+        ContextScopeExpr context => new[] { context.Inner },
         LabeledExpr labeled => new[] { labeled.Inner },
         RepeatExpr repeat => new[] { repeat.Inner },
         SeparatedListExpr list => new[] { list.Item, list.Separator },

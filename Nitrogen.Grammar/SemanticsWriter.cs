@@ -360,7 +360,7 @@ internal sealed class SemanticsWriter
                 int item = 0;
                 foreach (var e in group.Items.Select(Unlabel))
                 {
-                    if (e is PredicateExpr) continue;
+                    if (GrammarContextSyntax.NoNode(e)) continue;
                     if (e is ReferenceExpr r && _model.Resolve(r.Name, _info.Module, kind.ImplicitModule).Rule is SyntaxRule or ExtensibleRule)
                         found.Add((r, item));
                     item++;

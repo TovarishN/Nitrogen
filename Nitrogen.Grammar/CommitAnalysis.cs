@@ -432,6 +432,10 @@ internal sealed class CommitAnalysis
                 string text = string.Join(" / ", choice.Alternatives.Select(a => Render(a, nested: true)));
                 return nested ? "(" + text + ")" : text;
             }
+            case ContextTestExpr context:
+                return "context("+context.Context.Name+")";
+            case ContextScopeExpr context:
+                return "with("+context.Context.Name+" = "+(context.Value?"true":"false")+") "+Render(context.Inner,true);
             case LabeledExpr labeled:
                 return labeled.Label + ":" + Render(labeled.Inner, nested: true);
             case RepeatExpr repeat:
@@ -469,6 +473,9 @@ internal sealed class CommitAnalysis
             case ChoiceExpr choice:
                 for (int k = 0; k < choice.Alternatives.Count; k++)
                     Index(choice.Alternatives[k], choice, k, root, path + "#" + (k + 1), leftOperand);
+                break;
+            case ContextScopeExpr context:
+                Index(context.Inner,context,0,root,path,leftOperand);
                 break;
             case LabeledExpr labeled:
                 Index(labeled.Inner, labeled, 0, root, path + "/" + labeled.Label, leftOperand);
@@ -542,6 +549,9 @@ internal sealed class CommitAnalysis
                     _ => Lookahead.Empty,
                 };
                 break;
+            case ContextScopeExpr context:
+                result=First(context.Inner);
+                break;
             case LabeledExpr labeled:
                 result = First(labeled.Inner);
                 break;
@@ -558,6 +568,7 @@ internal sealed class CommitAnalysis
             case SequenceExpr sequence:
                 result = FirstOfItems(sequence.Items, 0, sequence.Items.Count);
                 break;
+            case ContextTestExpr:
             case PredicateExpr:
                 result = Lookahead.Empty;
                 break;
@@ -597,6 +608,9 @@ internal sealed class CommitAnalysis
                 break;
             case ReferenceExpr reference when Resolve(reference, root) is { Rule: SyntaxRule } rule:
                 result = ConcreteFirst(_ruleRoots[rule.Key].Body);
+                break;
+            case ContextScopeExpr context:
+                result=ConcreteFirst(context.Inner);
                 break;
             case LabeledExpr labeled:
                 result = ConcreteFirst(labeled.Inner);
@@ -664,6 +678,9 @@ internal sealed class CommitAnalysis
                 break;
             case AnyCharExpr:
                 set.AddAny();
+                break;
+            case ContextScopeExpr context:
+                AddTokenFirst(context.Inner,module,set);
                 break;
             case LabeledExpr labeled:
                 AddTokenFirst(labeled.Inner, module, set);
@@ -828,6 +845,8 @@ internal sealed class CommitAnalysis
                     if (Nullable(later) || Overlaps(First(later), lookahead)) return CommitKind.None;
                 }
                 return Query(choice, lookahead, after: false, ignore);
+            case ContextScopeExpr context:
+                return Query(context,lookahead,after:false,ignore);
             case LabeledExpr labeled:
                 return Query(labeled, lookahead, after: false, ignore);
             case RepeatExpr repeat:
@@ -867,6 +886,8 @@ internal sealed class CommitAnalysis
                 return Query(sequence, lookahead, after: true, ignore);
             case ChoiceExpr choice:
                 return Query(choice, lookahead, after: true, ignore);
+            case ContextScopeExpr context:
+                return Query(context,lookahead,after:true,ignore);
             case LabeledExpr labeled:
                 return Query(labeled, lookahead, after: true, ignore);
             case RepeatExpr repeat:
@@ -994,6 +1015,7 @@ internal sealed class CommitAnalysis
             case SeparatedListExpr list:
                 result = occurrence.Index == 0 ? ConcreteFirst(list.Separator).Union(Follow(list)) : ConcreteFirst(list.Item);
                 break;
+            case ContextTestExpr:
             case PredicateExpr:
                 result = Lookahead.Empty;
                 break;

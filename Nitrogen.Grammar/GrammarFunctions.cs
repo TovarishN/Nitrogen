@@ -90,6 +90,7 @@ public static partial class GrammarFunctions
         {
             SequenceExpr s => s with { Items = s.Items.Select(i => Map(i, replace)).ToArray() },
             ChoiceExpr c => c with { Alternatives = c.Alternatives.Select(a => Map(a, replace)).ToArray() },
+            ContextScopeExpr c => c with { Inner = Map(c.Inner, replace) },
             LabeledExpr l => l with { Inner = Map(l.Inner, replace) },
             RepeatExpr r => r with { Inner = Map(r.Inner, replace) },
             SeparatedListExpr l => l with { Item = Map(l.Item, replace), Separator = Map(l.Separator, replace) },

@@ -145,6 +145,7 @@ internal static class TextMateWriter
         LiteralExpr literal => literal.Value.IndexOf('\\') >= 0,
         SequenceExpr sequence => sequence.Items.Any(Escapes),
         ChoiceExpr choice => choice.Alternatives.Any(Escapes),
+        ContextScopeExpr context => Escapes(context.Inner),
         LabeledExpr labeled => Escapes(labeled.Inner),
         RepeatExpr repeat => Escapes(repeat.Inner),
         _ => false,

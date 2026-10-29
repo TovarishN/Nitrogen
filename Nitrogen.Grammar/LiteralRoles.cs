@@ -105,6 +105,10 @@ internal static class LiteralRoles
                         nullable |= Walk(alternative, first && !(words && whole), inArgument, words);
                     return nullable;
                 }
+                case ContextTestExpr:
+                    return true;
+                case ContextScopeExpr context:
+                    return Walk(context.Inner,first,inArgument,wordChoice);
                 case LabeledExpr labeled:
                     return Walk(labeled.Inner, first, inArgument || arguments?.Contains(labeled.Label) == true, wordChoice);
                 case RepeatExpr repeat:

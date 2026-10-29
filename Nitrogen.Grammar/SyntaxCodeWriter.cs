@@ -129,6 +129,7 @@ internal sealed class SyntaxCodeWriter
     bool ReferencesPoint(Expr element, ModuleDecl module, string implicitModule, GrammarSymbol point)
     {
         if (element is LabeledExpr labeled) element = labeled.Inner;
+        while(element is ContextScopeExpr context) element=context.Inner;
         return element is ReferenceExpr reference && _model.Resolve(reference.Name, module, implicitModule).Key == point.Key;
     }
 
@@ -136,6 +137,13 @@ internal sealed class SyntaxCodeWriter
     {
         switch (expr)
         {
+            case ContextTestExpr context:
+                return $"s.TestContext({ContextReference(context.Context,module,implicitModule)})";
+            case ContextScopeExpr context:
+            {
+                string child=NewContextHelper(context.Inner,module,implicitModule,minPrecedence,listRepair);
+                return $"s.ParseWithContext({ContextReference(context.Context,module,implicitModule)}, {(context.Value ? "true" : "false")}, &{child})";
+            }
             case LabeledExpr labeled:
                 return Element(labeled.Inner, module, implicitModule, minPrecedence, listRepair);
             case LiteralExpr literal:
@@ -205,6 +213,9 @@ internal sealed class SyntaxCodeWriter
         {
             case LabeledExpr labeled:
                 return MayBeListOrNull(labeled.Inner, module, implicitModule, aliases);
+            case ContextScopeExpr context:
+                return MayBeListOrNull(context.Inner,module,implicitModule,aliases);
+            case ContextTestExpr:
             case RepeatExpr or SeparatedListExpr or PredicateExpr:
                 return true;
             case ChoiceExpr choice:
@@ -388,12 +399,13 @@ internal sealed class SyntaxCodeWriter
     string Missing(Expr element, ModuleDecl module, string? implicitModule)
     {
         var bare = element is LabeledExpr labeled ? labeled.Inner : element;
+        if (bare is ContextScopeExpr context) return Missing(context.Inner,module,implicitModule);
         if (_model.Analysis.IsNullable(bare, module, implicitModule))
             return bare switch
             {
                 RepeatExpr { Kind: RepeatKind.Optional } => "s.PushEmpty();",
                 RepeatExpr or SeparatedListExpr => "s.PushEmptyList();",
-                PredicateExpr => "",
+                PredicateExpr or ContextTestExpr => "",
                 _ => "s.PushMissing(SyntaxKinds.Error);",
             };
         return "s.PushMissing(" + MissingKind(bare, module, implicitModule) + ");";
@@ -475,6 +487,8 @@ internal sealed class SyntaxCodeWriter
     /// <summary>An element as a diagnostic phrase.</summary>
     static string Describe(Expr element) => element switch
     {
+        ContextScopeExpr context => Describe(context.Inner),
+        ContextTestExpr context => "context("+context.Context.Name+")",
         LabeledExpr labeled => Describe(labeled.Inner),
         LiteralExpr literal => "'" + literal.Value + "'",
         ReferenceExpr reference => reference.Name.Substring(reference.Name.LastIndexOf('.') + 1),
@@ -484,6 +498,21 @@ internal sealed class SyntaxCodeWriter
         ChoiceExpr choice => string.Join(" or ", choice.Alternatives.Select(Describe)),
         _ => "character",
     };
+
+    string ContextReference(NameDecl name,ModuleDecl module,string? implicitModule)
+    {
+        var target=_model.Analysis.ResolveContext(name,module,implicitModule) ?? throw new InvalidOperationException("unresolved context");
+        var info=_model.Info(target.Module);
+        return info.TypeRef(_info,info.ClassName)+".Instance.ContextDeclarations["+target.Index+"]";
+    }
+
+    string NewContextHelper(Expr inner,ModuleDecl module,string? implicitModule,int precedence,string? repair)
+    {
+        string name="ContextChild"+_counter++;
+        string expression=Element(inner,module,implicitModule,precedence,repair);
+        _helpers.Append($"    static bool {name}(ref ParserState s) => {expression};\n\n");
+        return name;
+    }
 
     static bool IsKeywordLike(string literal) =>
         GrammarLexer.IsIdentifierStart(literal[0]) && literal.All(GrammarLexer.IsIdentifierPart);

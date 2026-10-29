@@ -12,7 +12,13 @@ public sealed record ModuleDecl(
     EquatableArray<BuiltinDecl> Builtins = default,
     EquatableArray<SymbolPropertyDecl> SymbolProperties = default,
     EquatableArray<QuoteHelperDecl> Helpers = default,
-    EquatableArray<GrammarFunctionDecl> Functions = default);
+    EquatableArray<GrammarFunctionDecl> Functions = default)
+{
+    public EquatableArray<NameDecl> Contexts { get; init; }
+}
+
+public sealed record ContextTestExpr(NameDecl Context, GrammarSpan Span) : Expr(Span);
+public sealed record ContextScopeExpr(NameDecl Context, bool Value, Expr Inner, GrammarSpan Span) : Expr(Span);
 
 public sealed record QuoteText(string Text, GrammarSpan Span);
 public sealed record QuoteParameter(NameDecl Name, NameDecl Category, bool IsList, GrammarSpan Span);

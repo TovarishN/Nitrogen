@@ -124,16 +124,23 @@ internal sealed class EmitModel
         (IsLiteralsAndReferences(rule.Body) && rule.Clauses.Count == 0 && rule.Semantics is null);
 
     static bool IsReferences(Expr body) =>
-        body is ReferenceExpr || (body is ChoiceExpr choice && choice.Alternatives.All(a => a is ReferenceExpr));
+        body is ReferenceExpr || (body is ContextScopeExpr context && IsReferences(context.Inner)) || (body is ChoiceExpr choice && choice.Alternatives.All(IsReferences));
 
     static bool IsLiteralsAndReferences(Expr body) =>
         IsAliasPart(body) || (body is ChoiceExpr choice && choice.Alternatives.All(IsAliasPart));
 
-    static bool IsAliasPart(Expr expr) => expr is ReferenceExpr or LiteralExpr;
+    static bool IsAliasPart(Expr expr) => expr is ReferenceExpr or LiteralExpr || (expr is ContextScopeExpr context && IsAliasPart(context.Inner));
 
     /// <summary>The alternatives of an alias: its choice's, or its single body.</summary>
     public static IReadOnlyList<Expr> AliasAlternatives(SyntaxRule rule) =>
-        rule.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { rule.Body };
+        AliasParts(rule.Body).ToList();
+
+    static IEnumerable<Expr> AliasParts(Expr expr) => expr switch
+    {
+        ContextScopeExpr context => AliasParts(context.Inner),
+        ChoiceExpr choice => choice.Alternatives.SelectMany(AliasParts),
+        _ => new[] { expr },
+    };
 
     /// <summary>
     /// True for an alias whose every alternative is a literal or a token: it is a token, so its
