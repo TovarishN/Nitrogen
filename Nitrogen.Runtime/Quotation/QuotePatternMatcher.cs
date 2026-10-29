@@ -17,7 +17,9 @@ internal sealed class QuotePatternMatcher(QuotePattern root, Func<QuoteNode, Quo
     sealed record ReferenceJob(Frame Caller, NamedPatternDefinition Target, QuoteNode Input, string? BindName,
         int Alternative = 0, int ChoiceDepth = -1) : Job;
     // Tries each preorder candidate at or below a hole in turn; later failure resumes with the next one.
-    sealed record DescendantJob(Frame Caller, NamedPatternDefinition Target, QuoteNode[] Candidates, int Index, string BindName) : Job;
+    // Remaining is a persistent cursor: the next node first, so nodes are visited only as candidates are needed.
+    sealed record DescendantJob(Frame Caller, NamedPatternDefinition Target, NodeStack? Remaining, string BindName) : Job;
+    sealed record NodeStack(QuoteNode Node, NodeStack? Next);
     // Commits a successful reference: the callee's choices are cut, since any alternative binds the same node.
     sealed record BindJob(Frame Caller, string? Name, QuoteNode Value, int ChoiceDepth) : Job;
     // Persistent continuations let a choice restore pending outer/nested work without copying a stack.
@@ -135,7 +137,7 @@ internal sealed class QuotePatternMatcher(QuotePattern root, Func<QuoteNode, Quo
             // A descendant search accepts any node at its site; the named pattern constrains what it finds.
             if (!discard && frame.Pattern.Contracts[name].Descendant && frame.Pattern.References.TryGetValue(name, out var searched))
             {
-                work = new(new DescendantJob(frame, searched, Preorder(source), 0, name), work);
+                work = new(new DescendantJob(frame, searched, new(source, null), name), work);
                 return true;
             }
             if (!_language.AcceptsQuoteNode(discard ? site!.Category : frame.Pattern.Contracts[name].Category, source.Tree, source.Node)) return false;
@@ -258,29 +260,17 @@ internal sealed class QuotePatternMatcher(QuotePattern root, Func<QuoteNode, Quo
 
     bool MatchDescendant(DescendantJob descendant, ref Pending? work)
     {
-        if (descendant.Index >= descendant.Candidates.Length) return false;
-        if (descendant.Index + 1 < descendant.Candidates.Length)
-            _choices.Push(new(new(descendant with { Index = descendant.Index + 1 }, work), _trail.Count));
-        work = new(new ReferenceJob(descendant.Caller, descendant.Target, descendant.Candidates[descendant.Index], descendant.BindName), work);
+        if (descendant.Remaining is not { } remaining) return false;
+        budget.Step();
+        var node = Resolve(remaining.Node);
+        // Preorder, document order: the node's children come next, before its later siblings.
+        var next = remaining.Next;
+        for (int i = node.Tree.ChildCount(node.Node) - 1; i >= 0; i--)
+            if (node.Tree.Child(node.Node, i) is var child && child != SyntaxTree.NoNode)
+                next = new(new(node.Tree, child, node.Origin), next);
+        if (next is not null) _choices.Push(new(new(descendant with { Remaining = next }, work), _trail.Count));
+        work = new(new ReferenceJob(descendant.Caller, descendant.Target, node, descendant.BindName), work);
         return true;
-    }
-
-    // The node and its descendants in preorder, document order.
-    QuoteNode[] Preorder(QuoteNode start)
-    {
-        var nodes = new List<QuoteNode>();
-        var work = new Stack<QuoteNode>();
-        work.Push(start);
-        while (work.TryPop(out var node))
-        {
-            budget.Step();
-            node = Resolve(node);
-            nodes.Add(node);
-            for (int i = node.Tree.ChildCount(node.Node) - 1; i >= 0; i--)
-                if (node.Tree.Child(node.Node, i) is var child && child != SyntaxTree.NoNode)
-                    work.Push(new(node.Tree, child, node.Origin));
-        }
-        return nodes.ToArray();
     }
 
     bool Commit(BindJob bind)

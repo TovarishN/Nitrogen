@@ -11,7 +11,8 @@ public sealed class NamedPatternMatchTests
         Spec("Nested", Alt("f($n)", ("n", QuoteHole.Pattern("P.Nested"))), Alt("1")),
         Spec("Wide", Alt("f(..$a, ..$_)", ("a", QuoteHole.List(Expr))), Alt("1")),
         Spec("One", Alt("1")),
-        Spec("Two", Alt("2")));
+        Spec("Two", Alt("2")),
+        Spec("DeepLit", Alt("f($x)", ("x", QuoteHole.DescendantOf("P.DeepLit"))), Alt("1")));
 
     internal static Language Shared => Language;
 
@@ -146,6 +147,15 @@ public sealed class NamedPatternMatchTests
     public void Descendant_backtracks_from_list_span_into_new_search()
     {
         Assert.Equal(13, FoundAt("f(..$_, $s, ..$_)", "f(1 + 3, 4 * 2)", "P.Two"));
+    }
+
+    [Fact]
+    public void Recursive_descendant_pattern_stays_linear()
+    {
+        // Each level's first candidate is the hole node itself, so candidates must be walked lazily, not listed up front.
+        var result = Run("$x", Deep(1_000), new QuoteMatchOptions { MaxWorkSteps = 50_000 }, ("x", QuoteHole.Pattern("P.DeepLit")));
+        Assert.Empty(result.Diagnostics);
+        Assert.True(result.Matched);
     }
 
     [Fact]
