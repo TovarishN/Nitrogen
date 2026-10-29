@@ -496,6 +496,39 @@ public unsafe ref partial struct ParserState
         }
     }
 
+    /// <summary>Re-enter a root rule's sole repetition after damage; nested calls retain ordinary list termination.</summary>
+    public bool RecoverInRootList(RepairSite site)
+    {
+        if (Arena.FrameCount != 2) return false;
+        int original = Position;
+        SkipTrivia();
+        int from = Position, depth = 0;
+        while (Position < _text.Length)
+        {
+            depth = Math.Max(0, depth + SkipUnit());
+            int skippedEnd = Position;
+            SkipTrivia();
+            if (depth != 0 || Position >= _text.Length) continue;
+            foreach (var point in site.Sync)
+            {
+                if (point.Element != site.Element - 1 || !point.First.Matches(_text, Position)) continue;
+                var a = Arena;
+                a.HasRecovery = true;
+                int text = a.AddRepairText(site.Expected);
+                if (++a.RepairCount > BuildArena.MaxRepairs)
+                {
+                    GiveUp(from, text);
+                    return false;
+                }
+                Skipped(from, skippedEnd, text);
+                return true;
+            }
+        }
+        // No later declaration: retain the existing trailing-input handling and tree shape.
+        Position = original;
+        return false;
+    }
+
     /// <summary>
     /// A separated list's separator failed (recovery pass). True, with the diagnostic pending for
     /// the next Missing node, when another item starts here and the element after the list does not:
@@ -532,6 +565,9 @@ public unsafe ref partial struct ParserState
 
     readonly bool Continues(RepairSite site, int position)
     {
+        // Input following the required delimiter also ends the list: the caller can insert
+        // that delimiter here instead of consuming the next declaration as a bad list item.
+        if (site.Insert.Matches(_text, position)) return true;
         foreach (var point in site.Sync)
             if (point.Element >= site.Element && point.First.Matches(_text, position)) return true;
         return false;
@@ -569,8 +605,7 @@ public unsafe ref partial struct ParserState
         }
         if (c is '"' or '\'')
         {
-            int close = _text.Slice(Position + 1).IndexOf(c);
-            Position = close < 0 ? _text.Length : Position + close + 2;
+            Position = SkipQuoted(Position);
             return 0;
         }
         if (IsIdentifierPart(c))
@@ -584,6 +619,21 @@ public unsafe ref partial struct ParserState
     }
 
     static bool IsCloser(char c) => c is ')' or ']' or '}';
+
+    // Recovery's lexical fallback must keep escaped delimiters inside the quoted unit, both
+    // while skipping damage and while reconstructing the surrounding bracket stack.
+    int SkipQuoted(int start)
+    {
+        char quote = _text[start];
+        int i = start + 1;
+        while (i < _text.Length)
+        {
+            char c = _text[i++];
+            if (c == quote) return i;
+            if (c == '\\' && i < _text.Length) i++;
+        }
+        return i;
+    }
 
     /// <summary>
     /// A closer at <paramref name="position"/> ends the current scope only when it closes the
@@ -633,8 +683,7 @@ public unsafe ref partial struct ParserState
             }
             else if (c is '"' or '\'')
             {
-                int close = _text.Slice(i + 1).IndexOf(c);
-                i = close < 0 ? _text.Length : i + close + 2;
+                i = SkipQuoted(i);
             }
             else
             {

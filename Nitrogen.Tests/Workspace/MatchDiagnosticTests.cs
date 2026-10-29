@@ -153,4 +153,46 @@ public sealed class MatchDiagnosticTests
         Assert.Empty(result.Diagnostics);
         Assert.Single(result.Roots);
     }
+
+    [Fact]
+    public void Scalar_capture_messages_support_text_and_typed_semantic_fields()
+    {
+        string grammar = Grammar.Replace("match <[ 0 ]>", "match (value: Num) <[ $value ]>")
+            .Replace("\"zero is discouraged\"", "\"value={value}; text={value.Text}; token={value.Value.Text}; owner={Text}\"");
+        using var snapshot = Compile(grammar);
+        using var parsed = snapshot.Parse("42", "M.Doc");
+        var project = new Project(snapshot.Language!);
+        project.Set("input", parsed.Tree);
+        var diagnostic = Assert.Single(new ProjectSemantics(project)["input"].Diagnostics());
+        Assert.Equal("value=42; text=42; token=42; owner=42", diagnostic.Message);
+    }
+
+    [Theory]
+    [InlineData("items(1)", "head=1; tail=0")]
+    [InlineData("items(1,2,3)", "head=1; tail=2")]
+    [InlineData("items()", null)]
+    public void Message_captures_are_scoped_typed_and_evaluated_only_on_a_match(string source, string? expected)
+    {
+        const string grammar = """
+            syntax module M {
+              token Number = ['0'..'9']+;
+              syntax Doc = "items" "(" Values:(Num; ",")* ")" {
+                match (head: Num, tail: Num*) <[ items($head, ..$tail) ]>
+                  => warning MT1001 : "head={head.Name}; tail={tail.Count}";
+              }
+              syntax Num = Value:Number {
+                out Name: string = "";
+                Name = Value.Text;
+              }
+            }
+            """;
+        using var snapshot = Compile(grammar);
+        using var parsed = snapshot.Parse(source, "M.Doc");
+        Assert.True(parsed.Success);
+        var project = new Project(snapshot.Language!);
+        project.Set("input", parsed.Tree);
+        var diagnostics = new ProjectSemantics(project)["input"].Diagnostics();
+        if (expected is null) Assert.Empty(diagnostics);
+        else Assert.Equal(expected, Assert.Single(diagnostics).Message);
+    }
 }

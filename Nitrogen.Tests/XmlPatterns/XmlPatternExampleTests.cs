@@ -25,8 +25,8 @@ public sealed class XmlPatternExampleTests
         project.Set("input.xml", parsed.Tree);
         return new ProjectSemantics(project)["input.xml"].Diagnostics();
     }
-    static string Example(string file) => Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory, "../../../../examples/XmlPatterns", file));
+    static string Example(string file, [System.Runtime.CompilerServices.CallerFilePath] string sourcePath = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourcePath)!, "../../examples/XmlPatterns", file));
 
     [Fact]
     public void Sample_reports_one_warning_at_the_credentials_element()
@@ -34,14 +34,15 @@ public sealed class XmlPatternExampleTests
         string source = File.ReadAllText(Example("sample.xml"));
         var issue = Assert.Single(Analyze(source));
         Assert.Equal("XML1001", issue.Code);
-        Assert.EndsWith("example-only-password", issue.Message);
         Assert.Equal(DiagnosticSeverity.Warning, issue.Severity);
+        Assert.EndsWith("example-only-password", issue.Message);
         Assert.Equal(source.IndexOf("<credentials source", StringComparison.Ordinal), issue.Span.Start);
         Assert.StartsWith("<credentials", source.Substring(issue.Span.Start, issue.Span.Length));
     }
 
     [Theory]
     [InlineData("<credentials><password>demo</password></credentials>", 1)]
+    [InlineData("<root><credentials mode='local'><password a='1' b=\"2\">some text</password></credentials></root>", 1)]
     [InlineData("<root><credentials mode='local'><password a='1' b=\"2\">some <b>text</b></password></credentials></root>", 0)]
     [InlineData("<root><credentials><password></password></credentials><credentials><password>x</password></credentials></root>", 1)]
     [InlineData("<credentials><secret-ref key='password' /></credentials>", 0)]
@@ -51,6 +52,8 @@ public sealed class XmlPatternExampleTests
     [InlineData("<credentials><user>alice</user><password>demo</password></credentials>", 1)]
     [InlineData("<credentials><password>demo</password><user>alice</user></credentials>", 1)]
     [InlineData("<credentials><user>alice</user><password>demo</password><other /></credentials>", 1)]
+    [InlineData("<credentials><before/><password>demo</password><after/></credentials>", 1)]
+    [InlineData("<credentials><password>some <b>text</b></password></credentials>", 0)]
     [InlineData("<credentials><password /></credentials>", 0)]
     [InlineData("<root><!-- <credentials><password>x</password></credentials> --></root>", 0)]
     public void Rule_matches_structure_with_a_scalar_text_capture(string source, int count)
@@ -87,7 +90,11 @@ public sealed class XmlPatternExampleTests
         var warning = Assert.Single(service.Diagnostics(uri));
         Assert.Equal("XML1001", warning.Code);
         Assert.Equal(ServiceSeverity.Warning, warning.Severity);
+        Assert.Contains("example-only-password", warning.Message);
         Assert.Equal(5, warning.Range.Start.Line);
+        service.Change(grammarUri, 2, File.ReadAllText(Example("Xml.ngr")).Replace("{pass}", "{pass.Text}"));
+        Assert.Empty(service.Diagnostics(grammarUri));
+        Assert.Contains("example-only-password", Assert.Single(service.Diagnostics(uri)).Message);
         service.Change(uri, 2, "<root></wrong>");
         Assert.Contains(service.Diagnostics(uri), diagnostic => diagnostic.Code == "XML0001");
     }
@@ -99,5 +106,6 @@ public sealed class XmlPatternExampleTests
         int code = await NitrogenCli.RunAsync(["check", Example("sample.xml")], output, CancellationToken.None);
         Assert.Equal(0, code);
         Assert.Contains("(6,5): warning XML1001:", output.ToString());
+        Assert.Contains("example-only-password", output.ToString());
     }
 }

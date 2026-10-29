@@ -49,6 +49,15 @@ internal sealed class MemoTable
         }
     }
 
+    /// <summary>Copy only successful strict recognition; failures must run again under recovery.</summary>
+    public void CopySuccessesTo(MemoTable destination)
+    {
+        destination.Clear();
+        foreach (var entry in _entries)
+            if (entry.Stamp == _generation && entry.Node >= 0)
+                destination.Set((int)(entry.Key >> 32), (int)entry.Key, entry.Node, entry.End, entry.Examined, entry.Context);
+    }
+
     public bool TryGet(int ruleKey, int position, out int node, out int end) => TryGet(ruleKey, position, out node, out end, out _);
 
     public bool TryGet(int ruleKey, int position, out int node, out int end, out int examined) =>

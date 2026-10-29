@@ -29,6 +29,7 @@ internal static class ModuleWriter
             .Append(hasSemantics ? "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing Nitrogen;\n\n" : "using System;\nusing Nitrogen;\n\n")
             .Append($"namespace {info.Namespace};\n\n")
             .Append($"public sealed unsafe class {cls} : SyntaxModule{(hasContexts ? ", IGrammarContextModule" : "")}\n{{\n")
+            .Append("    public override bool SupportsRecoverySeeding => true;\n\n")
             .Append($"    public static readonly {cls} Instance = new();\n\n");
 
         foreach (var kind in info.Kinds) b.Append($"    public const int L{kind.Name} = {kind.Local};\n");

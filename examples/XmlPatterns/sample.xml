@@ -4,8 +4,9 @@
   <service name="catalog" port="8080">
     <endpoint path="/items" />
     <credentials source="local">
-      <dfg />
+      <dsdfs />
       <password encoding="plain">example-only-password</password>
+      <sdfdf />
     </credentials>
   </service>
   <service name="reports">

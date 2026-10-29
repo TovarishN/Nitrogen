@@ -69,12 +69,24 @@ internal sealed class SyntaxCodeWriter
         }
         b.Append("        var start = s.Mark();\n")
             .Append($"        s.Open({_info.KindsName}.{CSharpText.Identifier(rule.Name)});\n");
-        if (GrammarContextSyntax.SharedChoice(rule.Body) is { } choiceBody)
+        var body=GrammarContextSyntax.Unwrap(rule.Body);
+        var sole = body is LabeledExpr labeledBody ? GrammarContextSyntax.Unwrap(labeledBody.Inner) : body;
+        if (GrammarContextSyntax.SharedChoice(body) is { } choiceBody)
         {
             string match=FlatContextBody(choiceBody,module,null);
             b.Append($"        if (!{match}(ref s)) return Fail(ref s, start);\n        s.Close();\n        return true;\n");
         }
-        else WriteElements(b, GrammarContextSyntax.Unwrap(rule.Body) as SequenceExpr, elements, module, null);
+        else if (sole is RepeatExpr { Kind: RepeatKind.ZeroOrMore } rootList)
+        {
+            string site = "s_rootList" + (++_counter);
+            _helpers.Append($"    static readonly RepairSite {site} = new(1, {CSharpText.Literal(Describe(rootList.Inner))},\n")
+                .Append($"        {LookaheadCode(Lookahead.Of(Terminal.End))},\n")
+                .Append($"        new SyncPoint[] {{ new SyncPoint(0, {LookaheadCode(_model.Commits.RecoveryFirst(rootList.Inner))}) }});\n\n");
+            string match = Element(body, module, null, 0, site, rootOnly: true);
+            b.Append($"        s.SkipTrivia();\n        if (!{match}) return Fail(ref s, start);\n")
+                .Append("        s.Close();\n        return true;\n");
+        }
+        else WriteElements(b, body as SequenceExpr, elements, module, null);
         b.Append("    }\n\n");
     }
 
@@ -151,7 +163,7 @@ internal sealed class SyntaxCodeWriter
         return element is ReferenceExpr reference && _model.Resolve(reference.Name, module, implicitModule).Key == point.Key;
     }
 
-    string Element(Expr expr, ModuleDecl module, string? implicitModule, int minPrecedence, string? listRepair = null)
+    string Element(Expr expr, ModuleDecl module, string? implicitModule, int minPrecedence, string? listRepair = null, bool rootOnly = false)
     {
         switch (expr)
         {
@@ -159,11 +171,11 @@ internal sealed class SyntaxCodeWriter
                 return $"s.TestContext({ContextReference(context.Context,module,implicitModule)})";
             case ContextScopeExpr context:
             {
-                string child=NewContextHelper(context.Inner,module,implicitModule,minPrecedence,listRepair);
+                string child=NewContextHelper(context.Inner,module,implicitModule,minPrecedence,listRepair,rootOnly);
                 return $"s.ParseWithContext({ContextReference(context.Context,module,implicitModule)}, {(context.Value ? "true" : "false")}, &{child})";
             }
             case LabeledExpr labeled:
-                return Element(labeled.Inner, module, implicitModule, minPrecedence, listRepair);
+                return Element(labeled.Inner, module, implicitModule, minPrecedence, listRepair, rootOnly);
             case LiteralExpr literal:
                 return IsKeywordLike(literal.Value)
                     ? $"s.MatchKeyword({CSharpText.Literal(literal.Value)})"
@@ -188,7 +200,7 @@ internal sealed class SyntaxCodeWriter
             case AnyCharExpr:
                 return $"s.MatchToken(SyntaxKinds.Literal, {TokenCall(_tokens.MatcherMethod(expr, module, implicitModule))}, \"character\")";
             default:
-                return Helper(expr, module, implicitModule, listRepair) + "(ref s)";
+                return Helper(expr, module, implicitModule, listRepair, rootOnly) + "(ref s)";
         }
     }
 
@@ -254,7 +266,7 @@ internal sealed class SyntaxCodeWriter
         }
     }
 
-    string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null)
+    string Helper(Expr expr, ModuleDecl module, string? implicitModule, string? listRepair = null, bool rootOnly = false)
     {
         string name = "P" + (++_counter);
         var body = new StringBuilder();
@@ -277,7 +289,7 @@ internal sealed class SyntaxCodeWriter
                     .Append("            var m = s.Mark();\n            s.SkipTrivia();\n            int before = s.Position;\n")
                     .Append($"            if (!{item} || s.Position == before)\n")
                     .Append("            {\n                s.Reset(m);\n")
-                    .Append(listRepair is null ? "" : $"                if (s.Recovering && s.RecoverInList({listRepair})) continue;\n")
+                    .Append(listRepair is null ? "" : $"                if (s.Recovering && s.{(rootOnly ? "RecoverInRootList" : "RecoverInList")}({listRepair})) continue;\n")
                     .Append("                break;\n            }\n        }\n")
                     .Append($"        {close}\n        return true;\n");
                 break;
@@ -479,6 +491,8 @@ internal sealed class SyntaxCodeWriter
         var literals = new List<string>();
         var keywords = new List<string>();
         var tokens = new List<string>();
+        var tokenStarts = new List<string>();
+        var firstSets = new FirstSets(_model);
         bool end = false;
         foreach (var terminal in lookahead.Items)
         {
@@ -491,6 +505,7 @@ internal sealed class SyntaxCodeWriter
                 {
                     var (rule, owner) = _model.Commits.Token(terminal.Value);
                     tokens.Add($"&{_model.Info(owner).ClassPrefix(_info)}Match{rule.Name}");
+                    tokenStarts.Add(firstSets.OfSequence(new[] { rule.Body }, 0, owner, null).ToAsciiSetCode());
                     break;
                 }
                 case TerminalKind.End:
@@ -500,7 +515,8 @@ internal sealed class SyntaxCodeWriter
             }
         }
         return $"new LookaheadSet(new string[] {{ {string.Join(", ", literals)} }}, new string[] {{ {string.Join(", ", keywords)} }}, "
-            + $"new delegate*<ReadOnlySpan<char>, int, int>[] {{ {string.Join(", ", tokens)} }}, {(end ? "true" : "false")})";
+            + $"new delegate*<ReadOnlySpan<char>, int, int>[] {{ {string.Join(", ", tokens)} }}, {(end ? "true" : "false")}"
+            + (tokens.Count == 0 ? ")" : $", new AsciiSet[] {{ {string.Join(", ", tokenStarts)} }})");
     }
 
     /// <summary>An element as a diagnostic phrase.</summary>
@@ -572,10 +588,10 @@ internal sealed class SyntaxCodeWriter
         return "((IGrammarContextModule)"+info.TypeRef(_info,info.ClassName)+".Instance).ContextDeclarations["+target.Index+"]";
     }
 
-    string NewContextHelper(Expr inner,ModuleDecl module,string? implicitModule,int precedence,string? repair)
+    string NewContextHelper(Expr inner,ModuleDecl module,string? implicitModule,int precedence,string? repair,bool rootOnly)
     {
         string name="ContextChild"+_counter++;
-        string expression=Element(inner,module,implicitModule,precedence,repair);
+        string expression=Element(inner,module,implicitModule,precedence,repair,rootOnly);
         _helpers.Append($"    static bool {name}(ref ParserState s) => {expression};\n\n");
         return name;
     }

@@ -10,6 +10,8 @@ namespace Nitrogen.Tests.Lexical;
 
 public sealed unsafe class LexicalModule : SyntaxModule
 {
+    public override bool SupportsRecoverySeeding => true;
+
     public static readonly LexicalModule Instance = new();
 
     public const int LComment = 1;
@@ -540,7 +542,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(0, new LookaheadSet(new string[] { "{" }, new string[] { "pick", "tag" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchComment, &MatchDigits, &MatchHex, &MatchSigned, &MatchText, &MatchUnicode, &MatchWord }, false)),
+            new SyncPoint(0, new LookaheadSet(new string[] { "{" }, new string[] { "pick", "tag" }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchComment, &MatchDigits, &MatchHex, &MatchSigned, &MatchText, &MatchUnicode, &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("("), AsciiSet.Of("0123456789"), AsciiSet.Of("0"), AsciiSet.Of("+-"), AsciiSet.Of("\""), AsciiSet.Of("").WithNonAscii(), AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") })),
         });
 
     static bool P1(ref ParserState s)
@@ -576,22 +578,22 @@ public sealed unsafe class LexicalModule : SyntaxModule
         new SyncPoint[]
         {
             new SyncPoint(2, new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(1, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") })),
         });
 
     static readonly RepairSite s_repair2 = new(1, "'='",
-        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchDigits }, false),
+        new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchDigits }, false, new AsciiSet[] { AsciiSet.Of("0123456789") }),
         new SyncPoint[]
         {
             new SyncPoint(1, new LookaheadSet(new string[] { "=" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false)),
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchDigits }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchDigits }, false, new AsciiSet[] { AsciiSet.Of("0123456789") })),
         });
 
     static readonly RepairSite s_repair3 = new(2, "Digits",
-        new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false),
+        new LookaheadSet(new string[] { "}" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") }),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchDigits }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchDigits }, false, new AsciiSet[] { AsciiSet.Of("0123456789") })),
         });
 
     static bool P3(ref ParserState s)
@@ -725,7 +727,7 @@ public sealed unsafe class LexicalModule : SyntaxModule
         new LookaheadSet(new string[] { ",", ";" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] {  }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &MatchWord }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz") })),
         });
 }
 

@@ -1,0 +1,541 @@
+{
+  "Schema": 1,
+  "Roslyn": "4.12.0",
+  "LanguageVersion": "CSharp4",
+  "Scores": {
+    "csharp-subset/delete": {
+      "Cases": 44,
+      "Eligible": 90,
+      "Preserved": 82,
+      "Diagnostics": 44,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 74,
+      "RoslynDiagnostics": 86
+    },
+    "csharp-subset/duplicate": {
+      "Cases": 44,
+      "Eligible": 90,
+      "Preserved": 73,
+      "Diagnostics": 60,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 82,
+      "RoslynDiagnostics": 99
+    },
+    "csharp-subset/insert": {
+      "Cases": 44,
+      "Eligible": 90,
+      "Preserved": 90,
+      "Diagnostics": 44,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 74,
+      "RoslynDiagnostics": 129
+    },
+    "csharp-subset/missing-closer": {
+      "Cases": 5,
+      "Eligible": 12,
+      "Preserved": 12,
+      "Diagnostics": 5,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 12,
+      "RoslynDiagnostics": 5
+    },
+    "csharp-subset/swap": {
+      "Cases": 40,
+      "Eligible": 74,
+      "Preserved": 61,
+      "Diagnostics": 71,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 68,
+      "RoslynDiagnostics": 120
+    },
+    "csharp-subset/truncate": {
+      "Cases": 44,
+      "Eligible": 41,
+      "Preserved": 41,
+      "Diagnostics": 39,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 41,
+      "RoslynDiagnostics": 70
+    },
+    "local/delete": {
+      "Cases": 38,
+      "Eligible": 66,
+      "Preserved": 63,
+      "Diagnostics": 40,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 0,
+      "RoslynDiagnostics": 0
+    },
+    "local/duplicate": {
+      "Cases": 38,
+      "Eligible": 66,
+      "Preserved": 59,
+      "Diagnostics": 40,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 0,
+      "RoslynDiagnostics": 0
+    },
+    "local/insert": {
+      "Cases": 38,
+      "Eligible": 66,
+      "Preserved": 66,
+      "Diagnostics": 38,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 0,
+      "RoslynDiagnostics": 0
+    },
+    "local/missing-closer": {
+      "Cases": 4,
+      "Eligible": 8,
+      "Preserved": 8,
+      "Diagnostics": 4,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 0,
+      "RoslynDiagnostics": 0
+    },
+    "local/swap": {
+      "Cases": 36,
+      "Eligible": 58,
+      "Preserved": 53,
+      "Diagnostics": 76,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 0,
+      "RoslynDiagnostics": 0
+    },
+    "local/truncate": {
+      "Cases": 38,
+      "Eligible": 31,
+      "Preserved": 31,
+      "Diagnostics": 37,
+      "ErrorRoots": 0,
+      "RoslynPreserved": 0,
+      "RoslynDiagnostics": 0
+    }
+  },
+  "Losses": [
+    {
+      "Fixture": "items",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 4,
+      "Replacement": "",
+      "ItemStart": 9
+    },
+    {
+      "Fixture": "items",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 4,
+      "Replacement": "",
+      "ItemStart": 16
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 5,
+      "Length": 0,
+      "Replacement": "a ",
+      "ItemStart": 9
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 5,
+      "Length": 0,
+      "Replacement": "a ",
+      "ItemStart": 16
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 5,
+      "Length": 0,
+      "Replacement": "a ",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "items",
+      "Family": "swap",
+      "Start": 5,
+      "Length": 3,
+      "Replacement": "{ a",
+      "ItemStart": 9
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 7,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 9
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 7,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 16
+    },
+    {
+      "Fixture": "items",
+      "Family": "swap",
+      "Start": 7,
+      "Length": 3,
+      "Replacement": "x {",
+      "ItemStart": 16
+    },
+    {
+      "Fixture": "items",
+      "Family": "swap",
+      "Start": 7,
+      "Length": 3,
+      "Replacement": "x {",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "items",
+      "Family": "swap",
+      "Start": 23,
+      "Length": 6,
+      "Replacement": "item }",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "items",
+      "Family": "delete",
+      "Start": 25,
+      "Length": 4,
+      "Replacement": "",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 30,
+      "Length": 0,
+      "Replacement": "b ",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "items",
+      "Family": "swap",
+      "Start": 30,
+      "Length": 3,
+      "Replacement": "{ b",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "items",
+      "Family": "duplicate",
+      "Start": 32,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 21
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 36
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 6,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 6,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 21
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 6,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 36
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 6,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 6,
+      "Length": 3,
+      "Replacement": "{ C",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 8,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 8,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 21
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 8,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 36
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 8,
+      "Length": 5,
+      "Replacement": "int {",
+      "ItemStart": 21
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 8,
+      "Length": 5,
+      "Replacement": "int {",
+      "ItemStart": 36
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 8,
+      "Length": 5,
+      "Replacement": "int {",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 14,
+      "Length": 6,
+      "Replacement": ";first",
+      "ItemStart": 21
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 28,
+      "Length": 7,
+      "Replacement": ";second",
+      "ItemStart": 36
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 45,
+      "Length": 7,
+      "Replacement": "class }",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "delete",
+      "Start": 47,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 53,
+      "Length": 0,
+      "Replacement": "D ",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "swap",
+      "Start": 53,
+      "Length": 3,
+      "Replacement": "{ D",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-siblings",
+      "Family": "duplicate",
+      "Start": 55,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 57
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "delete",
+      "Start": 13,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 23
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "delete",
+      "Start": 13,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "duplicate",
+      "Start": 19,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 23
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "duplicate",
+      "Start": 19,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "swap",
+      "Start": 19,
+      "Length": 3,
+      "Replacement": "{ C",
+      "ItemStart": 23
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "duplicate",
+      "Start": 21,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 23
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "duplicate",
+      "Start": 21,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "swap",
+      "Start": 21,
+      "Length": 5,
+      "Replacement": "int {",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "csharp-unicode",
+      "Family": "swap",
+      "Start": 27,
+      "Length": 6,
+      "Replacement": ";first",
+      "ItemStart": 34
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-0",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-0",
+      "Family": "duplicate",
+      "Start": 6,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-0",
+      "Family": "swap",
+      "Start": 6,
+      "Length": 3,
+      "Replacement": "{ C",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-0",
+      "Family": "duplicate",
+      "Start": 8,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-2",
+      "Family": "delete",
+      "Start": 0,
+      "Length": 5,
+      "Replacement": "",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-2",
+      "Family": "duplicate",
+      "Start": 6,
+      "Length": 0,
+      "Replacement": "C ",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-2",
+      "Family": "swap",
+      "Start": 6,
+      "Length": 3,
+      "Replacement": "{ C",
+      "ItemStart": 10
+    },
+    {
+      "Fixture": "nitride-csharp4-grammar-2",
+      "Family": "duplicate",
+      "Start": 8,
+      "Length": 0,
+      "Replacement": "{ ",
+      "ItemStart": 10
+    }
+  ]
+}

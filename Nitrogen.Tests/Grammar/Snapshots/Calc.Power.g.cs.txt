@@ -10,6 +10,8 @@ namespace Nitrogen.Tests.Calc;
 
 public sealed unsafe class PowerModule : SyntaxModule
 {
+    public override bool SupportsRecoverySeeding => true;
+
     public static readonly PowerModule Instance = new();
 
     public const int LPow = 1;
@@ -82,7 +84,7 @@ public sealed unsafe class PowerModule : SyntaxModule
         new LookaheadSet(new string[] { ")", "*", "+", ",", "-", ";", "=", "^" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] {  }, false),
         new SyncPoint[]
         {
-            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false)),
+            new SyncPoint(2, new LookaheadSet(new string[] { "(", "-" }, new string[] {  }, new delegate*<ReadOnlySpan<char>, int, int>[] { &CalcModule.MatchIdentifier, &CalcModule.MatchNumber }, false, new AsciiSet[] { AsciiSet.Of("ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"), AsciiSet.Of("0123456789") })),
         });
 }
 

@@ -37,6 +37,9 @@ public sealed class DiagnosticCaptureMessageTests
         return semantics["input"].Diagnostics();
     }
 
+    static string XmlGrammarPath([System.Runtime.CompilerServices.CallerFilePath] string sourcePath = "") =>
+        Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourcePath)!, "../../examples/XmlPatterns/Xml.ngr"));
+
     static string XmlCaptureGrammar(string path)
     {
         string grammar = File.ReadAllText(path);
@@ -55,7 +58,7 @@ public sealed class DiagnosticCaptureMessageTests
     [InlineData("<credentials><user>alice</user><password>secret</password><other /></credentials>", "secret")]
     public void The_requested_xml_capture_is_available_in_the_warning(string input, string expected)
     {
-        string path = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../examples/XmlPatterns/Xml.ngr"));
+        string path = XmlGrammarPath();
         string grammar = XmlCaptureGrammar(path);
         var workspace = new GrammarWorkspace { CompositionName = "Xml", StartRule = "Xml.Document" };
         workspace.SetGrammar(path, grammar);
@@ -77,7 +80,7 @@ public sealed class DiagnosticCaptureMessageTests
         string root = Directory.CreateTempSubdirectory("nitrogen-capture-xml-").FullName;
         try
         {
-            string original = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../examples/XmlPatterns/Xml.ngr"));
+            string original = XmlGrammarPath();
             string grammar = XmlCaptureGrammar(original);
             string path = Path.Combine(root, "Xml.ngr"), input = Path.Combine(root, "input.xml");
             File.WriteAllText(path, grammar);

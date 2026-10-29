@@ -94,4 +94,10 @@ public class GeneratedGrammarContextTests
         using var second=L.Reparse(first,"n x",[new(0,1,1)]);using var full=L.Parse("n x",C.GrammarContextModule.Selected);TreeAssert.Same(full,second);
         using var third=L.Reparse(second,"a x",[new(0,1,1)]);using var restored=L.Parse("a x",C.GrammarContextModule.Selected);TreeAssert.Same(restored,third);
     }
+    [Theory][InlineData("a x n ? n x")][InlineData("a [ n ? ] n x")][InlineData("a x n x ?")]
+    public void Recovery_seeding_retains_context_and_matches_an_unseeded_recovery(string source)
+    {
+        using var seeded=L.Parse(source,C.GrammarContextModule.File);using var unseeded=L.ParseUnseeded(source,C.GrammarContextModule.File);
+        TreeAssert.Same(unseeded,seeded);
+    }
 }

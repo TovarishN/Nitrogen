@@ -7,6 +7,7 @@ public sealed unsafe partial class Language
 {
     readonly ExtensionPoint?[] _points;
     readonly SyntaxModule?[] _modulesById;
+    readonly bool _supportsRecoverySeeding;
     internal readonly delegate*<ReadOnlySpan<char>, int, int> Trivia;
     internal readonly AsciiSet TriviaStart;
 
@@ -15,6 +16,7 @@ public sealed unsafe partial class Language
     {
         ComposeContexts(modules);
         Modules = modules;
+        _supportsRecoverySeeding = modules.All(m => m.SupportsRecoverySeeding);
         SemanticCatalog = semanticCatalog;
         Declarative = declarative;
         _points = points;
@@ -92,6 +94,8 @@ public sealed unsafe partial class Language
     /// tree as <see cref="Parse(string, Rule)"/> without a single repair.
     /// </summary>
     internal ParseResult ParseRecovering(string text, Rule start) => Parse(text, start, recoverOnly: true);
+
+    internal ParseResult ParseUnseeded(string text, Rule start) => Parse(text, start, recoverOnly: false, seedRecovery: false);
 
     /// <summary>
     /// The fast pass alone, as parsing worked before issue 235: a test hook for the mutation
@@ -222,7 +226,7 @@ public sealed unsafe partial class Language
     }
 
 
-    ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false, ReuseContext? reuse = null)
+    ParseResult Parse(string text, Rule start, bool recoverOnly, string? treeText = null, bool incremental = false, ReuseContext? reuse = null, bool seedRecovery = true)
     {
         ArgumentNullException.ThrowIfNull(text);
         treeText ??= text;
@@ -245,17 +249,19 @@ public sealed unsafe partial class Language
                 }
                 // A reused subtree skips the attempts made inside it, and with them what they expected at the
                 // furthest failure: retry the fast pass without reuse so the first diagnostic is a full parse's.
-                if (reuse is not null) Run(text, start, context, recovering: false);
+                // With no grafts, no rule body was skipped, so this pass already observed every
+                // expectation. Grafts from rolled-back attempts still require the conservative retry.
+                if (reuse is not null && arena.Grafts.Count != 0) Run(text, start, context, recovering: false);
                 failure = ParseResult.CaptureFailure(arena);
             }
             if (incremental)
             {
                 // A text with errors keeps nothing to reuse: the next reparse parses it whole.
-                var recovered = Parse(text, start, failure, context, treeText);
+                var recovered = Parse(text, start, failure, context, treeText, seedStrict: seedRecovery);
                 recovered.Reuse = ReuseTable.Empty;
                 return recovered;
             }
-            return Parse(text, start, failure, context, treeText, recoverOnly);
+            return Parse(text, start, failure, context, treeText, recoverOnly, seedStrict: seedRecovery && !recoverOnly);
         }
         finally
         {
@@ -264,10 +270,10 @@ public sealed unsafe partial class Language
     }
 
     /// <summary>The recovery pass after the fast pass failed with <paramref name="failure"/> (or alone, for <paramref name="recoverOnly"/>).</summary>
-    ParseResult Parse(string text, Rule start, FirstFailure failure, ParseContext context, string treeText, bool recoverOnly = false)
+    ParseResult Parse(string text, Rule start, FirstFailure failure, ParseContext context, string treeText, bool recoverOnly = false, bool seedStrict = false)
     {
         var arena = context.Arena;
-        if (!Run(text, start, context, recovering: true))
+        if (!Run(text, start, context, recovering: true, seedStrict: seedStrict))
             return ParseResult.Failed(TreeFreezer.ErrorTree(treeText, this), arena, failure);
         var tree = TreeFreezer.Freeze(arena, arena.ChildStack[0], treeText, this);
         return arena.HasRecovery || !recoverOnly
@@ -397,11 +403,28 @@ public sealed unsafe partial class Language
 
     bool Run(string text, Rule start, ParseContext context, bool recovering,
         IReadOnlyDictionary<string, QuoteHole>? holes = null, ExtensionPointDecl? templateStart = null, bool tracking = false,
-        ReuseContext? reuse = null, bool pattern = false, Action<TextSpan, PatternHoleSite>? patternHoleProbe = null)
+        ReuseContext? reuse = null, bool pattern = false, Action<TextSpan, PatternHoleSite>? patternHoleProbe = null, bool seedStrict = false)
     {
         var arena = context.Arena;
+        // Strict keys have no repair bits. Recovery can hit these only at calls with the same
+        // precedence and no repair permission. Never seed failures or a forest containing grafts.
+        seedStrict &= _supportsRecoverySeeding && recovering && arena.Grafts.Count == 0 && context.Memo.Count > 0;
+        int seedNodes = arena.NodeCount, seedSlots = arena.ChildLogCount;
+        bool seedAmbiguity = arena.HasAmbiguity;
+        if (seedStrict)
+        {
+            context.Memo.CopySuccessesTo(context.SeedMemo);
+            (context.Memo, context.SeedMemo) = (context.SeedMemo, context.Memo);
+            seedStrict = context.Memo.Count > 0;
+        }
         arena.Clear();
-        context.Memo.Clear();
+        if (seedStrict)
+        {
+            arena.NodeCount = seedNodes;
+            arena.ChildLogCount = seedSlots;
+            arena.HasAmbiguity = seedAmbiguity;
+        }
+        else context.Memo.Clear();
         arena.Recovering = recovering;
         // Only a plain fast pass records reuse data: recovery repairs and template holes depend on more than the text.
         arena.Tracking = tracking && !recovering && holes is null;
