@@ -34,5 +34,18 @@ public sealed class GrammarContextEditorTests : IDisposable
         const string source="syntax module A { context Flag; } syntax module B { using A; context Ready; syntax Root = context(Flag) \"x\"; }";
         using var service=Open(source);Assert.Throws<RenameRefusedException>(()=>service.Rename(Uri,At(source,"context Flag",8),"Ready"));
     }
+    [Theory]
+    [InlineData("syntax module A { using B; context Flag; syntax Root=context(Ready) \"x\"; } syntax module B { context Ready; }")]
+    [InlineData("syntax module A { context Flag; } syntax module B { using A; using C; syntax Root=context(Ready) \"x\"; } syntax module C { context Ready; }")]
+    public void Context_rename_refuses_to_capture_or_make_other_context_references_ambiguous(string source)
+    {
+        using var service=Open(source);Assert.Throws<RenameRefusedException>(()=>service.Rename(Uri,At(source,"context Flag",8),"Ready"));
+    }
+    [Fact]public void Context_rename_preserves_an_unrelated_qualified_binding()
+    {
+        const string source="syntax module A { using B; context Flag; syntax Root=context(B.Ready) \"x\"; } syntax module B { context Ready; }";
+        using var service=Open(source);var edits=service.Rename(Uri,At(source,"context Flag",8),"Ready");
+        Assert.Single(edits);Assert.Single(edits[Uri]);Assert.Equal("Ready",edits[Uri][0].NewText);
+    }
     public void Dispose()=>Directory.Delete(root,true);
 }

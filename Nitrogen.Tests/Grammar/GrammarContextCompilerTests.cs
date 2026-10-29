@@ -83,4 +83,20 @@ public class GrammarContextCompilerTests
         Assert.False(result.HasErrors);string code=Assert.Single(result.Sources).Code;
         Assert.DoesNotContain("Token Header =>",code);Assert.DoesNotContain("ContextBranch",code);
     }
+    [Theory]
+    [InlineData("(context(F); context(F))*")]
+    [InlineData("(context(F); context(F))+")]
+    [InlineData("(Guard; Guard)*")]
+    [InlineData("(Guard; Guard)+")]
+    public void Nullable_context_separated_lists_are_rejected_before_emission(string body)
+    {
+        var result=Compile("syntax module A { context F; syntax Guard=context(F); syntax Root=with(F = true) "+body+"; }");
+        Assert.True(result.HasErrors);Assert.Empty(result.Sources);Assert.Contains(result.Diagnostics,d=>d.Diagnostic.Code=="NGR0166");
+    }
+    [Fact]public void Scoped_unlabeled_references_keep_the_existing_names_and_duplicate_numbering()
+    {
+        var result=Compile("syntax module A { context F; syntax Child=Value:\"x\"; syntax R=\"a\" with(F = true) Child; syntax Pair=with(F = true) Child Child; }");
+        Assert.False(result.HasErrors);string code=Assert.Single(result.Sources).Code;
+        Assert.Contains("ChildNode Child =>",code);Assert.Contains("ChildNode Child1 =>",code);Assert.Contains("ChildNode Child2 =>",code);
+    }
 }

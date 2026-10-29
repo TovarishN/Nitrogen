@@ -115,7 +115,7 @@ internal sealed class SyntaxCodeWriter
         if (GrammarContextSyntax.SharedChoice(alternative.Body) is { } choiceBody)
         {
             string branchImplementation=RootContextBody(b,MethodName(kind),alternative.Body,module,implicitModule);
-            string match=FlatContextBody(choiceBody,module,implicitModule);
+            string match=FlatContextBody(choiceBody,module,implicitModule,point,OperandPrecedence(alternative,postfix));
             b.Append($"    static bool {branchImplementation}(ref ParserState s) => {match}(ref s);\n\n");
             return;
         }
@@ -536,37 +536,39 @@ internal sealed class SyntaxCodeWriter
 
     // These callbacks parse directly into the existing owner frame. Each failed branch rolls
     // back its children and position, while ParseWithContext restores the environment in finally.
-    string FlatContextBody(Expr expr,ModuleDecl module,string? implicitModule)
+    string FlatContextBody(Expr expr,ModuleDecl module,string? implicitModule,GrammarSymbol? point=null,int operandPrecedence=0)
     {
         string name="ContextBranch"+_counter++;
         var body=new StringBuilder();
         switch(expr)
         {
             case ContextScopeExpr scope:
-                string child=FlatContextBody(scope.Inner,module,implicitModule);
+                string child=FlatContextBody(scope.Inner,module,implicitModule,point,operandPrecedence);
                 body.Append($"        return s.ParseWithContext({ContextReference(scope.Context,module,implicitModule)}, {(scope.Value ? "true" : "false")}, &{child});\n");
                 break;
             case ChoiceExpr choice:
                 body.Append("        var start=s.Mark();\n");
                 foreach(var arm in choice.Alternatives)
                 {
-                    string branch=FlatContextBody(arm,module,implicitModule);
+                    string branch=FlatContextBody(arm,module,implicitModule,point,operandPrecedence);
                     body.Append($"        if ({branch}(ref s)) return true;\n        s.Reset(start);\n");
                 }
                 body.Append("        return false;\n");
                 break;
             case SequenceExpr sequence:
-                foreach(var element in sequence.Items)
+                for(int i=0;i<sequence.Items.Count;i++)
                 {
+                    var element=sequence.Items[i];
+                    int precedence=i==sequence.Items.Count-1?operandPrecedence:0;
                     string match = element is ContextScopeExpr or SequenceExpr
-                        ? FlatContextBody(element,module,implicitModule)+"(ref s)"
-                        : Element(element,module,implicitModule,0);
+                        ? FlatContextBody(element,module,implicitModule,point,precedence)+"(ref s)"
+                        : Element(element,module,implicitModule,point is not null && ReferencesPoint(element,module,implicitModule!,point)?precedence:0);
                     body.Append($"        s.SkipTrivia();\n        if (!{match}) return false;\n");
                 }
                 body.Append("        return true;\n");
                 break;
             default:
-                body.Append($"        s.SkipTrivia();\n        return {Element(expr,module,implicitModule,0)};\n");
+                body.Append($"        s.SkipTrivia();\n        return {Element(expr,module,implicitModule,point is not null && ReferencesPoint(expr,module,implicitModule!,point)?operandPrecedence:0)};\n");
                 break;
         }
         _helpers.Append($"    static bool {name}(ref ParserState s)\n    {{\n{body}    }}\n\n");

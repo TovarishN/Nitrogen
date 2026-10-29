@@ -66,8 +66,9 @@ internal sealed class ViewWriter
     {
         var slots = new List<(Expr Element, int Child)>();
         int child = 0;
-        foreach (var element in elements)
+        foreach (var original in elements)
         {
+            var element = GrammarContextSyntax.Unwrap(original);
             var bare = element is LabeledExpr labeled ? labeled.Inner : element;
             if (GrammarContextSyntax.NoNode(bare)) continue; // predicates push no node
             slots.Add((element, child++));

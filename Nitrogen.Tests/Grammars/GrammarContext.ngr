@@ -16,6 +16,8 @@ syntax module GrammarContext
     extensible syntax Entry { | transparent Scoped = with(Enabled = true) Expr }
     token Mode = "a" / "n";
     syntax Selected = (&"a" with(Enabled = true) (Header:Mode Body:Expr)) / (!"a" (Header:Mode Body:Expr));
+    syntax Unlabeled = "u" with(Enabled = true) Expr;
+    syntax UnlabeledPair = "p" with(Enabled = true) Expr Expr;
     syntax SelectedEntry = Selection;
     extensible syntax Selection {
         | SelectedBranch = with(Enabled = true) (&"a" Header:Mode Body:with(Enabled = false) Expr) / (!"a" Header:Mode Body:Expr)
@@ -31,6 +33,7 @@ syntax module GrammarContext
         | Enabled = context(Enabled) "x"
         | Disabled = !context(Enabled) "x"
         | Group = "[" Item "]"
+        | Neg = (context(Enabled) "-" Arg:Expr) / (!context(Enabled) "-" Arg:Expr) precedence 20
         | Add = Expr "+" Right:with(Enabled = true) Expr precedence 10 left
     }
 }

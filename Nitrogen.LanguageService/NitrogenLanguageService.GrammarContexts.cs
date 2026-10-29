@@ -42,17 +42,29 @@ public sealed partial class NitrogenLanguageService
     static void CheckContextRename(GrammarOccurrences scope,GrammarRuleOccurrence target,List<GrammarRuleOccurrence> uses,string newName)
     {
         string qualified=target.Identity["context ".Length..];int dot=qualified.LastIndexOf('.');string owner=qualified[..dot];
-        var modules=scope.Files.SelectMany(f=>f.File.Modules).ToArray();var analysis=new GrammarAnalysis(modules);
+        var modules=scope.Files.SelectMany(f=>f.File.Modules).ToArray();
         if(modules.Where(m=>m.Name==owner).SelectMany(m=>m.Contexts).Any(c=>c.Name==newName&&newName!=NameText(scope,target)))
             throw new RenameRefusedException($"'{newName}' already names a grammar context in module '{owner}'.");
-        foreach(var use in uses.Where(u=>!u.IsDefinition))
+        // Rebind the complete proposed scope, including references to other contexts. Looking
+        // only at the renamed symbol misses newly captured imports and new ambiguities.
+        var proposed=new List<GrammarScopeFile>();
+        foreach(var file in scope.Files)
         {
-            if(LastSegment(scope,use).Start!=use.Span.Start)continue;
-            var from=scope.Files.Single(f=>f.Path==use.Path).File.Modules.First(m=>m.Span.Start<=use.Span.Start&&use.Span.End<=m.Span.End);
-            bool ambiguous=false;
-            var bound=analysis.ResolveContext(new(newName,use.Span),from,null,(code,message,span,module)=>ambiguous|=message.Contains("ambiguous",StringComparison.Ordinal));
-            if(ambiguous||bound is not null&&"context "+bound.Module.Name+"."+bound.Name.Name!=target.Identity)
-                throw new RenameRefusedException($"'{newName}' would capture or obscure a grammar context reference.");
+            string text=file.Text;
+            foreach(var span in uses.Where(u=>u.Path==file.Path).Select(u=>LastSegment(scope,u)).Distinct().OrderByDescending(s=>s.Start))
+                text=text[..span.Start]+newName+text[(span.Start+span.Length)..];
+            var parsed=GrammarParser.Parse(DocumentSignatures.Read(text).MaskedText);
+            if(!parsed.Success || parsed.File is null)
+                throw new RenameRefusedException("The proposed context rename does not preserve the grammar.");
+            proposed.Add(new(file.Path,text,parsed.File));
         }
+        static IEnumerable<GrammarRuleOccurrence> Contexts(IEnumerable<GrammarRuleOccurrence> occurrences)=>
+            occurrences.Where(o=>o.Kind==GrammarNameKind.Context).OrderBy(o=>o.Path,StringComparer.Ordinal).ThenBy(o=>o.Span.Start);
+        var before=Contexts(scope.Occurrences).ToArray();var after=Contexts(CollectGrammarOccurrences(proposed)).ToArray();
+        string renamed="context "+owner+"."+newName;
+        if(before.Length!=after.Length || before.Where((original,i)=>
+            original.Path!=after[i].Path || original.IsDefinition!=after[i].IsDefinition ||
+            (original.Identity==target.Identity?renamed:original.Identity)!=after[i].Identity).Any())
+            throw new RenameRefusedException($"'{newName}' would capture or obscure a grammar context reference.");
     }
 }

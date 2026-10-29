@@ -572,6 +572,9 @@ public static class GrammarValidator
                     CheckExpr(repeat.Inner, module, implicitModule, inToken);
                     break;
                 case SeparatedListExpr list:
+                    if(_analysis.IsNullable(list.Item,module,implicitModule) && _analysis.IsNullable(list.Separator,module,implicitModule)
+                        && (ContainsContext(list.Item,module,implicitModule) || ContainsContext(list.Separator,module,implicitModule)))
+                        Report(GrammarCodes.NullableContextRepeat,"a repeated context list must consume input",list.Span,module);
                     CheckExpr(list.Item, module, implicitModule, inToken);
                     CheckExpr(list.Separator, module, implicitModule, inToken);
                     break;

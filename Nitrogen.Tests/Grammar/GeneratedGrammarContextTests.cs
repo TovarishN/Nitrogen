@@ -100,4 +100,23 @@ public class GeneratedGrammarContextTests
         using var seeded=L.Parse(source,C.GrammarContextModule.File);using var unseeded=L.ParseUnseeded(source,C.GrammarContextModule.File);
         TreeAssert.Same(unseeded,seeded);
     }
+    [Theory][InlineData(true)][InlineData(false)]
+    public void Context_selected_prefix_operands_keep_the_declared_precedence(bool enabled)
+    {
+        var start=enabled?C.GrammarContextModule.ScopedAlias:C.GrammarContextModule.Off;
+        using var p=L.Parse("-x+x",start);Assert.True(p.Success&&!p.HasErrors);
+        Assert.Equal("Add",L.GetKindName(p.Tree.Kind(p.Tree.Root)));
+        int neg=Assert.Single(Nodes(p,"Neg"));var node=SyntaxView.Cast<C.NegExpr>(p.Tree,neg);C.ExprNode arg=node.Arg;
+        Assert.Equal("x",Text(p,arg.Span));Assert.Equal("-x",Text(p,node.Span));
+    }
+    [Fact]public void Unlabeled_scoped_children_keep_compilable_typed_fields_and_direct_parent_slots()
+    {
+        using var p=L.Parse("u x",C.GrammarContextModule.Unlabeled);Assert.True(p.Success&&!p.HasErrors);
+        var node=SyntaxView.Cast<C.UnlabeledNode>(p.Tree,p.Tree.Root);C.ExprNode child=node.Expr;
+        Assert.Equal("Enabled",L.GetKindName(child.Kind));Assert.Equal(p.Tree.Root,p.Tree.Parent(child.Index));
+        using var pair=L.Parse("p x x",C.GrammarContextModule.UnlabeledPair);Assert.True(pair.Success&&!pair.HasErrors);
+        var both=SyntaxView.Cast<C.UnlabeledPairNode>(pair.Tree,pair.Tree.Root);C.ExprNode first=both.Expr1;C.ExprNode second=both.Expr2;
+        Assert.Equal("Enabled",L.GetKindName(first.Kind));Assert.Equal("Disabled",L.GetKindName(second.Kind));
+        Assert.Equal(pair.Tree.Root,pair.Tree.Parent(first.Index));Assert.Equal(pair.Tree.Root,pair.Tree.Parent(second.Index));
+    }
 }
