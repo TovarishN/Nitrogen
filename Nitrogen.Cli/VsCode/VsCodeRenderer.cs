@@ -241,6 +241,8 @@ function dotnet(): string {
 }
 
 export async function activate(context: ExtensionContext): Promise<void> {
+  // Nitride (nitride.nitride) serves these files when installed; uninstall it to use this extension.
+  if (extensions.getExtension('nitride.nitride')) return;
   const settings = workspace.getConfiguration(LANGUAGE);
   const developmentMode = settings.get<boolean>('developmentMode') ?? false;
   const selected = languageConfig(
