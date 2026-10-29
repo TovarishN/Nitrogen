@@ -46,7 +46,22 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
     /// </summary>
     public (GrammarSymbol Category, string? PatternName)? CaptureContract(QuoteParameter capture, ModuleDecl module, GrammarReport? report = null)
     {
-        if (analysis.ResolvePattern(capture.Category.Name, module) is { } found)
+        var candidates = analysis.PatternCandidates(capture.Category.Name, module);
+        if (candidates.Count > 1)
+        {
+            report?.Invoke(GrammarCodes.AmbiguousReference, $"'{capture.Category.Name}' is a named pattern in both '{candidates[0].Module.Name}' and '{candidates[1].Module.Name}'; qualify it",
+                capture.Category.Span, module);
+            return null;
+        }
+        // A pattern must not silently take over a name that already means a syntax category here.
+        if (candidates.Count == 1 && !capture.Category.Name.Contains('.') && Category(capture.Category, module) is { } shadowed &&
+            !ReferenceEquals(shadowed.Module, candidates[0].Module))
+        {
+            report?.Invoke(GrammarCodes.AmbiguousReference, $"'{capture.Category.Name}' names both syntax category {shadowed.Key} and pattern {candidates[0].Module.Name}.{capture.Category.Name}; qualify it",
+                capture.Category.Span, module);
+            return null;
+        }
+        if (candidates.Count == 1 && candidates[0] is var found)
         {
             if (capture.IsDescendant && capture.IsList)
                 report?.Invoke(GrammarCodes.InvalidPatternCapture, $"descendant capture '{capture.Name.Name}' finds one node; it cannot be a list", capture.Span, module);

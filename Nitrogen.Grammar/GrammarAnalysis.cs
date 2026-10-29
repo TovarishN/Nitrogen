@@ -72,16 +72,19 @@ internal sealed class GrammarAnalysis
     public ModuleDecl? FindModule(string name) => _byName.TryGetValue(name, out var module) ? module : null;
 
     /// <summary>A named pattern by qualified name, or by simple name in the module or a module it uses; null when absent or ambiguous.</summary>
-    public (ModuleDecl Module, NamedPatternDecl Pattern)? ResolvePattern(string name, ModuleDecl from)
+    public (ModuleDecl Module, NamedPatternDecl Pattern)? ResolvePattern(string name, ModuleDecl from) =>
+        PatternCandidates(name, from) is { Count: 1 } found ? found[0] : null;
+
+    /// <summary>Every named pattern <paramref name="name"/> could mean from <paramref name="from"/>; more than one is ambiguous.</summary>
+    public IReadOnlyList<(ModuleDecl Module, NamedPatternDecl Pattern)> PatternCandidates(string name, ModuleDecl from)
     {
         int dot = name.LastIndexOf('.');
         if (dot >= 0)
             return FindModule(name.Substring(0, dot)) is { } owner &&
-                owner.Patterns.FirstOrDefault(p => p.Name.Name == name.Substring(dot + 1)) is { } qualified ? (owner, qualified) : null;
-        if (from.Patterns.FirstOrDefault(p => p.Name.Name == name) is { } local) return (from, local);
-        var found = ImportedModules(from, null).Select(FindModule).OfType<ModuleDecl>()
+                owner.Patterns.FirstOrDefault(p => p.Name.Name == name.Substring(dot + 1)) is { } qualified ? [(owner, qualified)] : [];
+        if (from.Patterns.FirstOrDefault(p => p.Name.Name == name) is { } local) return [(from, local)];
+        return ImportedModules(from, null).Distinct(StringComparer.Ordinal).Select(FindModule).OfType<ModuleDecl>()
             .SelectMany(module => module.Patterns.Where(p => p.Name.Name == name).Select(p => (module, p))).ToList();
-        return found.Count == 1 ? found[0] : null;
     }
 
     public IReadOnlyList<string> PointKeys => _pointOrder;

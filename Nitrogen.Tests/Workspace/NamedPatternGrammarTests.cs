@@ -138,6 +138,46 @@ public sealed class NamedPatternGrammarTests
     }
 
     [Fact]
+    public void Imported_pattern_does_not_silently_replace_a_local_category()
+    {
+        string grammar = Grammar("", "pattern Wrapped : Element = <[ <w/> ]>;") + """
+
+            syntax module Y {
+              using X;
+              syntax Wrapped = "[" Inner:Element "]";
+              syntax Holder = "{" Item:Wrapped "}" {
+                match (w: Wrapped) <[ { $w } ]> => warning XP1005 : "m";
+              }
+            }
+            """;
+        var workspace = new GrammarWorkspace { CompositionName = "Y", StartRule = "Y.Holder" };
+        workspace.SetGrammar("patterns.ngr", grammar);
+        Assert.Contains(workspace.ValidateCompilation(), d => d.IsError && d.Code == Nitrogen.Grammar.GrammarCodes.AmbiguousReference);
+    }
+
+    [Fact]
+    public void Ambiguous_imported_pattern_is_reported()
+    {
+        string grammar = Grammar("", "") + """
+
+            syntax module Z {
+              using X;
+              pattern Secret : X.Element = <[ <z/> ]>;
+            }
+            syntax module Y {
+              using X;
+              using Z;
+              syntax Holder = "{" Item:X.Element "}" {
+                match (s: ..Secret) <[ { $s } ]> => warning XP1006 : "m";
+              }
+            }
+            """;
+        var workspace = new GrammarWorkspace { CompositionName = "Y", StartRule = "Y.Holder" };
+        workspace.SetGrammar("patterns.ngr", grammar);
+        Assert.Contains(workspace.ValidateCompilation(), d => d.IsError && d.Code == Nitrogen.Grammar.GrammarCodes.AmbiguousReference);
+    }
+
+    [Fact]
     public void Non_consuming_cycle_fails_composition_with_NQP0008()
     {
         var diagnostics = Validate(Grammar("", """
