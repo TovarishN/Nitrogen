@@ -1,10 +1,10 @@
 namespace Nitrogen;
 
 /// <summary>
-/// Packrat memo for extensible rules, keyed by <c>(ruleKey, position)</c> and storing
+/// Packrat memo for extensible rules, keyed by <c>(ruleKey, position, grammar context)</c> and storing
 /// <c>(node, end, examined)</c>, where a negative node means "failed here" and examined is one past
 /// the furthest index the computation read (a tracked parse replays it on a hit; 0 otherwise). Open
-/// addressing with linear probing over one array of 24-byte entries, grown at three-quarters load. A slot is live only
+/// addressing with linear probing over one array of 32-byte entries, grown at three-quarters load. A slot is live only
 /// if its stamp equals the current generation, so <see cref="Clear"/> is O(1) however large the
 /// table has grown and one table serves every parse on a thread without reallocating.
 /// </summary>
@@ -16,6 +16,7 @@ internal sealed class MemoTable
     struct Entry
     {
         public long Key;
+        public ulong Context;
         public int Node;
         public int End;
         public int Stamp;
@@ -50,12 +51,15 @@ internal sealed class MemoTable
 
     public bool TryGet(int ruleKey, int position, out int node, out int end) => TryGet(ruleKey, position, out node, out end, out _);
 
-    public bool TryGet(int ruleKey, int position, out int node, out int end, out int examined)
+    public bool TryGet(int ruleKey, int position, out int node, out int end, out int examined) =>
+        TryGet(ruleKey, position, out node, out end, out examined, 0);
+
+    public bool TryGet(int ruleKey, int position, out int node, out int end, out int examined, ulong context)
     {
         long key = Key(ruleKey, position);
         var entries = _entries;
         int mask = entries.Length - 1;
-        for (int i = Hash(key) & mask; ; i = (i + 1) & mask)
+        for (int i = Hash(key, context) & mask; ; i = (i + 1) & mask)
         {
             ref Entry e = ref entries[i];
             if (e.Stamp != _generation)
@@ -63,7 +67,7 @@ internal sealed class MemoTable
                 node = end = examined = 0;
                 return false;
             }
-            if (e.Key == key)
+            if (e.Key == key && e.Context == context)
             {
                 node = e.Node;
                 end = e.End;
@@ -75,19 +79,22 @@ internal sealed class MemoTable
 
     internal bool Contains(int ruleKey, int position) => TryGet(ruleKey, position, out _, out _);
 
-    public void Set(int ruleKey, int position, int node, int end, int examined = 0)
+    public void Set(int ruleKey, int position, int node, int end, int examined = 0) =>
+        Set(ruleKey, position, node, end, examined, 0);
+
+    public void Set(int ruleKey, int position, int node, int end, int examined, ulong context)
     {
         if (_count + 1 > _limit) Grow();
-        Insert(_entries, Key(ruleKey, position), node, end, examined);
+        Insert(_entries, Key(ruleKey, position), node, end, examined, context);
     }
 
-    void Insert(Entry[] entries, long key, int node, int end, int examined)
+    void Insert(Entry[] entries, long key, int node, int end, int examined, ulong context)
     {
         int mask = entries.Length - 1;
-        int i = Hash(key) & mask;
-        while (entries[i].Stamp == _generation && entries[i].Key != key) i = (i + 1) & mask;
+        int i = Hash(key, context) & mask;
+        while (entries[i].Stamp == _generation && (entries[i].Key != key || entries[i].Context != context)) i = (i + 1) & mask;
         if (entries[i].Stamp != _generation) _count++;
-        entries[i] = new Entry { Key = key, Node = node, End = end, Stamp = _generation, Examined = examined };
+        entries[i] = new Entry { Key = key, Context = context, Node = node, End = end, Stamp = _generation, Examined = examined };
     }
 
     void Grow()
@@ -98,7 +105,7 @@ internal sealed class MemoTable
         _generation = 1;
         _count = 0;
         foreach (var e in old)
-            if (e.Stamp == generation) Insert(entries, e.Key, e.Node, e.End, e.Examined);
+            if (e.Stamp == generation) Insert(entries, e.Key, e.Node, e.End, e.Examined, e.Context);
         _entries = entries;
         _limit = Limit(entries.Length);
     }
@@ -107,5 +114,5 @@ internal sealed class MemoTable
 
     static long Key(int ruleKey, int position) => ((long)ruleKey << 32) | (uint)position;
 
-    static int Hash(long key) => (int)(((ulong)key * 0x9E3779B97F4A7C15UL) >> 32);
+    static int Hash(long key, ulong context) => (int)((((ulong)key ^ (context * 0xD6E8FEB86659FD93UL)) * 0x9E3779B97F4A7C15UL) >> 32);
 }
