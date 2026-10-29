@@ -34,6 +34,7 @@ public class GrammarContextCompilerTests
     [Fact] public void Context_predicates_cannot_hide_nullable_repetition_or_left_recursion()
     {
         var repeat=Compile("syntax module A { context F; syntax Root = context(F)*; }");Assert.True(repeat.HasErrors);Assert.Empty(repeat.Sources);
+        var indirect=Compile("syntax module A { context F; syntax Guard = context(F); syntax Root = Guard*; }");Assert.True(indirect.HasErrors);
         var recursion=Compile("syntax module A { context F; syntax Root = with(F = true) Root; }");Assert.True(recursion.HasErrors);Assert.Empty(recursion.Sources);
     }
     [Fact]public void Grammar_function_context_names_bind_at_the_definition_site_and_unused_bodies_are_validated()

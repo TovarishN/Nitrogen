@@ -153,7 +153,7 @@ internal static class ModuleWriter
             int slot = 0;
             foreach (var element in SyntaxCodeWriter.Elements(body))
             {
-                var bare = element is LabeledExpr labeled ? labeled.Inner : element;
+                var bare = GrammarContextSyntax.Unwrap(element is LabeledExpr labeled ? labeled.Inner : element);
                 if (GrammarContextSyntax.NoNode(bare)) continue;
                 if (bare is RepeatExpr { Kind: not RepeatKind.Optional } or SeparatedListExpr) slots.Add(slot);
                 slot++;

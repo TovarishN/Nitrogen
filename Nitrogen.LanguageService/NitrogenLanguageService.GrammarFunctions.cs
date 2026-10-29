@@ -43,7 +43,7 @@ public sealed partial class NitrogenLanguageService
     static readonly HashSet<string> s_grammarWords = new(StringComparer.Ordinal)
     {
         "if", "then", "else", "choice", "seq", "let", "where", "in", "or", "and", "not", "function", "syntax", "token",
-        "module", "using", "precedence", "except", "declares", "references", "scope", "dynamic", "lowers", "rewrites", "match",
+        "context", "with", "true", "false", "module", "using", "precedence", "except", "declares", "references", "scope", "dynamic", "lowers", "rewrites", "match",
         "char", "code", "upper", "lower", "length",
     };
 
@@ -208,6 +208,8 @@ public sealed partial class NitrogenLanguageService
             return new HoverInfo($"```ngr\n{call.Signature}\n```\n" + ExpansionMarkdown(call), call.Range);
         }
         var range = lines.RangeOf(new(found.Span.Start, found.Span.Length));
+        if(found.Kind == GrammarNameKind.Context)
+            return new HoverInfo($"`{found.Identity}`\n\nBoolean grammar context. Defaults to false; scoped changes restore on return.",range);
         if (found.Kind == GrammarNameKind.Builtin)
         {
             var (signature, meaning) = s_builtinDocs[scope.Text.Substring(found.Span.Start, found.Span.Length)];
@@ -385,6 +387,8 @@ public sealed partial class NitrogenLanguageService
             if (function.Module.Functions.Any(f => f.Name.Name == newName) || function.Module.Helpers.Any(h => h.Name.Name == newName))
                 throw new RenameRefusedException($"'{newName}' already names a function in module '{function.Module.Name}'.");
         }
+        else if(target.Kind==GrammarNameKind.Context)
+            CheckContextRename(scope,target,uses,newName);
         else
         {
             // A name already used inside the function would be captured or would shadow: refuse rather than change meaning.
@@ -480,7 +484,7 @@ internal static class GrammarExpressionText
     {
         ChoiceExpr => 1,
         SequenceExpr => 2,
-        LabeledExpr => 2,
+        ContextScopeExpr or LabeledExpr => 2,
         SeparatedListExpr => 0,
         _ => 3,
     };
@@ -489,7 +493,7 @@ internal static class GrammarExpressionText
     {
         ChoiceExpr { Alternatives.Count: > 1 } => 0,
         SequenceExpr { Items.Count: > 1 } => 1,
-        LabeledExpr or RepeatExpr or PredicateExpr => 2,
+        ContextScopeExpr or LabeledExpr or RepeatExpr or PredicateExpr => 2,
         _ => 3,
     };
 
@@ -504,6 +508,13 @@ internal static class GrammarExpressionText
             case SequenceExpr { Items.Count: 0 }: text.Append("()"); break;
             case ChoiceExpr choice: Join(choice.Alternatives, " / ", 1); break;
             case SequenceExpr sequence: Join(sequence.Items, " ", 2); break;
+            case ContextTestExpr context:
+                text.Append("context(").Append(context.Context.Name).Append(')');
+                break;
+            case ContextScopeExpr context:
+                text.Append("with(").Append(context.Context.Name).Append(context.Value?" = true) ":" = false) ");
+                Write(text,context.Inner,2);
+                break;
             case LabeledExpr labeled:
                 text.Append(labeled.Label).Append(':');
                 Write(text, labeled.Inner, labeled.Inner is LabeledExpr ? 3 : 2);

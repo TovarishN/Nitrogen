@@ -478,3 +478,17 @@ The language server uses what a document lowers to as well as its syntax:
 
 `ILanguageAssist` is the hook behind the `.ngr` support: a `LanguageEntry` can add colors, completions,
 hovers and diagnostics for text that its binding and lowering do not describe.
+
+## Scoped parsing context
+
+A syntax module may declare a Boolean grammar flag with `context Flag;`. Each parse starts with all flags false. `context(Flag)` is a zero-width predicate with no tree slot; use `!context(Flag)` for its inverse. `with(Flag = true) Child` and `with(Flag = false) Child` parse one unary child under a replacement value and restore the complete caller environment on success, failure or exception. Use parentheses to scope a sequence, and nest operations to replace several flags.
+
+Flags resolve like grammar names: locally, through `using` modules, or as a module-qualified name. The selected Language must include every referenced flag owner, even if a particular entry rule does not execute that use. Composition rejects duplicate qualified identities and more than64 declared flags. Flag bits belong to the immutable Language snapshot, not to global process state.
+
+Scopes retain the child's typed owner, captures and UTF16 source spans; they add no wrapper node. For example `Items:with(Flag = true) Expr*` keeps the ordinary typed list field. Both successful and failed memo entries, and incremental subtree reuse, distinguish the full incoming flag environment. A header edit can therefore change a nested parse's meaning even when its text is unchanged.
+
+Context operations are syntax operations. Token rules cannot read or change parser context; guard a token reference from syntax instead. Context-only nullable repetition and hidden left recursion are rejected. A scope around a postfix operand retains its precedence; a scoped recursive left operand must not conceal recursion.
+
+Standalone parsing and quotation start with false flags. To parse a category in a non-default context, author an explicitly scoped entry rule. There is no ambient flag parameter on `Language.Parse` or `CompileQuote`. Parsing context does not implement binding, source-specific legality checks or execution.
+
+See [ScopedWords](../examples/ScopedWords/README.md) for an IDE-configured example. Context declarations/references support definition, references, hover, safe rename and completion; extraction retains qualified flag identity.

@@ -183,6 +183,7 @@ internal sealed class SyntaxCodeWriter
 
     string? ListCategory(Expr item, ModuleDecl module, string? implicitModule)
     {
+        item=GrammarContextSyntax.Unwrap(item);
         if (item is not ReferenceExpr reference) return null;
         var symbol = _model.Resolve(reference.Name, module, implicitModule);
         return symbol.Rule is SyntaxRule or ExtensibleRule ? symbol.Module.Name + "." + symbol.Rule.Name : null;

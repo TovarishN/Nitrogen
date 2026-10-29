@@ -17,9 +17,11 @@ public class GeneratedGrammarContextTests
     [Fact]public void Scoped_list_and_optional_fields_preserve_their_typed_shape_and_absence()
     {
         using var list=L.Parse("l x x ;",C.GrammarContextModule.List);Assert.True(list.Success&&!list.HasErrors);
-        var node=SyntaxView.Cast<C.ListNode>(list.Tree,list.Tree.Root);SyntaxList<C.ExprNode> items=node.Items;Assert.Equal(2,items.Count);
+        var node=SyntaxView.Cast<C.ListNode>(list.Tree,list.Tree.Root);SyntaxList<C.ExprNode> items=node.Items;Assert.Equal(2,items.Count);Assert.True(L.IsListSlot(list.Tree.Kind(list.Tree.Root),1));
         using var present=L.Parse("m x ;",C.GrammarContextModule.Maybe);Assert.True(present.Success&&!present.HasErrors);
         Optional<C.ExprNode> value=SyntaxView.Cast<C.MaybeNode>(present.Tree,present.Tree.Root).Value;Assert.True(value.HasValue);Assert.Equal("x",Text(present,value.Value.Span));
+        using var maybeList=L.Parse("o x x ;",C.GrammarContextModule.MaybeList);Assert.True(maybeList.Success&&!maybeList.HasErrors);
+        Optional<SyntaxNode> values=SyntaxView.Cast<C.MaybeListNode>(maybeList.Tree,maybeList.Tree.Root).Values;Assert.True(values.HasValue);
         using var absent=L.Parse("m ;",C.GrammarContextModule.Maybe);Assert.True(absent.Success&&!absent.HasErrors);Assert.False(SyntaxView.Cast<C.MaybeNode>(absent.Tree,absent.Tree.Root).Value.HasValue);
     }
     [Fact]public void Speculative_scope_restores_before_the_consuming_parse_at_the_same_position()
@@ -53,5 +55,10 @@ public class GeneratedGrammarContextTests
     {
         Assert.Throws<LanguageCompositionException>(()=>new LanguageBuilder().Add(C.GrammarContextModule.Instance).Build());
         using var p=L.Parse("z",C.GrammarContextModule.External);Assert.True(p.Success&&!p.HasErrors);
+    }
+    [Fact]public void Explicit_false_and_transparent_entries_preserve_child_owners()
+    {
+        using var off=L.Parse("x",C.GrammarContextModule.ForceOff);Assert.True(off.Success&&!off.HasErrors);Assert.Equal("Disabled",L.GetKindName(off.Tree.Kind(off.Tree.Root)));
+        using var entry=L.Parse("x",C.GrammarContextModule.ViaEntry);Assert.True(entry.Success&&!entry.HasErrors);Assert.Equal("Enabled",L.GetKindName(entry.Tree.Kind(entry.Tree.Root)));Assert.True(C.EntryNode.Is(entry.Tree,entry.Tree.Root));
     }
 }

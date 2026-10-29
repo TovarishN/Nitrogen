@@ -414,7 +414,7 @@ internal sealed class SemanticsWriter
         };
     }
 
-    static Expr Unlabel(Expr expr) => expr is LabeledExpr labeled ? labeled.Inner : expr;
+    static Expr Unlabel(Expr expr) => GrammarContextSyntax.Unwrap(expr is LabeledExpr labeled ? labeled.Inner : expr);
 
     /// <summary>C# from the grammar on lines of its own, mapped back to its .ngr span by #line (issue 239).</summary>
     void Fragment(StringBuilder b, CodeText code, string prefix)

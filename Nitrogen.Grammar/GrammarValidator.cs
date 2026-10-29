@@ -523,7 +523,17 @@ public static class GrammarValidator
             _ => "dynamic",
         };
 
-        static bool ContainsContext(Expr expr) => expr is ContextTestExpr or ContextScopeExpr || GrammarExtraction.Children(expr).Any(ContainsContext);
+        bool ContainsContext(Expr expr,ModuleDecl module,string? implicitModule,HashSet<string>? visited=null)
+        {
+            if(expr is ContextTestExpr or ContextScopeExpr)return true;
+            visited??=new(StringComparer.Ordinal);
+            if(expr is ReferenceExpr reference && _analysis.Resolve(reference.Name,reference.Span,module,implicitModule) is {} symbol && visited.Add(symbol.Key))
+            {
+                if(symbol.Rule is SyntaxRule syntax)return ContainsContext(syntax.Body,symbol.Module,null,visited);
+                if(symbol.Rule is ExtensibleRule)return _analysis.Point(symbol.Key).Any(p=>ContainsContext(p.Alternative.Body,p.Module,p.ImplicitModule,visited));
+            }
+            return GrammarExtraction.Children(expr).Any(child=>ContainsContext(child,module,implicitModule,visited));
+        }
 
         void CheckExpr(Expr expr, ModuleDecl module, string? implicitModule, bool inToken)
         {
@@ -557,7 +567,7 @@ public static class GrammarValidator
                     if(inToken) Report(GrammarCodes.ContextInToken,"grammar context operations require syntax rules",context.Span,module);
                     break;
                 case RepeatExpr repeat:
-                    if(repeat.Kind != RepeatKind.Optional && ContainsContext(repeat.Inner) && _analysis.IsNullable(repeat.Inner,module,implicitModule))
+                    if(repeat.Kind != RepeatKind.Optional && _analysis.IsNullable(repeat.Inner,module,implicitModule) && ContainsContext(repeat.Inner,module,implicitModule))
                         Report(GrammarCodes.NullableContextRepeat,"a repeated context expression must consume input",repeat.Span,module);
                     CheckExpr(repeat.Inner, module, implicitModule, inToken);
                     break;

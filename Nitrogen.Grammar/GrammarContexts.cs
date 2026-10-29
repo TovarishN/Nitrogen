@@ -25,6 +25,27 @@ internal sealed partial class GrammarAnalysis
         return null;
     }
 
+    public IEnumerable<(NameDecl Name,GrammarContextSymbol Symbol)> ContextOccurrences(ModuleDecl module)
+    {
+        var result=new List<(NameDecl,GrammarContextSymbol)>();
+        void Visit(Expr expr,string? implicitModule)
+        {
+            NameDecl? name=expr switch {ContextTestExpr c=>c.Context,ContextScopeExpr c=>c.Context,_=>null};
+            if(name is not null && ResolveContext(name,module,implicitModule) is {} symbol)result.Add((name,symbol));
+            foreach(var child in GrammarExtraction.Children(expr))Visit(child,implicitModule);
+        }
+        foreach(var rule in module.Rules)
+            switch(rule)
+            {
+                case SyntaxRule syntax:Visit(syntax.Body,null);break;
+                case ExtensibleRule point:foreach(var alternative in point.Alternatives)Visit(alternative.Body,module.Name);break;
+            }
+        foreach(var extend in module.Extends)
+            foreach(var alternative in extend.Alternatives)Visit(alternative.Body,Resolve(extend.Target,extend.Span,module,null)?.Module.Name);
+        foreach(var function in module.Functions)Visit(function.Body,null);
+        return result;
+    }
+
     public IEnumerable<GrammarContextSymbol> ContextReferences(ModuleDecl module)
     {
         var found=new Dictionary<string,GrammarContextSymbol>(StringComparer.Ordinal);
@@ -52,6 +73,8 @@ internal sealed partial class GrammarAnalysis
 
 internal static class GrammarContextSyntax
 {
+    public static Expr Unwrap(Expr expr) => expr is ContextScopeExpr context ? Unwrap(context.Inner) : expr;
+
     public static bool NoNode(Expr expr) => expr switch
     {
         LabeledExpr l=>NoNode(l.Inner),ContextScopeExpr c=>NoNode(c.Inner),PredicateExpr or ContextTestExpr=>true,_=>false,

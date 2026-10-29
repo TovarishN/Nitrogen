@@ -21,7 +21,7 @@ public sealed partial class NitrogenLanguageService
     /// What a grammar name names: a rule, a grammar function, a function's parameter, <c>let</c> or loop variable, or a
     /// built-in such as <c>upper</c>, which has uses but no declaration.
     /// </summary>
-    internal enum GrammarNameKind { Rule, Function, Parameter, Variable, Builtin }
+    internal enum GrammarNameKind { Rule, Function, Parameter, Variable, Builtin, Context }
 
     static string BuiltinKey(string name) => "builtin " + name;
 
@@ -80,6 +80,8 @@ public sealed partial class NitrogenLanguageService
         foreach (var file in files)
             foreach (var module in file.File.Modules)
             {
+                foreach(var context in module.Contexts)
+                    occurrences.Add(new("context "+module.Name+"."+context.Name,file.Path,context.Span,true,GrammarNameKind.Context));
                 // A function's parameters, lets and loop variables: name → identity, declared where they are bound.
                 var variables = new Dictionary<string, (string Key, GrammarNameKind Kind)>(StringComparer.Ordinal);
                 string scopeKey = "";
@@ -134,6 +136,9 @@ public sealed partial class NitrogenLanguageService
                         occurrences.Add(new(bound.Key, file.Path, reference.Span, false, bound.Kind));
                     else if (expression is ReferenceExpr rule && analysis.Resolve(rule.Name, rule.Span, module, implicitModule) is { } target)
                         occurrences.Add(new(target.Key, file.Path, rule.Span, false));
+                    NameDecl? contextName=expression switch {ContextTestExpr c=>c.Context,ContextScopeExpr c=>c.Context,_=>null};
+                    if(contextName is not null && analysis.ResolveContext(contextName,module,implicitModule) is {} context)
+                        occurrences.Add(new("context "+context.Module.Name+"."+context.Name.Name,file.Path,contextName.Span,false,GrammarNameKind.Context));
                     // Grammar functions (spec: grammar functions): calls, and rule names among their values.
                     switch (expression)
                     {

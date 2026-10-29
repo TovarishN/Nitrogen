@@ -147,7 +147,7 @@ internal sealed class ViewWriter
 
     string ItemType(Expr expr, string? implicitModule)
     {
-        var bare = expr is LabeledExpr labeled ? labeled.Inner : expr;
+        var bare = GrammarContextSyntax.Unwrap(expr is LabeledExpr labeled ? labeled.Inner : expr);
         return bare is RepeatExpr or SeparatedListExpr ? "SyntaxNode" : TypeOf(bare, implicitModule);
     }
 

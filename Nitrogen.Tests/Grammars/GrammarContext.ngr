@@ -8,7 +8,12 @@ syntax module GrammarContext
     syntax Async = "a" Body:with(Enabled = true) Expr;
     syntax Ordinary = "n" Body:Expr;
     syntax List = "l" Items:with(Enabled = true) Expr* ";";
+    syntax MaybeList = "o" Values:(with(Enabled = true) Expr+)? ";";
     syntax Maybe = "m" Value:with(Enabled = true) Expr? ";";
+    syntax ForceOff = with(Enabled = true) Off;
+    syntax Off = with(Enabled = false) Expr;
+    syntax ViaEntry = Entry;
+    extensible syntax Entry { | transparent Scoped = with(Enabled = true) Expr }
     syntax ScopedAlias = with(Enabled = true) Expr;
     syntax Speculative = &(with(Enabled = true) Expr) Body:Expr;
     extensible syntax Expr
