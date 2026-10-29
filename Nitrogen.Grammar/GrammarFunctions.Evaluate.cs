@@ -78,6 +78,12 @@ public static partial class GrammarFunctions
 
         // ---- rules ----
 
+        NameDecl QualifiedContext(NameDecl name,ModuleDecl module)
+        {
+            var resolved=registry.Analysis.ResolveContext(name,module,null) ?? throw Error($"unknown context '{name.Name}'");
+            return name with { Name=resolved.Module.Name+"."+resolved.Name.Name };
+        }
+
         Expr Build(Expr expr, Scope<Value>? scope, ModuleDecl module)
         {
             if (++_nodes > MaxNodes) throw Limit($"the expansion exceeds {MaxNodes} nodes");
@@ -89,9 +95,9 @@ public static partial class GrammarFunctions
                     if (Scope<Value>.TryFind(scope, reference.Name, out var value)) return AsRule(value);
                     return new ReferenceExpr((registry.ResolveRule(reference.Name, module) ?? throw Error($"unknown rule '{reference.Name}'")).Key, default);
                 case ContextTestExpr context:
-                    return context with { Context = context.Context with { Name = context.Context.Name.Contains(".") ? context.Context.Name : module.Name + "." + context.Context.Name } };
+                    return context with { Context = QualifiedContext(context.Context,module) };
                 case ContextScopeExpr context:
-                    return context with { Context = context.Context with { Name = context.Context.Name.Contains(".") ? context.Context.Name : module.Name + "." + context.Context.Name }, Inner = Build(context.Inner,scope,module) };
+                    return context with { Context = QualifiedContext(context.Context,module), Inner = Build(context.Inner,scope,module) };
                 case LabeledExpr labeled:
                     return new LabeledExpr(labeled.Label, Build(labeled.Inner, scope, module), default);
                 case RepeatExpr repeat:

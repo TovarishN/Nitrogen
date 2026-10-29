@@ -41,6 +41,8 @@ public class GrammarContextCompilerTests
     {
         var good=Compile("syntax module A { context F; function Wrap(r: Grammar.Rule): Grammar.Rule = with(F = true) r; } syntax module B { using A; syntax Root = Wrap(Value); syntax Value = context(A.F) \"x\"; }");
         Assert.False(good.HasErrors,string.Join(";",good.Diagnostics.Select(d=>d.Diagnostic.Message)));
+        var imported=Compile("syntax module A { context F; } syntax module B { using A; function Wrap(r: Grammar.Rule): Grammar.Rule = with(F = true) r; } syntax module C { using B; syntax Root = Wrap(\"x\"); }");
+        Assert.False(imported.HasErrors,string.Join(";",imported.Diagnostics.Select(d=>d.Diagnostic.Message)));
         var bad=Compile("syntax module A { function Wrap(r: Grammar.Rule): Grammar.Rule = with(Missing = true) r; syntax Root = \"x\"; }");
         Assert.Contains(bad.Diagnostics,d=>d.Diagnostic.Code=="NGR0163");
     }
