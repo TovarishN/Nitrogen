@@ -1,6 +1,6 @@
 # Named patterns, descendant search and ancestor context
 
-Status: draft for user review, 2026-10-29. Builder check done; open questions resolved.
+Status: approved by the user on 2026-10-29. Implemented on branch named-patterns; Release build has zero warnings and 2,318 tests pass. Live VS Code/Rider visual acceptance is pending.
 
 ## Intent
 

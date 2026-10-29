@@ -12,6 +12,13 @@
   <service name="reports">
     <credentials><secret-ref key="reports-password" /></credentials>
   </service>
+  <service name="search">
+    <settings><api-key>nested-example-key</api-key></settings>
+    <api-key>direct-example-key</api-key>
+  </service>
+  <vault name="operations">
+    <folder><password>nested-example</password></folder>
+  </vault>
   <documentation>
     <password>This tag is outside credentials, so it does not match.</password>
   </documentation>

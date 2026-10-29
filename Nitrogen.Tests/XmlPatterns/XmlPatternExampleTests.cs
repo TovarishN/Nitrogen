@@ -32,8 +32,7 @@ public sealed class XmlPatternExampleTests
     public void Sample_reports_one_warning_at_the_credentials_element()
     {
         string source = File.ReadAllText(Example("sample.xml"));
-        var issue = Assert.Single(Analyze(source));
-        Assert.Equal("XML1001", issue.Code);
+        var issue = Assert.Single(Analyze(source), issue => issue.Code == "XML1001");
         Assert.Equal(DiagnosticSeverity.Warning, issue.Severity);
         Assert.EndsWith("example-only-password", issue.Message);
         Assert.Equal(source.IndexOf("<credentials source", StringComparison.Ordinal), issue.Span.Start);
@@ -87,16 +86,35 @@ public sealed class XmlPatternExampleTests
         Assert.Empty(service.Diagnostics(grammarUri));
         string uri = new Uri(Example("sample.xml")).AbsoluteUri;
         service.Open(uri, 1, File.ReadAllText(Example("sample.xml")));
-        var warning = Assert.Single(service.Diagnostics(uri));
-        Assert.Equal("XML1001", warning.Code);
+        var warning = Assert.Single(service.Diagnostics(uri), diagnostic => diagnostic.Code == "XML1001");
         Assert.Equal(ServiceSeverity.Warning, warning.Severity);
         Assert.Contains("example-only-password", warning.Message);
         Assert.Equal(5, warning.Range.Start.Line);
         service.Change(grammarUri, 2, File.ReadAllText(Example("Xml.ngr")).Replace("{pass}", "{pass.Text}"));
         Assert.Empty(service.Diagnostics(grammarUri));
-        Assert.Contains("example-only-password", Assert.Single(service.Diagnostics(uri)).Message);
+        Assert.Contains("example-only-password", Assert.Single(service.Diagnostics(uri), diagnostic => diagnostic.Code == "XML1001").Message);
         service.Change(uri, 2, "<root></wrong>");
         Assert.Contains(service.Diagnostics(uri), diagnostic => diagnostic.Code == "XML0001");
+    }
+
+    [Fact]
+    public void Api_key_inside_a_service_reports_each_key()
+    {
+        string source = File.ReadAllText(Example("sample.xml"));
+        var issues = Analyze(source).Where(issue => issue.Code == "XML1003").ToArray();
+        Assert.Equal([source.IndexOf("<api-key>nested", StringComparison.Ordinal), source.IndexOf("<api-key>direct", StringComparison.Ordinal)],
+            issues.Select(issue => issue.Span.Start));
+        Assert.All(issues, issue => Assert.Equal(DiagnosticSeverity.Warning, issue.Severity));
+    }
+
+    [Fact]
+    public void Vault_containing_a_secret_reports_once_at_the_vault()
+    {
+        string source = File.ReadAllText(Example("sample.xml"));
+        var issue = Assert.Single(Analyze(source), issue => issue.Code == "XML1002");
+        Assert.Equal(source.IndexOf("<vault", StringComparison.Ordinal), issue.Span.Start);
+        Assert.EndsWith("</vault>", source.Substring(issue.Span.Start, issue.Span.Length));
+        Assert.EndsWith("<password>nested-example</password>", issue.Message);
     }
 
     [Fact]

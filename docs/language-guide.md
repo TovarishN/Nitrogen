@@ -75,8 +75,67 @@ match errors rather than trying another arm or fallback; lowering wraps quotatio
 existing `NH0009` diagnostic. Ignored input still must be valid syntax from the same language snapshot.
 
 Captures borrow input syntax and preserve its origins. Keep the source tree alive while consuming
-captures or instantiating a replacement. Matching performs no rewriting, lowering or implicit subtree
-search. Unsupported token/list hole sites remain unsupported.
+captures or instantiating a replacement. Matching performs no rewriting or lowering, and searches
+below a node only where a descendant capture asks for it (see below). Unsupported token/list hole
+sites remain unsupported.
+
+## Named patterns and tree context
+
+A module can declare a named pattern: ordered alternatives over one syntax category.
+
+```ngr
+pattern Secret : Element =
+  | <[ <password ..$_>..$_</password> ]>
+  | <[ <api-key ..$_>..$_</api-key> ]>;
+```
+
+Each alternative may declare its own captures, as a match arm does; they are private to that
+alternative. A capture whose category names a pattern accepts only syntax the pattern matches,
+and has the pattern's category in messages: `match (s: Secret) <[ ... $s ... ]>`. Patterns are
+visible by simple name in their module and in modules that `use` it, or by qualified name
+(`Xml.Secret`). They work in diagnostic matches, syntax-function arms (`| (s: Secret) <[ $s ]> => ...`)
+and C# (`QuoteHole.Pattern("Xml.Secret")`, `QuoteHole.PatternList`, `QuoteHole.DescendantOf`).
+
+Alternatives are tried in order. The first one that matches is committed: a named pattern is a
+yes/no question about one node, so another alternative could not change what the caller captures.
+A pattern may refer to itself, directly or through other patterns, as long as every cycle steps
+into a child first. `pattern Nested : Expr = | (n: Nested) <[ f($n) ]> | <[ 1 ]>;` is fine;
+`pattern A : Expr = (x: A) <[ $x ]>;` never descends and is rejected with `NQP0008`.
+
+**Looking down.** Prefix the pattern name with `..` to search at or below the hole:
+
+```ngr
+match (secret: ..Secret)
+  <[ <vault ..$_>..$_ $secret ..$_</vault> ]>
+  => warning XML1002 : $"A vault stores a plaintext secret: {secret}";
+```
+
+The hole accepts any node at its site; the matcher searches that node and its descendants in
+preorder, document order, and binds the first node the pattern matches. If later structure fails,
+it resumes with the next candidate. The diagnostic belongs to the node being checked (the vault),
+so one container yields one warning. A descendant capture may appear only once in a pattern and
+captures one node, not a list.
+
+**Looking up.** Add an `inside` or `parent` clause to report each inner item instead:
+
+```ngr
+match <[ <api-key ..$_>..$_</api-key> ]>
+  inside <[ <service ..$_>..$_</service> ]>
+  => warning XML1003 : "An API key is embedded in a service definition; reference it instead.";
+```
+
+`inside` passes when any ancestor matches, trying the nearest first; `parent` checks only the
+semantic parent (list and group wrappers are skipped). The context quote is parsed in the rule's own
+category unless one is named: `inside Method (m: Method) <[ ... ]>`. Its captures join the message's
+captures; the nearest matching ancestor supplies them, and their names must differ from the
+pattern's (`NGR0165`). An ancestor whose syntax has errors is treated as not matching, so a typo
+silences the warning rather than failing the check.
+
+One work limit covers a check's own match and its ancestors; exhausting it reports `NQP0006` as a
+check failure, as other pattern limits do. From C#, `Language.NamedPattern("Xml.Secret")` returns a
+language-owned pattern, and `QuotePattern.FindAll(root)` returns every match at or below `root` in
+preorder, nested matches included; subtrees with errors are skipped, and a partial result is marked
+incomplete with `NQP0006` when the limit is reached.
 
 ## Declaration scopes
 
