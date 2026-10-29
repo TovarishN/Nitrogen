@@ -93,7 +93,19 @@ public sealed class NamedPatternSyntaxTests
             """);
         var context = Diagnostic(file).Context!;
         Assert.True(context.ParentOnly);
+        Assert.Null(context.Category);
         Assert.Equal("n", Assert.Single(context.Captures).Name.Name);
+    }
+
+    [Fact]
+    public void Context_clause_with_explicit_category()
+    {
+        var file = Parse("""
+              syntax Item = "<" Open:Name ">" {
+                match <[ <a> ]> inside X.Doc (n: Item*) <[ ..$n ]> => warning XP1001 : "m";
+              }
+            """);
+        Assert.Equal("X.Doc", Diagnostic(file).Context!.Category!.Name);
     }
 
     [Fact]

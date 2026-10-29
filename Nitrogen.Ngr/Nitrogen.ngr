@@ -166,8 +166,8 @@ syntax module Nitrogen
   syntax CheckAt        = "at" Name:Identifier  lowers text Core.Text Name;
   syntax MatchDiagnostic = "match" Captures:QuoteCaptures? Pattern:TemplateString Context:MatchContext? "=>" Severity:("warning" / "error") Code:CheckCode ":" Message:CsCode ";"
                           lowers Grammar.MatchDiagnostic(optional Grammar.QuoteCaptures Captures, text Pattern, text Severity, text Code, text Message, optional Grammar.MatchContext Context);
-  syntax MatchContext   = Kind:("inside" / "parent") Captures:QuoteCaptures? Pattern:TemplateString
-                          lowers Grammar.MatchContext(text Kind, optional Grammar.QuoteCaptures Captures, text Pattern);
+  syntax MatchContext   = Kind:("inside" / "parent") Category:QualifiedName? Captures:QuoteCaptures? Pattern:TemplateString
+                          lowers Grammar.MatchContext(text Kind, optional text Category, optional Grammar.QuoteCaptures Captures, text Pattern);
   syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target  lowers Grammar.Assignment(text Target, text Value);
 
   syntax Expression     = Choices:(Sequence; "/")+  lowers Grammar.Choice(sequence Grammar.Expression Choices);

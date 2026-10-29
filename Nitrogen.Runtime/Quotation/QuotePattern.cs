@@ -60,6 +60,18 @@ public sealed class QuotePattern
 
     public QuoteMatchResult Match(QuoteNode input, QuoteMatchOptions options) => MatchCore(input, null, options);
 
+    /// <summary>Matches under a caller's budget, letting its exhaustion propagate; invalid input returns NQP0004.</summary>
+    internal QuoteMatchResult MatchWithBudget(QuoteNode input, QuoteMatchBudget budget) => MatchChecked(input, null, budget);
+
+    /// <summary>Matches input whose subtree the caller already validated, under the caller's budget.</summary>
+    internal QuoteMatchResult MatchPrevalidated(QuoteNode input, QuoteMatchBudget budget)
+    {
+        if (_disposed) return QuotePatternMatcher.Invalid("NQP0004", "The pattern compilation has been disposed.");
+        if (!_parsed.Tree.Language!.AcceptsQuoteNode(_category, input.Tree, input.Node))
+            return new(false, new Dictionary<string, QuoteArgument>().AsReadOnly(), []);
+        return Published(new QuotePatternMatcher(this, null, budget).Match(input));
+    }
+
     internal QuoteMatchResult MatchResolved(QuoteNode input, Func<QuoteNode, QuoteNode> resolve, QuoteMatchOptions? options = null)
         => MatchCore(input, resolve, options ?? new QuoteMatchOptions());
 
@@ -122,9 +134,9 @@ public sealed class QuotePattern
                 var tree = root.Tree;
                 for (int i = tree.ChildCount(node) - 1; i >= 0; i--)
                     if (tree.Child(node, i) is var child && child != SyntaxTree.NoNode) work.Push(child);
-                if (invalid.Contains(node) || !language.AcceptsQuoteNode(_category, tree, node)) continue;
+                if (invalid.Contains(node)) continue;
                 var candidate = new QuoteNode(tree, node, root.Origin);
-                var result = Published(new QuotePatternMatcher(this, null, budget).Match(candidate));
+                var result = MatchPrevalidated(candidate, budget);
                 if (result.Matched) matches.Add(new(candidate, result.Captures));
             }
         }

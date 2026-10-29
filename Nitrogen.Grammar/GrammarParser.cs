@@ -1216,10 +1216,11 @@ public static class GrammarParser
             if (AtKeyword("inside") || AtKeyword("parent"))
             {
                 var kind = Advance();
+                NameDecl? contextCategory = At(TokenKind.Identifier) || At(TokenKind.QualifiedName) ? ReadCategory() : null;
                 bool contextCaptures = At(TokenKind.LParen);
                 var captureList = contextCaptures ? ReadQuoteParameters() : Array.Empty<QuoteParameter>();
                 var quote = ReadQuote(_tokens[_position - 1].End);
-                context = new(kind.Value == "parent", captureList, quote, GrammarSpan.FromBounds(kind.Start, quote.Span.End + 2));
+                context = new(kind.Value == "parent", contextCategory, captureList, quote, GrammarSpan.FromBounds(kind.Start, quote.Span.End + 2));
             }
             Expect(TokenKind.Arrow, "'=>'");
             if (!AtKeyword("warning") && !AtKeyword("error")) throw Error("expected 'warning' or 'error'");

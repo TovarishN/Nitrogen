@@ -285,8 +285,9 @@ public sealed record CheckStatement(NameDecl? Code, CodeText Condition, CodeText
 public sealed record MatchDiagnosticStatement(EquatableArray<QuoteParameter> Captures, QuoteText Pattern,
     NameDecl Code, bool IsWarning, CodeText Message, GrammarSpan Span, MatchContext? Context = null) : SemanticStatement(Span);
 
-/// <summary><c>inside</c>/<c>parent [captures] &lt;[ … ]&gt;</c>: an ancestor of the matched node must match too.</summary>
-public sealed record MatchContext(bool ParentOnly, EquatableArray<QuoteParameter> Captures, QuoteText Pattern, GrammarSpan Span);
+/// <summary><c>inside</c>/<c>parent [Category] [captures] &lt;[ … ]&gt;</c>: an ancestor of the matched node must match too.</summary>
+/// <param name="Category">The ancestor's category; null means the category of the rule the diagnostic belongs to.</param>
+public sealed record MatchContext(bool ParentOnly, NameDecl? Category, EquatableArray<QuoteParameter> Captures, QuoteText Pattern, GrammarSpan Span);
 
 /// <summary>The <c>{ … }</c> after a syntax rule or an alternative (issue 239).</summary>
 public sealed record SemanticsBlock(EquatableArray<PropertyDecl> Properties, EquatableArray<SemanticStatement> Statements, GrammarSpan Span);

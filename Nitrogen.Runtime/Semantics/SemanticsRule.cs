@@ -85,11 +85,42 @@ public sealed class SemanticsCheck(string code, Func<FileSemantics, int, bool> c
 
     QuoteMatchResult Match(FileSemantics semantics, int node)
     {
-        var compiled = semantics.Tree.Language!.DiagnosticPattern(Pattern!);
+        var language = semantics.Tree.Language!;
+        var compiled = language.DiagnosticPattern(Pattern!);
         if (!compiled.Success) throw new InvalidOperationException(string.Join("; ", compiled.Diagnostics));
-        var match = compiled.Pattern!.Match(new(semantics.Tree, node));
-        if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
-        return match;
+        if (Pattern!.Context is not { } context)
+        {
+            var match = compiled.Pattern!.Match(new(semantics.Tree, node));
+            if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
+            return match;
+        }
+        var ancestorPattern = language.DiagnosticContextPattern(context);
+        if (!ancestorPattern.Success) throw new InvalidOperationException(string.Join("; ", ancestorPattern.Diagnostics));
+        // One limit covers the node's own match and every ancestor tried for the context.
+        var budget = new QuoteMatchBudget(new QuoteMatchOptions());
+        try
+        {
+            var match = compiled.Pattern!.MatchWithBudget(new(semantics.Tree, node), budget);
+            if (match.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", match.Diagnostics));
+            if (!match.Matched) return match;
+            for (int ancestor = semantics.ParentOf(node); ancestor >= 0; ancestor = context.ParentOnly ? -1 : semantics.ParentOf(ancestor))
+            {
+                budget.Step();
+                // An ancestor with recovered or ambiguous syntax is skipped rather than failing the check.
+                if (!language.AcceptsQuoteNode(context.Category, semantics.Tree, ancestor) || semantics.InvalidSubtrees.Contains(ancestor)) continue;
+                var found = ancestorPattern.Pattern!.MatchPrevalidated(new(semantics.Tree, ancestor), budget);
+                if (found.Diagnostics.Count > 0) throw new InvalidOperationException(string.Join("; ", found.Diagnostics));
+                if (!found.Matched) continue;
+                var captures = new Dictionary<string, QuoteArgument>(StringComparer.Ordinal);
+                foreach (var (name, value) in match.Captures.Concat(found.Captures)) captures[name] = value;
+                return match with { Captures = captures.AsReadOnly() };
+            }
+            return new(false, new Dictionary<string, QuoteArgument>().AsReadOnly(), []);
+        }
+        catch (QuoteMatchLimitException)
+        {
+            throw new InvalidOperationException("NQP0006: The syntax-pattern match exceeded its work limit.");
+        }
     }
 
     public bool Holds(FileSemantics semantics, int node)

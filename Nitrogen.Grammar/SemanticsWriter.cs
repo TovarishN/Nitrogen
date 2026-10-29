@@ -100,7 +100,7 @@ internal sealed class SemanticsWriter
                         $"'{name}' names two members of {kind.ViewName}Semantics: a child, a property, or one of {string.Join(", ", Reserved)}; rename it",
                         kind.Span, info.Module.Name);
             foreach (var match in Block(kind)!.Statements.OfType<MatchDiagnosticStatement>())
-                foreach (var capture in match.Captures)
+                foreach (var capture in MessageCaptures(match))
                     if (names.Contains(capture.Name.Name))
                         yield return new GrammarDiagnostic(GrammarCodes.QuoteMatchCapture, GrammarSeverity.Error,
                             $"capture '{capture.Name.Name}' shadows a child, property or reserved semantic view member",
@@ -172,7 +172,16 @@ internal sealed class SemanticsWriter
                         .Append(CSharpText.Literal(match.Pattern.Text)).Append(", ").Append(map)
                         .Append(", new global::Nitrogen.QuoteHelperSource(")
                         .Append(CSharpText.Literal(_model.InputOf(_info.Module)?.Path ?? ""))
-                        .Append($", {match.Pattern.Span.Start}, {match.Pattern.Span.Length}));\n");
+                        .Append($", {match.Pattern.Span.Start}, {match.Pattern.Span.Length}))");
+                    if (match.Context is { } context)
+                        b.Append(" { Context = new global::Nitrogen.SyntaxDiagnosticContext(").Append(context.ParentOnly ? "true" : "false").Append(", ")
+                            .Append(CSharpText.Literal(context.Category is { } named
+                                ? _model.Analysis.Helpers.Category(named, _info.Module)!.Key
+                                : OwnerOf(kind).Owner.Module.Name + "." + category)).Append(", ")
+                            .Append(CSharpText.Literal(context.Pattern.Text)).Append(", ")
+                            .Append(QuoteHelperWriter.HoleMap(context.Captures, _model, _info)).Append(", ")
+                            .Append(QuoteHelperWriter.QuoteSource(context.Pattern, _model, _info)).Append(") }");
+                    b.Append(";\n");
                 }
                 index++;
             }
@@ -214,7 +223,7 @@ internal sealed class SemanticsWriter
         var checks = block.Statements.Where(s => s is CheckStatement or MatchDiagnosticStatement)
             .Select((statement, i) => statement is MatchDiagnosticStatement match
                 ? $"new {Ns}SemanticsCheck({CSharpText.Literal(match.Code.Name)}, s_match_{kind.Name}_{i}, "
-                    + $"static (s, n, c) => new {view}(s, n).Message_{i}({string.Join(", ", match.Captures.Select(capture => "c." + (capture.IsList ? "List" : "Scalar") + "<" + CaptureItemType(capture) + ">(" + CSharpText.Literal(capture.Name.Name) + ")"))}), severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")})"
+                    + $"static (s, n, c) => new {view}(s, n).Message_{i}({string.Join(", ", MessageCaptures(match).Select(capture => "c." + (capture.IsList ? "List" : "Scalar") + "<" + CaptureItemType(capture) + ">(" + CSharpText.Literal(capture.Name.Name) + ")"))}), severity: global::Nitrogen.DiagnosticSeverity.{(match.IsWarning ? "Warning" : "Error")})"
                 : statement is CheckStatement check ? $"new {Ns}SemanticsCheck({CSharpText.Literal(check.Code?.Name ?? "NS0100")}, "
                 + $"static (s, n) => new {view}(s, n).Check_{i}(), static (s, n) => new {view}(s, n).Message_{i}()"
                 + (check.At is { } at ? $", static (s, n) => new {view}(s, n).{CSharpText.Identifier(at.Name)}.Span" : "")
@@ -305,7 +314,7 @@ internal sealed class SemanticsWriter
             }
             else if (statement is MatchDiagnosticStatement match)
             {
-                b.Append($"    internal string Message_{check}({string.Join(", ", match.Captures.Select(capture => (capture.IsList ? "global::System.Collections.Generic.IReadOnlyList<" + CaptureItemType(capture) + ">" : CaptureItemType(capture)) + " " + CSharpText.Identifier(capture.Name.Name)))}) =>\n");
+                b.Append($"    internal string Message_{check}({string.Join(", ", MessageCaptures(match).Select(capture => (capture.IsList ? "global::System.Collections.Generic.IReadOnlyList<" + CaptureItemType(capture) + ">" : CaptureItemType(capture)) + " " + CSharpText.Identifier(capture.Name.Name)))}) =>\n");
                 Fragment(b, match.Message, match.Message.Text.StartsWith("\"", StringComparison.Ordinal) ? "$" : "");
                 b.Append("        ;\n\n");
                 check++;
@@ -390,6 +399,10 @@ internal sealed class SemanticsWriter
         SyntaxRule { Semantics: not null } syntax when !EmitModel.IsAlias(syntax) => rule.Name + "NodeSemantics",
         _ => null,
     };
+
+    /// <summary>The captures a match message receives: the pattern's, then its context's.</summary>
+    static IEnumerable<QuoteParameter> MessageCaptures(MatchDiagnosticStatement match) =>
+        match.Context is null ? match.Captures : match.Captures.Concat(match.Context.Captures);
 
     string CaptureItemType(QuoteParameter capture)
     {

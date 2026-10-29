@@ -432,7 +432,8 @@ internal static class NgrProjector
                     if (Value(a[5]) is { } contextNode)
                     {
                         var parts = Expect(contextNode, "MatchContext").Arguments;
-                        context = new(Text(parts[0]) == "parent", Captures(parts[1]), Quote(parts[2]), Span(contextNode));
+                        context = new(Text(parts[0]) == "parent", Value(parts[1]) is { } category ? Name(category) : null,
+                            Captures(parts[2]), Quote(parts[3]), Span(contextNode));
                     }
                     statements.Add(new MatchDiagnosticStatement(captures, Quote(a[1]), Name(a[3]),
                         Text(a[2]) == "warning", Code(a[4]), Span(statement), context));

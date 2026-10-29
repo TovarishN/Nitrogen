@@ -78,7 +78,7 @@ public static class GrammarSemantics
         Op("QuoteParameter", Types.QuoteParameter, Text, Text, Opt(Text), Opt(Text)),
         Op("NamedPattern", Types.Member, Text, Text, Seq(Types.NamedPatternAlternative)),
         Op("NamedPatternAlternative", Types.NamedPatternAlternative, Opt(Types.QuoteCaptures), Text),
-        Op("MatchContext", Types.MatchContext, Text, Opt(Types.QuoteCaptures), Text),
+        Op("MatchContext", Types.MatchContext, Text, Opt(Text), Opt(Types.QuoteCaptures), Text),
         Op("HelperRewrite", Types.Clause, Text, Seq(Text)),
         Op("Symbols", Types.Member, Seq(Text)),
         Op("SymbolProperty", Types.Member, Text, Types.Kinds, Text, Text),
