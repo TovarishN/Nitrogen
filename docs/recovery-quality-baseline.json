@@ -15,8 +15,8 @@
     "csharp-subset/duplicate": {
       "Cases": 44,
       "Eligible": 90,
-      "Preserved": 73,
-      "Diagnostics": 60,
+      "Preserved": 82,
+      "Diagnostics": 46,
       "ErrorRoots": 0,
       "RoslynPreserved": 82,
       "RoslynDiagnostics": 99
@@ -69,8 +69,8 @@
     "local/duplicate": {
       "Cases": 38,
       "Eligible": 66,
-      "Preserved": 59,
-      "Diagnostics": 40,
+      "Preserved": 63,
+      "Diagnostics": 38,
       "ErrorRoots": 0,
       "RoslynPreserved": 0,
       "RoslynDiagnostics": 0
@@ -131,30 +131,6 @@
     },
     {
       "Fixture": "items",
-      "Family": "duplicate",
-      "Start": 5,
-      "Length": 0,
-      "Replacement": "a ",
-      "ItemStart": 9
-    },
-    {
-      "Fixture": "items",
-      "Family": "duplicate",
-      "Start": 5,
-      "Length": 0,
-      "Replacement": "a ",
-      "ItemStart": 16
-    },
-    {
-      "Fixture": "items",
-      "Family": "duplicate",
-      "Start": 5,
-      "Length": 0,
-      "Replacement": "a ",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
       "Family": "swap",
       "Start": 5,
       "Length": 3,
@@ -211,14 +187,6 @@
     },
     {
       "Fixture": "items",
-      "Family": "duplicate",
-      "Start": 30,
-      "Length": 0,
-      "Replacement": "b ",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "items",
       "Family": "swap",
       "Start": 30,
       "Length": 3,
@@ -256,38 +224,6 @@
       "Length": 5,
       "Replacement": "",
       "ItemStart": 36
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "duplicate",
-      "Start": 6,
-      "Length": 0,
-      "Replacement": "C ",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "duplicate",
-      "Start": 6,
-      "Length": 0,
-      "Replacement": "C ",
-      "ItemStart": 21
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "duplicate",
-      "Start": 6,
-      "Length": 0,
-      "Replacement": "C ",
-      "ItemStart": 36
-    },
-    {
-      "Fixture": "csharp-siblings",
-      "Family": "duplicate",
-      "Start": 6,
-      "Length": 0,
-      "Replacement": "C ",
-      "ItemStart": 57
     },
     {
       "Fixture": "csharp-siblings",
@@ -379,14 +315,6 @@
     },
     {
       "Fixture": "csharp-siblings",
-      "Family": "duplicate",
-      "Start": 53,
-      "Length": 0,
-      "Replacement": "D ",
-      "ItemStart": 57
-    },
-    {
-      "Fixture": "csharp-siblings",
       "Family": "swap",
       "Start": 53,
       "Length": 3,
@@ -415,22 +343,6 @@
       "Start": 13,
       "Length": 5,
       "Replacement": "",
-      "ItemStart": 34
-    },
-    {
-      "Fixture": "csharp-unicode",
-      "Family": "duplicate",
-      "Start": 19,
-      "Length": 0,
-      "Replacement": "C ",
-      "ItemStart": 23
-    },
-    {
-      "Fixture": "csharp-unicode",
-      "Family": "duplicate",
-      "Start": 19,
-      "Length": 0,
-      "Replacement": "C ",
       "ItemStart": 34
     },
     {
@@ -483,14 +395,6 @@
     },
     {
       "Fixture": "nitride-csharp4-grammar-0",
-      "Family": "duplicate",
-      "Start": 6,
-      "Length": 0,
-      "Replacement": "C ",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "nitride-csharp4-grammar-0",
       "Family": "swap",
       "Start": 6,
       "Length": 3,
@@ -511,14 +415,6 @@
       "Start": 0,
       "Length": 5,
       "Replacement": "",
-      "ItemStart": 10
-    },
-    {
-      "Fixture": "nitride-csharp4-grammar-2",
-      "Family": "duplicate",
-      "Start": 6,
-      "Length": 0,
-      "Replacement": "C ",
       "ItemStart": 10
     },
     {
