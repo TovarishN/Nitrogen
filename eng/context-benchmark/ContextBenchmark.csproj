@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableContexts Condition="'$(EnableContexts)' == ''">true</EnableContexts>
+    <DefineConstants Condition="'$(EnableContexts)' == 'true'">$(DefineConstants);SCOPED_CONTEXTS</DefineConstants>
+    <DefineConstants Condition="'$(CSNitrogenRoot)' != ''">$(DefineConstants);CSHARP_CONSUMER</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Nitrogen.Runtime/Nitrogen.Runtime.csproj" />
+    <ProjectReference Include="../../Nitrogen.Generator/Nitrogen.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="../../Nitrogen.Tests/Grammars/Calc.ngr" Namespace="ContextBenchmark.CalcSyntax" />
+    <AdditionalFiles Include="../../Nitrogen.Tests/Grammars/GrammarContext.ngr" Namespace="ContextBenchmark.ScopedSyntax" Condition="'$(EnableContexts)' == 'true'" />
+    <CompilerVisibleItemMetadata Include="AdditionalFiles" MetadataName="Namespace" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(CSNitrogenRoot)' != ''">
+    <ProjectReference Include="$(CSNitrogenRoot)/src/CSNitrogen.Syntax/CSNitrogen.Syntax.csproj" />
+  </ItemGroup>
+</Project>

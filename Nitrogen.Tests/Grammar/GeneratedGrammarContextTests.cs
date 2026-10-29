@@ -58,7 +58,17 @@ public class GeneratedGrammarContextTests
     }
     [Fact]public void Explicit_false_and_transparent_entries_preserve_child_owners()
     {
+        using var literal=L.Parse("  z",C.GrammarContextModule.ScopedLiteral);Assert.True(literal.Success&&!literal.HasErrors);Assert.Equal(SyntaxKinds.Literal,literal.Tree.Kind(literal.Tree.Root));
         using var off=L.Parse("x",C.GrammarContextModule.ForceOff);Assert.True(off.Success&&!off.HasErrors);Assert.Equal("Disabled",L.GetKindName(off.Tree.Kind(off.Tree.Root)));
         using var entry=L.Parse("x",C.GrammarContextModule.ViaEntry);Assert.True(entry.Success&&!entry.HasErrors);Assert.Equal("Enabled",L.GetKindName(entry.Tree.Kind(entry.Tree.Root)));Assert.True(C.EntryNode.Is(entry.Tree,entry.Tree.Root));
+    }
+    [Fact]public void Whole_rule_and_alternative_scopes_keep_original_named_children_without_a_group_wrapper()
+    {
+        using var rule=L.Parse("x,x",C.GrammarContextModule.ScopedPair);Assert.True(rule.Success&&!rule.HasErrors);
+        var pair=SyntaxView.Cast<C.ScopedPairNode>(rule.Tree,rule.Tree.Root);C.ExprNode left=pair.Left;C.ExprNode right=pair.Right;
+        Assert.Equal("x",Text(rule,left.Span));Assert.Equal("x",Text(rule,right.Span));Assert.Equal(rule.Tree.Root,rule.Tree.Parent(left.Index));
+        using var alternative=L.Parse("x,x",C.GrammarContextModule.ScopedPointEntry);Assert.True(alternative.Success&&!alternative.HasErrors);
+        var scoped=SyntaxView.Cast<C.PairScopedPoint>(alternative.Tree,alternative.Tree.Root);C.ExprNode altLeft=scoped.Left;C.ExprNode altRight=scoped.Right;
+        Assert.Equal(alternative.Tree.Root,alternative.Tree.Parent(altLeft.Index));Assert.Equal("x",Text(alternative,altRight.Span));
     }
 }

@@ -26,7 +26,7 @@ Preserve all existing public signatures and CSharp Parameters/Body/signature typ
 
 **Files (Nitrogen):** new Nitrogen.Runtime/GrammarContextDecl.cs and ParserState.GrammarContext.cs; modify SyntaxModule.cs, Language.cs, LanguageBuilder.cs, MemoTable.cs, ExtensibleRules.cs, ParserState.cs, ReuseRecord.cs, ReuseTable.cs; tests GrammarContextTests.cs plus generated fixture later.
 
-**Interfaces:** new GrammarContextDecl(SyntaxModule owner,string name), SyntaxModule.ContextDeclarations/ContextReferences virtual IReadOnlyList<GrammarContextDecl>; ParserState.TestContext(GrammarContextDecl), ParseWithContext(GrammarContextDecl,bool,delegate*<ref ParserState,bool>). Language privately maps declaration identity to a ulong bit. Internal full environment shared with cache paths. Existing APIs retain signatures.
+**Interfaces:** new GrammarContextDecl(SyntaxModule owner,string name), IGrammarContextModule.ContextDeclarations/ContextReferences IReadOnlyList<GrammarContextDecl>, implemented explicitly by generated modules; ParserState.TestContext(GrammarContextDecl), ParseWithContext(GrammarContextDecl,bool,delegate*<ref ParserState,bool>). Language privately maps declaration identity to a ulong bit. Internal full environment shared with cache paths. Existing APIs retain signatures.
 
 - [ ] Write production runtime witnesses from the reviewed spike, plus missing-owner/65th/duplicate qualified identity, restoration/parallel/default-context cases. Watch RED against baseline.
 - [ ] Implement declaration validation and stable per-Language mask assignment. Promote only reviewed mechanism, preserving old memo overload signatures with delegating context0 methods rather than replacing optional-parameter metadata. Correct stale XML summaries from the experiment.

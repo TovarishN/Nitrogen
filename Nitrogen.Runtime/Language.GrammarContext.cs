@@ -6,7 +6,7 @@ public sealed unsafe partial class Language
 
     void ComposeContexts(SyntaxModule[] modules)
     {
-        var declarations = modules.SelectMany(module => module.ContextDeclarations.Select(flag => (Module: module, Flag: flag)))
+        var declarations = modules.OfType<IGrammarContextModule>().SelectMany(contexts => contexts.ContextDeclarations.Select(flag => (Module: (SyntaxModule)contexts, Flag: flag)))
             .OrderBy(entry => entry.Flag.QualifiedName, StringComparer.Ordinal).ToArray();
         if (declarations.Length > 64) throw new LanguageCompositionException("A language supports at most 64 Boolean grammar contexts.");
         var names = new HashSet<string>(StringComparer.Ordinal);
@@ -17,7 +17,7 @@ public sealed unsafe partial class Language
             _grammarContexts.Add(flag, 1UL << _grammarContexts.Count);
         }
         foreach (var module in modules)
-            foreach (var flag in module.ContextReferences)
+            foreach (var flag in (module as IGrammarContextModule)?.ContextReferences ?? Array.Empty<GrammarContextDecl>())
                 if (!_grammarContexts.ContainsKey(flag))
                     throw new LanguageCompositionException($"Module '{module.Name}' needs grammar context '{flag}', whose declaration is not selected.");
     }

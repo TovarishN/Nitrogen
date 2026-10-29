@@ -20,4 +20,9 @@ public class GrammarContextExampleTests
         using var service=new NitrogenLanguageService(LspCommand.Registry());service.ConfigureWorkspace(root);service.Open(uri,1,sample);Assert.Empty(service.Diagnostics(uri));
         var target=Assert.Single(service.Definition(uri,new LineMap(sample).PositionOf(sample.IndexOf("bang",StringComparison.Ordinal)+1)));Assert.EndsWith("ScopedWords.ngr",new Uri(target.Uri).LocalPath);
     }
+    [Fact]public void Context_metadata_does_not_reserve_existing_rule_property_names()
+    {
+        var workspace=new GrammarWorkspace();workspace.SetGrammar("names.ngr","syntax module A { context F; syntax ContextDeclarations = \"x\"; syntax ContextReferences = \"y\"; syntax Root = with(F = true) ContextDeclarations; }");
+        using var snapshot=workspace.Compile();Assert.True(snapshot.Succeeded,string.Join(";",snapshot.Diagnostics));using var p=snapshot.Parse("x","A.Root");Assert.True(p.Success&&!p.HasErrors);
+    }
 }

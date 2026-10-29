@@ -19,12 +19,6 @@ public abstract class SyntaxModule
         KindBase = Id << 16;
     }
 
-    /// <summary>Boolean grammar flags declared by this module.</summary>
-    public virtual IReadOnlyList<GrammarContextDecl> ContextDeclarations => [];
-
-    /// <summary>Flags this module reads or scopes; their owners must be selected.</summary>
-    public virtual IReadOnlyList<GrammarContextDecl> ContextReferences => [];
-
     public string Name { get; }
 
     public int Id { get; }

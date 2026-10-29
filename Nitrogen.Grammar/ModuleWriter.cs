@@ -14,6 +14,8 @@ internal static class ModuleWriter
         var firstSets = new FirstSets(model);
         var rules = model.Analysis.PrimaryRules(module).ToList();
         var points = rules.OfType<ExtensibleRule>().ToList();
+        var contexts=model.Analysis.ContextReferences(module).ToArray();
+        bool hasContexts=module.Contexts.Count>0||contexts.Length>0;
         var alternatives = info.Kinds.Where(k => k.Alternative is not null).ToList();
         string cls = info.ClassName;
         var semantics = new SemanticsWriter(model, info);
@@ -26,7 +28,7 @@ internal static class ModuleWriter
             .Append("#pragma warning disable CS0164 // recovery labels (issue 235) are emitted for every element of a committed sequence\n\n")
             .Append(hasSemantics ? "using System;\nusing System.Collections.Generic;\nusing System.Linq;\nusing Nitrogen;\n\n" : "using System;\nusing Nitrogen;\n\n")
             .Append($"namespace {info.Namespace};\n\n")
-            .Append($"public sealed unsafe class {cls} : SyntaxModule\n{{\n")
+            .Append($"public sealed unsafe class {cls} : SyntaxModule{(hasContexts ? ", IGrammarContextModule" : "")}\n{{\n")
             .Append($"    public static readonly {cls} Instance = new();\n\n");
 
         foreach (var kind in info.Kinds) b.Append($"    public const int L{kind.Name} = {kind.Local};\n");
@@ -36,17 +38,18 @@ internal static class ModuleWriter
             .Append(" };\n\n");
 
         if(module.Contexts.Count>0)
-            b.Append("    readonly GrammarContextDecl[] _contextDeclarations;\n    public override System.Collections.Generic.IReadOnlyList<GrammarContextDecl> ContextDeclarations => _contextDeclarations;\n\n");
-        var contexts=model.Analysis.ContextReferences(module).ToArray();
+            b.Append("    readonly GrammarContextDecl[] _contextDeclarations;\n    System.Collections.Generic.IReadOnlyList<GrammarContextDecl> IGrammarContextModule.ContextDeclarations => _contextDeclarations;\n\n");
+        else if(hasContexts) b.Append("    System.Collections.Generic.IReadOnlyList<GrammarContextDecl> IGrammarContextModule.ContextDeclarations => Array.Empty<GrammarContextDecl>();\n\n");
         if(contexts.Length>0)
         {
             string Reference(GrammarContextSymbol c)
             {
-                var target=model.Info(c.Module);return target.TypeRef(info,target.ClassName)+".Instance.ContextDeclarations["+c.Index+"]";
+                var target=model.Info(c.Module);return "((IGrammarContextModule)"+target.TypeRef(info,target.ClassName)+".Instance).ContextDeclarations["+c.Index+"]";
             }
-            b.Append("    public override System.Collections.Generic.IReadOnlyList<GrammarContextDecl> ContextReferences => new GrammarContextDecl[] { ")
+            b.Append("    System.Collections.Generic.IReadOnlyList<GrammarContextDecl> IGrammarContextModule.ContextReferences => new GrammarContextDecl[] { ")
                 .Append(string.Join(", ",contexts.Select(Reference))).Append(" };\n\n");
         }
+        else if(hasContexts) b.Append("    System.Collections.Generic.IReadOnlyList<GrammarContextDecl> IGrammarContextModule.ContextReferences => Array.Empty<GrammarContextDecl>();\n\n");
         foreach (var point in points) b.Append($"    public readonly ExtensionPointDecl {CSharpText.Identifier(point.Name)};\n\n");
         b.Append($"    {cls}() : base({CSharpText.Literal(module.Name)})\n    {{\n");
         if(module.Contexts.Count>0)

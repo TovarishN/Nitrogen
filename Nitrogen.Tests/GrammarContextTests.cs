@@ -3,12 +3,13 @@ namespace Nitrogen.Tests;
 // Generic synthetic grammar, NOT a C# parser. Marker a/n controls the same payload x.
 public unsafe class GrammarContextTests
 {
-    sealed class ProbeModule : SyntaxModule
+    sealed class ProbeModule : SyntaxModule, IGrammarContextModule
     {
         internal static readonly ProbeModule Instance = new();
         internal readonly GrammarContextDecl Flag;
         internal readonly GrammarContextDecl Other;
-        public override IReadOnlyList<GrammarContextDecl> ContextDeclarations => [Flag,Other];
+        public IReadOnlyList<GrammarContextDecl> ContextReferences => [];
+        public IReadOnlyList<GrammarContextDecl> ContextDeclarations => [Flag,Other];
         internal readonly ExtensionPointDecl Expr;
         internal readonly ExtensionPointDecl EnabledOnly;
         ProbeModule() : base("GrammarContextRuntime") { Flag=new(this,"Flag");Other=new(this,"Other");Expr = new(this,"Expr"); EnabledOnly = new(this,"EnabledOnly"); }
@@ -81,14 +82,14 @@ public unsafe class GrammarContextTests
             Assert.False(memo.TryGet(7,i,out _,out _,out _,1));
         }
     }
-    sealed class FlagsModule : SyntaxModule
+    sealed class FlagsModule : SyntaxModule, IGrammarContextModule
     {
         readonly GrammarContextDecl[] _flags;
         readonly GrammarContextDecl[] _references;
         public FlagsModule(string name,int count,GrammarContextDecl[]? references=null):base(name)
         {_flags=Enumerable.Range(0,count).Select(i=>new GrammarContextDecl(this,"F"+i.ToString("D2"))).ToArray();_references=references??[];}
-        public override IReadOnlyList<GrammarContextDecl> ContextDeclarations=>_flags;
-        public override IReadOnlyList<GrammarContextDecl> ContextReferences=>_references;
+        public IReadOnlyList<GrammarContextDecl> ContextDeclarations=>_flags;
+        public IReadOnlyList<GrammarContextDecl> ContextReferences=>_references;
         public override string GetKindName(int k)=>"unused";
         public override void Register(ExtensionRegistry r){}
     }

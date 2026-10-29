@@ -60,4 +60,9 @@ public class GrammarContextCompilerTests
         string text="syntax module A { context F; syntax Root = "+body+"; }";
         Assert.False(GrammarParser.Parse(text).Success);Assert.False(Nitrogen.Ngr.NgrParser.Parse(text).Success);
     }
+    [Fact]public void Existing_nested_choices_without_context_keep_their_nominal_rule_kind()
+    {
+        var result=Compile("syntax module A { syntax R = (X / Y) / (U / V); syntax X=\"x\"; syntax Y=\"y\"; syntax U=\"u\"; syntax V=\"v\"; }");
+        Assert.False(result.HasErrors);Assert.Contains("public const int LR =",Assert.Single(result.Sources).Code);
+    }
 }

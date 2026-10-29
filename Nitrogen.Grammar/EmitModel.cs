@@ -124,10 +124,11 @@ internal sealed class EmitModel
         (IsLiteralsAndReferences(rule.Body) && rule.Clauses.Count == 0 && rule.Semantics is null);
 
     static bool IsReferences(Expr body) =>
-        body is ReferenceExpr || (body is ContextScopeExpr context && IsReferences(context.Inner)) || (body is ChoiceExpr choice && choice.Alternatives.All(IsReferences));
+        body is ReferenceExpr || (body is ContextScopeExpr context && IsReferences(context.Inner)) ||
+        (body is ChoiceExpr choice && choice.Alternatives.All(a => a is ReferenceExpr || a is ContextScopeExpr scope && IsReferences(scope.Inner)));
 
     static bool IsLiteralsAndReferences(Expr body) =>
-        IsAliasPart(body) || (body is ChoiceExpr choice && choice.Alternatives.All(IsAliasPart));
+        (body is ContextScopeExpr context && IsLiteralsAndReferences(context.Inner)) || IsAliasPart(body) || (body is ChoiceExpr choice && choice.Alternatives.All(IsAliasPart));
 
     static bool IsAliasPart(Expr expr) => expr is ReferenceExpr or LiteralExpr || (expr is ContextScopeExpr context && IsAliasPart(context.Inner));
 

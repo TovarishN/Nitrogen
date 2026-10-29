@@ -23,8 +23,11 @@ internal sealed class SyntaxCodeWriter
         _helpers = helpers;
     }
 
-    public static IReadOnlyList<Expr> Elements(Expr body) =>
-        body is SequenceExpr sequence ? sequence.Items.ToList() : new List<Expr> { body };
+    public static IReadOnlyList<Expr> Elements(Expr body)
+    {
+        body=GrammarContextSyntax.Unwrap(body);
+        return body is SequenceExpr sequence ? sequence.Items.ToList() : new List<Expr> { body };
+    }
 
     public static string MethodName(KindInfo kind) => $"Parse{kind.Point!.Rule.Name}_{kind.Alternative!.Name}";
 
@@ -35,7 +38,7 @@ internal sealed class SyntaxCodeWriter
         {
             var alternatives = rule.Body is ChoiceExpr choice ? choice.Alternatives.ToList() : new List<Expr> { rule.Body };
             // A literal alternative matches where the caller left off, so a start rule skips its leading trivia.
-            bool skips = alternatives.Any(a => a is LiteralExpr);
+            bool skips = EmitModel.AliasAlternatives(rule).Any(a => a is LiteralExpr);
             b.Append(skips ? $"    internal static bool Parse{rule.Name}(ref ParserState s)\n    {{\n        s.SkipTrivia();\n        return "
                     : $"    internal static bool Parse{rule.Name}(ref ParserState s) =>\n        ")
                 .Append($"s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})\n        || ")
@@ -53,7 +56,8 @@ internal sealed class SyntaxCodeWriter
             .Append($"        bool parsed = Parse{rule.Name}__(ref s);\n")
             .Append($"        s.EndRule({_info.KindsName}.{CSharpText.Identifier(rule.Name)}, at, outer, parsed);\n")
             .Append("        return parsed;\n    }\n\n");
-        b.Append($"    static bool Parse{rule.Name}__(ref ParserState s)\n    {{\n");
+        string implementation=RootContextBody(b,$"Parse{rule.Name}__",rule.Body,module,null);
+        b.Append($"    static bool {implementation}(ref ParserState s)\n    {{\n");
         b.Append($"        if (s.TryHole({CSharpText.Literal(module.Name + "." + rule.Name)})) return true;\n");
         if (LeadingLiteral(elements[0]) is { } literal)
         {
@@ -64,7 +68,7 @@ internal sealed class SyntaxCodeWriter
         }
         b.Append("        var start = s.Mark();\n")
             .Append($"        s.Open({_info.KindsName}.{CSharpText.Identifier(rule.Name)});\n");
-        WriteElements(b, rule.Body as SequenceExpr, elements, module, null);
+        WriteElements(b, GrammarContextSyntax.Unwrap(rule.Body) as SequenceExpr, elements, module, null);
         b.Append("    }\n\n");
     }
 
@@ -93,12 +97,13 @@ internal sealed class SyntaxCodeWriter
         var elements = Elements(alternative.Body);
         int first = postfix ? 1 : 0;
         var sites = new RecoverySite?[elements.Count];
-        if (alternative.Body is SequenceExpr sequence)
+        if (GrammarContextSyntax.Unwrap(alternative.Body) is SequenceExpr sequence)
             for (int i = first; i < elements.Count; i++)
                 if (_model.Commits.Site(sequence, i) is { Kind: not CommitKind.None } committed) sites[i] = committed;
         bool labels = sites.Any(site => site is not null);
         string kindRef = $"{_info.KindsName}.{CSharpText.Identifier(kind.Name)}";
-        b.Append($"    static bool {MethodName(kind)}(ref ParserState s)\n    {{\n");
+        string implementation=RootContextBody(b,MethodName(kind),alternative.Body,module,implicitModule);
+        b.Append($"    static bool {implementation}(ref ParserState s)\n    {{\n");
         for (int i = first; i < elements.Count; i++)
         {
             int minPrecedence = i == elements.Count - 1 && ReferencesPoint(elements[i], module, implicitModule, point)
@@ -500,11 +505,19 @@ internal sealed class SyntaxCodeWriter
         _ => "character",
     };
 
+    string RootContextBody(StringBuilder b,string entry,Expr body,ModuleDecl module,string? implicitModule)
+    {
+        if(body is not ContextScopeExpr context)return entry;
+        string child="_contextBody"+_counter++;
+        b.Append($"    static bool {entry}(ref ParserState s) => s.ParseWithContext({ContextReference(context.Context,module,implicitModule)}, {(context.Value ? "true" : "false")}, &{child});\n\n");
+        return RootContextBody(b,child,context.Inner,module,implicitModule);
+    }
+
     string ContextReference(NameDecl name,ModuleDecl module,string? implicitModule)
     {
         var target=_model.Analysis.ResolveContext(name,module,implicitModule) ?? throw new InvalidOperationException("unresolved context");
         var info=_model.Info(target.Module);
-        return info.TypeRef(_info,info.ClassName)+".Instance.ContextDeclarations["+target.Index+"]";
+        return "((IGrammarContextModule)"+info.TypeRef(_info,info.ClassName)+".Instance).ContextDeclarations["+target.Index+"]";
     }
 
     string NewContextHelper(Expr inner,ModuleDecl module,string? implicitModule,int precedence,string? repair)

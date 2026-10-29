@@ -15,3 +15,10 @@ public sealed class GrammarContextDecl
     public string QualifiedName => Owner.Name + "." + Name;
     public override string ToString() => QualifiedName;
 }
+
+/// <summary>Optional grammar context metadata, kept separate from SyntaxModule's existing member names.</summary>
+public interface IGrammarContextModule
+{
+    IReadOnlyList<GrammarContextDecl> ContextDeclarations { get; }
+    IReadOnlyList<GrammarContextDecl> ContextReferences { get; }
+}
