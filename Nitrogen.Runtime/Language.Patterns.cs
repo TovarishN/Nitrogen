@@ -15,6 +15,23 @@ public sealed unsafe partial class Language
         }
     }
 
+    readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lazy<PatternCompilation?>> _publicNamedPatterns = new(StringComparer.Ordinal);
+
+    /// <summary>A named pattern of this language, or null when it is unknown or invalid. The language owns it; do not dispose it.</summary>
+    public QuotePattern? NamedPattern(string qualifiedName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(qualifiedName);
+        return _publicNamedPatterns.GetOrAdd(qualifiedName, name => new Lazy<PatternCompilation?>(() =>
+        {
+            if (NamedPatternTable.Find(name) is not { Valid: true } definition) return null;
+            // One whole-pattern reference hole; its capture is internal, so matches publish none.
+            var compiled = CompilePatternCore(definition.Category, "$it",
+                new Dictionary<string, QuoteHole> { ["it"] = QuoteHole.Pattern(name) }, NamedPatternTable);
+            compiled.Pattern?.HideCaptures();
+            return compiled;
+        })).Value?.Pattern;
+    }
+
     /// <summary>Compiles a read-only syntax pattern. The result owns its parsed pattern storage.</summary>
     public PatternCompilation CompilePattern(string category, string text, IReadOnlyDictionary<string, QuoteHole> captures)
         => CompilePatternCore(category, text, captures, NamedPatternTable);

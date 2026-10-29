@@ -57,6 +57,34 @@ internal sealed class QuotePatternMatcher(QuotePattern root, Func<QuoteNode, Quo
         return null;
     }
 
+    // Nodes whose subtree Validate would reject, computed bottom-up in one pass.
+    internal static HashSet<int> InvalidSubtrees(QuoteNode root, QuoteMatchBudget budget)
+    {
+        var tree = root.Tree;
+        var invalid = new HashSet<int>();
+        var work = new Stack<(int Node, bool Exit)>();
+        work.Push((root.Node, false));
+        while (work.TryPop(out var item))
+        {
+            budget.Step();
+            int node = item.Node;
+            if (!item.Exit)
+            {
+                work.Push((node, true));
+                for (int i = tree.ChildCount(node) - 1; i >= 0; i--)
+                    if (tree.Child(node, i) is var child && child != SyntaxTree.NoNode) work.Push((child, false));
+                continue;
+            }
+            bool bad = tree.Flags(node) != NodeFlags.None || tree.Kind(node) is
+                SyntaxKinds.None or SyntaxKinds.Error or SyntaxKinds.Ambiguous or SyntaxKinds.Hole or SyntaxKinds.ListHole or SyntaxKinds.Skipped ||
+                !tree.SkippedTrivia(node).IsEmpty;
+            for (int i = 0; !bad && i < tree.ChildCount(node); i++)
+                bad = tree.Child(node, i) is var child && child != SyntaxTree.NoNode && invalid.Contains(child);
+            if (bad) invalid.Add(node);
+        }
+        return invalid;
+    }
+
     internal QuoteMatchResult Match(QuoteNode input)
     {
         Pending? work = new(new NodeJob(new(root, 0), root.Tree.Root, input), null);

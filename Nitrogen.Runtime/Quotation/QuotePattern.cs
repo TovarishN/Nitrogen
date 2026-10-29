@@ -45,6 +45,10 @@ public sealed class QuotePattern
     /// <summary>The named pattern when this whole pattern is one reference hole; it consumes no syntax.</summary>
     internal NamedPatternDefinition? RootReference { get; }
 
+    bool _hideCaptures;
+
+    internal void HideCaptures() => _hideCaptures = true;
+
     internal void DisposeStorage()
     {
         if (_disposed) return;
@@ -83,7 +87,55 @@ public sealed class QuotePattern
         if (invalid is not null) return invalid;
         if (!language.AcceptsQuoteNode(_category, input.Tree, input.Node))
             return QuotePatternMatcher.Invalid("NQP0005", "Input category does not match.");
-        return new QuotePatternMatcher(this, resolve, budget).Match(input);
+        return Published(new QuotePatternMatcher(this, resolve, budget).Match(input));
+    }
+
+    QuoteMatchResult Published(QuoteMatchResult result) => _hideCaptures && result.Captures.Count > 0
+        ? result with { Captures = new System.Collections.ObjectModel.ReadOnlyDictionary<string, QuoteArgument>(new Dictionary<string, QuoteArgument>()) }
+        : result;
+
+    /// <summary>
+    /// Matches every node at or below <paramref name="root"/> in preorder, document order, including nested matches.
+    /// Nodes whose own subtree has recovered or ambiguous syntax are skipped. One work limit covers the whole search.
+    /// </summary>
+    public QuoteFindResult FindAll(QuoteNode root, QuoteMatchOptions? options = null)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        options ??= new QuoteMatchOptions();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxWorkSteps);
+        options.CancellationToken.ThrowIfCancellationRequested();
+        var matches = new List<QuoteFoundMatch>();
+        if (_disposed) return Incomplete("NQP0004", "The pattern compilation has been disposed.");
+        if (root.Tree is null || root.Tree.IsDisposed || (uint)root.Node >= (uint)root.Tree.NodeCount)
+            return Incomplete("NQP0004", "Invalid or disposed input syntax.");
+        var language = _parsed.Tree.Language!;
+        if (!ReferenceEquals(root.Tree.Language, language)) return Incomplete("NQP0005", "Input language snapshot does not match.");
+        var budget = new QuoteMatchBudget(options);
+        try
+        {
+            var invalid = QuotePatternMatcher.InvalidSubtrees(root, budget);
+            var work = new Stack<int>();
+            work.Push(root.Node);
+            while (work.TryPop(out int node))
+            {
+                budget.Step();
+                var tree = root.Tree;
+                for (int i = tree.ChildCount(node) - 1; i >= 0; i--)
+                    if (tree.Child(node, i) is var child && child != SyntaxTree.NoNode) work.Push(child);
+                if (invalid.Contains(node) || !language.AcceptsQuoteNode(_category, tree, node)) continue;
+                var candidate = new QuoteNode(tree, node, root.Origin);
+                var result = Published(new QuotePatternMatcher(this, null, budget).Match(candidate));
+                if (result.Matched) matches.Add(new(candidate, result.Captures));
+            }
+        }
+        catch (QuoteMatchLimitException)
+        {
+            return Incomplete("NQP0006", "The syntax-pattern search exceeded its work limit.");
+        }
+        return new(matches.AsReadOnly(), true, []);
+
+        QuoteFindResult Incomplete(string code, string message) =>
+            new(matches.AsReadOnly(), false, [new QuoteDiagnostic(code, default, message)]);
     }
 }
 

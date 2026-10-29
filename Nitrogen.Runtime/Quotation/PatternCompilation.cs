@@ -16,6 +16,12 @@ public sealed class PatternCompilation : IDisposable
     public void Dispose() => Pattern?.DisposeStorage();
 }
 
+/// <summary>One node a search matched, with that match's captures. Both borrow the input syntax.</summary>
+public sealed record QuoteFoundMatch(QuoteNode Node, IReadOnlyDictionary<string, QuoteArgument> Captures);
+
+/// <summary>Every match of a search in preorder; <see cref="Complete"/> is false when the work limit stopped it early.</summary>
+public sealed record QuoteFindResult(IReadOnlyList<QuoteFoundMatch> Matches, bool Complete, IReadOnlyList<QuoteDiagnostic> Diagnostics);
+
 /// <summary>A successful match borrows its captures from the input syntax. Keep that syntax alive while consuming them.</summary>
 public sealed record QuoteMatchResult(bool Matched, IReadOnlyDictionary<string, QuoteArgument> Captures,
     IReadOnlyList<QuoteDiagnostic> Diagnostics);
