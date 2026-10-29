@@ -674,6 +674,10 @@
           "include": "#check"
         },
         {
+          "match": "\\b(?:inside|parent)\\b(?=\\s*(?:[A-Za-z_][A-Za-z0-9_.]*\\s*)?(?:\\(|<\\[))",
+          "name": "keyword.control.context.ngr"
+        },
+        {
           "include": "#property-decl"
         },
         {
@@ -1180,7 +1184,36 @@
           "include": "#function"
         },
         {
+          "include": "#named-pattern"
+        },
+        {
           "include": "#syntax-rule"
+        }
+      ]
+    },
+    "named-pattern": {
+      "name": "meta.pattern.ngr",
+      "begin": "\\b(pattern)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(:)",
+      "end": ";",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.type.pattern.ngr"
+        },
+        "2": {
+          "name": "entity.name.function.pattern.ngr"
+        },
+        "3": {
+          "name": "punctuation.separator.ngr"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.terminator.ngr"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#expression"
         }
       ]
     },
