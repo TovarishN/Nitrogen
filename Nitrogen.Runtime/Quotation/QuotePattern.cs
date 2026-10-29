@@ -9,11 +9,19 @@ public sealed class QuotePattern
     readonly IReadOnlyDictionary<int, QuotePatternList> _lists;
     bool _disposed;
 
-    internal QuotePattern(ParseResult parsed, string category, IReadOnlyDictionary<string, QuoteHole> captures)
+    internal QuotePattern(ParseResult parsed, string category, IReadOnlyDictionary<string, QuoteHole> captures,
+        IReadOnlyDictionary<string, NamedPatternDefinition>? references = null)
     {
         _parsed = parsed;
         _category = category;
         _captures = captures;
+        References = references ?? new Dictionary<string, NamedPatternDefinition>(StringComparer.Ordinal);
+        // A whole-pattern hole naming a pattern matches the same node again: a non-consuming reference.
+        int root = parsed.Tree.Root;
+        while (parsed.Tree.Kind(root) == SyntaxKinds.Group && parsed.Tree.ChildCount(root) == 1) root = parsed.Tree.Child(root, 0);
+        if (parsed.Tree.Kind(root) == SyntaxKinds.Hole &&
+            References.TryGetValue(parsed.Tree.GetText(root)[1..].ToString(), out var target))
+            RootReference = target;
         var lists = new Dictionary<int, QuotePatternList>();
         // A template list is a List node, or a list hole standing alone as its collapsed one-item list.
         foreach (var (node, shape) in parsed.Tree.TemplateLists)
@@ -26,6 +34,12 @@ public sealed class QuotePattern
         }
         _lists = lists;
     }
+
+    /// <summary>Named patterns required at holes, by capture name.</summary>
+    internal IReadOnlyDictionary<string, NamedPatternDefinition> References { get; }
+
+    /// <summary>The named pattern when this whole pattern is one reference hole; it consumes no syntax.</summary>
+    internal NamedPatternDefinition? RootReference { get; }
 
     internal void DisposeStorage()
     {

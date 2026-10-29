@@ -4,10 +4,10 @@ namespace Nitrogen;
 public sealed class PatternCompilation : IDisposable
 {
     internal PatternCompilation(ParseResult? parsed, string category, IReadOnlyDictionary<string, QuoteHole> captures,
-        IReadOnlyList<QuoteDiagnostic> diagnostics)
+        IReadOnlyList<QuoteDiagnostic> diagnostics, IReadOnlyDictionary<string, NamedPatternDefinition>? references = null)
     {
         Diagnostics = Array.AsReadOnly(diagnostics.ToArray());
-        if (parsed is not null) Pattern = new(parsed, category, captures);
+        if (parsed is not null) Pattern = new(parsed, category, captures, references);
     }
 
     public bool Success => Pattern is not null;

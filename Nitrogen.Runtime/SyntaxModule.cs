@@ -64,6 +64,9 @@ public abstract class SyntaxModule
 
     public virtual IReadOnlyList<SyntaxDiagnosticPattern> DiagnosticPatterns => [];
 
+    /// <summary>The module's named patterns, compiled once by each language that includes the module.</summary>
+    public virtual IReadOnlyList<NamedPatternSpec> NamedPatterns => [];
+
     /// <summary>Syntax categories supported by this generated module.</summary>
     public virtual IReadOnlyList<string> QuoteCategoryNames => [];
 
