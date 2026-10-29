@@ -71,4 +71,27 @@ public class GeneratedGrammarContextTests
         var scoped=SyntaxView.Cast<C.PairScopedPoint>(alternative.Tree,alternative.Tree.Root);C.ExprNode altLeft=scoped.Left;C.ExprNode altRight=scoped.Right;
         Assert.Equal(alternative.Tree.Root,alternative.Tree.Parent(altLeft.Index));Assert.Equal("x",Text(alternative,altRight.Span));
     }
+    [Theory][InlineData("a x","Enabled")][InlineData("n x","Disabled")]
+    public void Context_selected_branches_keep_typed_fields_spans_and_the_original_owner(string source,string expected)
+    {
+        using var p=L.Parse(source,C.GrammarContextModule.Selected);Assert.True(p.Success&&!p.HasErrors);
+        var node=SyntaxView.Cast<C.SelectedNode>(p.Tree,p.Tree.Root);Token header=node.Header;C.ExprNode body=node.Body;
+        Assert.Equal(source[..1],Text(p,header.Span));Assert.Equal("x",Text(p,body.Span));
+        Assert.Equal(expected,L.GetKindName(body.Kind));Assert.Equal(p.Tree.Root,p.Tree.Parent(body.Index));
+        using var recovered=L.ParseRecovering(source,C.GrammarContextModule.Selected);TreeAssert.Same(p,recovered);
+    }
+    [Theory][InlineData("a x","Disabled")][InlineData("n x","Disabled")]
+    public void Context_selected_alternatives_restore_scopes_and_keep_the_existing_owner(string source,string expected)
+    {
+        using var p=L.Parse(source,C.GrammarContextModule.SelectedEntry);Assert.True(p.Success&&!p.HasErrors);
+        var node=SyntaxView.Cast<C.SelectedBranchSelection>(p.Tree,p.Tree.Root);Token header=node.Header;C.ExprNode body=node.Body;
+        Assert.Equal(expected,L.GetKindName(body.Kind));Assert.Equal(p.Tree.Root,p.Tree.Parent(body.Index));
+        Assert.Equal(source[..1],Text(p,header.Span));
+    }
+    [Fact]public void Context_selected_header_edits_match_full_trees_in_both_directions()
+    {
+        using var first=L.ParseIncremental("a x",C.GrammarContextModule.Selected);
+        using var second=L.Reparse(first,"n x",[new(0,1,1)]);using var full=L.Parse("n x",C.GrammarContextModule.Selected);TreeAssert.Same(full,second);
+        using var third=L.Reparse(second,"a x",[new(0,1,1)]);using var restored=L.Parse("a x",C.GrammarContextModule.Selected);TreeAssert.Same(restored,third);
+    }
 }

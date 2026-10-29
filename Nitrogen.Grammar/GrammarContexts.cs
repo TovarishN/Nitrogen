@@ -73,6 +73,37 @@ internal sealed partial class GrammarAnalysis
 
 internal static class GrammarContextSyntax
 {
+    // This is an opt-in shape rule for the new context syntax. Legacy choices retain their
+    // nominal groups. Only branches with exactly the same material fields may share an owner.
+    public static ChoiceExpr? SharedChoice(Expr body)
+    {
+        if (Unwrap(body) is not ChoiceExpr choice || choice.Alternatives.Count < 2 || !ContainsContext(choice)) return null;
+        string shape = GrammarDumper.Dump(Material(choice.Alternatives[0]));
+        return choice.Alternatives.Skip(1).All(a => GrammarDumper.Dump(Material(a)) == shape) ? choice : null;
+    }
+
+    public static IEnumerable<Expr> FlatElements(Expr expr)
+    {
+        expr=Unwrap(expr);
+        if(expr is SequenceExpr sequence)
+            return sequence.Items.SelectMany(FlatElements);
+        return new[]{expr};
+    }
+
+    static bool ContainsContext(Expr expr) => expr is ContextScopeExpr or ContextTestExpr ||
+        GrammarExtraction.Children(expr).Any(ContainsContext);
+
+    static Expr Material(Expr expr) => expr switch
+    {
+        ContextScopeExpr c => Material(c.Inner),
+        LabeledExpr l => l with { Inner = Material(l.Inner) },
+        SequenceExpr s => s with { Items = s.Items.Where(e => !NoNode(e)).Select(Material).ToArray() },
+        ChoiceExpr c => c with { Alternatives = c.Alternatives.Select(Material).ToArray() },
+        RepeatExpr r => r with { Inner = Material(r.Inner) },
+        SeparatedListExpr l => l with { Item = Material(l.Item), Separator = Material(l.Separator) },
+        _ => expr,
+    };
+
     public static Expr Unwrap(Expr expr) => expr is ContextScopeExpr context ? Unwrap(context.Inner) : expr;
 
     public static bool NoNode(Expr expr) => expr switch

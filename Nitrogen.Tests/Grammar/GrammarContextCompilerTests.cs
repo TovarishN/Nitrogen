@@ -67,4 +67,20 @@ public class GrammarContextCompilerTests
         var result=Compile("syntax module A { syntax R = (X / Y) / (U / V); syntax X=\"x\"; syntax Y=\"y\"; syntax U=\"u\"; syntax V=\"v\"; }");
         Assert.False(result.HasErrors);Assert.Contains("public const int LR =",Assert.Single(result.Sources).Code);
     }
+    [Fact]public void Context_selected_same_layout_branches_keep_the_existing_named_fields()
+    {
+        var result=Compile("syntax module A { context F; syntax R = (&\"a\" Header:X Body:with(F = true) Y) / (!\"a\" Header:X Body:Y); token X = \"a\" / \"n\"; syntax Y = \"x\"; }");
+        Assert.False(result.HasErrors,string.Join(";",result.Diagnostics.Select(d=>d.Diagnostic.Message)));
+        string code=Assert.Single(result.Sources).Code;
+        Assert.Contains("Token Header =>",code);Assert.Contains("Token Body =>",code);
+    }
+    [Theory]
+    [InlineData("syntax R = (&\"a\" Header:X Body:Y) / (!\"a\" Header:X Body:Y);")]
+    [InlineData("context F; syntax R = (&\"a\" Header:X Body:with(F = true) Y) / (!\"a\" Other:X Body:Y);")]
+    public void Legacy_and_different_layout_choices_keep_their_nominal_groups(string body)
+    {
+        var result=Compile("syntax module A { "+body+" token X = \"a\" / \"n\"; syntax Y = \"x\"; }");
+        Assert.False(result.HasErrors);string code=Assert.Single(result.Sources).Code;
+        Assert.DoesNotContain("Token Header =>",code);Assert.DoesNotContain("ContextBranch",code);
+    }
 }

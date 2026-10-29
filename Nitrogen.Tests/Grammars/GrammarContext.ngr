@@ -14,6 +14,12 @@ syntax module GrammarContext
     syntax Off = with(Enabled = false) Expr;
     syntax ViaEntry = Entry;
     extensible syntax Entry { | transparent Scoped = with(Enabled = true) Expr }
+    token Mode = "a" / "n";
+    syntax Selected = (&"a" with(Enabled = true) (Header:Mode Body:Expr)) / (!"a" (Header:Mode Body:Expr));
+    syntax SelectedEntry = Selection;
+    extensible syntax Selection {
+        | SelectedBranch = with(Enabled = true) (&"a" Header:Mode Body:with(Enabled = false) Expr) / (!"a" Header:Mode Body:Expr)
+    }
     syntax ScopedPair = with(Enabled = true) (Left:Expr "," Right:Expr);
     syntax ScopedPointEntry = ScopedPoint;
     extensible syntax ScopedPoint { | Pair = with(Enabled = true) (Left:Expr "," Right:Expr) }
