@@ -86,6 +86,7 @@ internal sealed class QuoteHelperSourceIndex
                         string captureId = scopeId + ":parameter:" + capture.Name.Name;
                         Add(captureId, path, capture.Name.Span, true, "parameter");
                         AddCategory(path, module, capture.Category);
+                        AddPatternReference(path, module, capture.Category);
                         captures[capture.Name.Name] = (new(_analysis.Helpers.Category(capture.Category, module)?.Key ?? capture.Category.Name, capture.IsList), captureId);
                     }
                     var selectorParameter = helper.Parameters.FirstOrDefault(parameter => parameter.Name.Name == match.Selector.Name);
@@ -142,6 +143,15 @@ internal sealed class QuoteHelperSourceIndex
                 }
 
             }
+            foreach (var pattern in module.Patterns)
+            {
+                Add(PatternId(module.Name, pattern.Name.Name), path, pattern.Name.Span, true, "pattern");
+                foreach (var capture in pattern.Alternatives.SelectMany(alternative => alternative.Captures))
+                    AddPatternReference(path, module, capture.Category);
+            }
+            foreach (var match in DiagnosticMatches(module))
+                foreach (var capture in match.Captures.Concat(match.Context?.Captures ?? []))
+                    AddPatternReference(path, module, capture.Category);
             foreach (var rule in module.Rules)
                 if (rule is SyntaxRule syntax) Calls(path, module, syntax.Body, syntax.Clauses);
                 else if (rule is ExtensibleRule point)
@@ -153,6 +163,39 @@ internal sealed class QuoteHelperSourceIndex
 
     void Add(string id, string path, GrammarSpan span, bool declaration, string kind) =>
         _occurrences.Add(new(id, path, span, declaration, kind));
+
+    static string PatternId(string module, string name) => "pattern:" + module + ":" + name;
+
+    // Only the last segment of a qualified reference is the pattern's own name, so renames keep the qualifier.
+    void AddPatternReference(string path, ModuleDecl module, NameDecl name)
+    {
+        if (_analysis.ResolvePattern(name.Name, module) is not { } found) return;
+        int dot = name.Name.LastIndexOf('.');
+        Add(PatternId(found.Module.Name, found.Pattern.Name.Name), path,
+            new GrammarSpan(name.Span.Start + dot + 1, name.Name.Length - dot - 1), false, "pattern");
+    }
+
+    static IEnumerable<MatchDiagnosticStatement> DiagnosticMatches(ModuleDecl module) =>
+        module.Rules.SelectMany(rule => rule switch
+        {
+            SyntaxRule syntax => [syntax.Semantics],
+            ExtensibleRule point => point.Alternatives.Select(alternative => alternative.Semantics),
+            _ => [],
+        }).Concat(module.Extends.SelectMany(extend => extend.Alternatives.Select(alternative => alternative.Semantics)))
+        .SelectMany(block => block?.Statements.OfType<MatchDiagnosticStatement>() ?? []);
+
+    /// <summary>The signature of the named pattern at <paramref name="position"/>, if any.</summary>
+    public HoverInfo? PatternHover(string path, DocumentPosition position)
+    {
+        if (At(path, position) is not { Kind: "pattern" } at) return null;
+        string[] parts = at.Identity.Split(':');
+        var owner = _modules.Select(m => m.Module).First(m => m.Name == parts[1]);
+        var pattern = owner.Patterns.First(p => p.Name.Name == parts[2]);
+        string category = _analysis.Helpers.Category(pattern.Category, owner)?.Key ?? pattern.Category.Name;
+        int count = pattern.Alternatives.Count;
+        return new HoverInfo($"```\npattern {owner.Name}.{pattern.Name.Name} : {category}\n```\n{count} alternative{(count == 1 ? "" : "s")}",
+            Location(at).Range);
+    }
 
     void AddCategory(string path, ModuleDecl module, NameDecl name)
     {
@@ -254,6 +297,17 @@ internal sealed class QuoteHelperSourceIndex
         if (!_texts.TryGetValue(path, out string? text)) return null;
         int offset = new LineMap(text).OffsetOf(position);
         if (PatternCompletion(path, offset) is { } patternItems) return patternItems;
+        var descendant = Regex.Match(text[..offset], @":\s*\.\.([A-Za-z_][\w.]*|)$");
+        if (descendant.Success)
+        {
+            var current = _modules.FirstOrDefault(m => m.Path == path && m.Module.Span.Start <= offset && offset <= m.Module.Span.End).Module;
+            if (current is null) return [];
+            return _modules.Where(m => ReferenceEquals(m.Module, current) || current.Usings.Any(u => u.Module == m.Module.Name))
+                .SelectMany(m => m.Module.Patterns.Select(p => ReferenceEquals(m.Module, current) ? p.Name.Name : m.Module.Name + "." + p.Name.Name))
+                .Where(name => name.StartsWith(descendant.Groups[1].Value, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal)
+                .Select(name => new CompletionItem(name, CompletionKind.Class, "named pattern",
+                    new LineMap(text).RangeOf(new(descendant.Groups[1].Index, offset - descendant.Groups[1].Index)))).ToArray();
+        }
         var selectorPrefix = Regex.Match(text[..offset], @"\bmatch\s+([A-Za-z_][\w]*|)$");
         var helperContext = _modules.Where(module => module.Path == path).SelectMany(module => module.Module.Helpers)
             .FirstOrDefault(helper => helper.Span.Start <= offset && offset <= helper.Span.End);
@@ -268,12 +322,15 @@ internal sealed class QuoteHelperSourceIndex
         if (categoryPrefix.Success && helperContext is not null && !inQuote)
         {
             var owner = _modules.First(module => module.Path == path && module.Module.Helpers.Contains(helperContext)).Module;
+            // Arm captures may also name a pattern; helper parameters and return types may not.
+            bool armCapture = helperContext.Match?.Arms.Any(arm => arm.Span.Start <= offset && offset <= arm.Pattern.Span.Start) == true;
             return _modules.SelectMany(module => module.Module.Rules.Where(rule => rule is SyntaxRule or ExtensibleRule)
-                    .Select(rule => (Owner: module.Module, Rule: rule)))
+                    .Select(rule => (Owner: module.Module, Name: rule.Name, Detail: "syntax category"))
+                    .Concat(armCapture ? module.Module.Patterns.Select(p => (Owner: module.Module, Name: p.Name.Name, Detail: "named pattern")) : []))
                 .Where(entry => ReferenceEquals(entry.Owner, owner) || owner.Usings.Any(imported => imported.Module == entry.Owner.Name) || categoryPrefix.Groups[1].Value.Contains('.'))
-                .Select(entry => ReferenceEquals(entry.Owner, owner) ? entry.Rule.Name : entry.Owner.Name + "." + entry.Rule.Name)
-                .Where(name => name.StartsWith(categoryPrefix.Groups[1].Value, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal)
-                .Select(name => new CompletionItem(name, CompletionKind.Class, "syntax category",
+                .Select(entry => (Name: ReferenceEquals(entry.Owner, owner) ? entry.Name : entry.Owner.Name + "." + entry.Name, entry.Detail))
+                .Where(entry => entry.Name.StartsWith(categoryPrefix.Groups[1].Value, StringComparison.Ordinal)).DistinctBy(entry => entry.Name)
+                .Select(entry => new CompletionItem(entry.Name, CompletionKind.Class, entry.Detail,
                     new LineMap(text).RangeOf(new(categoryPrefix.Groups[1].Index, offset - categoryPrefix.Groups[1].Index)))).ToArray();
         }
         var prefix = Regex.Match(text[..offset], @"\brewrites\s+([A-Za-z_][\w.]*|)$");
@@ -300,7 +357,7 @@ internal sealed class QuoteHelperSourceIndex
     public IReadOnlyDictionary<string, IReadOnlyList<DocumentEdit>> Rename(string path, DocumentPosition position, string newName)
     {
         var target = At(path, position) ?? throw new RenameRefusedException("Nothing to rename here.");
-        if (target.Kind is not ("helper" or "parameter"))
+        if (target.Kind is not ("helper" or "parameter" or "pattern"))
             throw new RenameRefusedException("This syntax category/field is used by a quote helper; update its resolved consumers together.");
         if (!Regex.IsMatch(newName, @"^[A-Za-z_]\w*$")) throw new RenameRefusedException("Choose a valid helper/parameter name.");
         if (target.Kind == "parameter" && _unparsedHelpers.Contains(target.Identity[..target.Identity.IndexOf(":parameter:", StringComparison.Ordinal)]))

@@ -53,7 +53,7 @@ syntax module Nitrogen
                           lowers Grammar.LanguagePresentationSetting(text Kind, text Name, text Value);
   syntax Module         = "syntax" "module" Name:QualifiedName "{" Members:Member* "}"  declares module Name scope
                           lowers Grammar.Module(text Name, sequence Grammar.Member Members);
-  syntax Member         = QuoteMatchHelper / QuoteHelper / GrammarFunction / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
+  syntax Member         = NamedPattern / QuoteMatchHelper / QuoteHelper / GrammarFunction / Using / Symbols / SymbolProperty / Builtin / TokenRule / SyntaxRule / ExtensibleRule / Extend;
   syntax QuoteHelper = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:TemplateString ";"
                        lowers Grammar.QuoteHelper(text Name, sequence Grammar.QuoteParameter Parameters, text Category, text Body);
   syntax QuoteMatchHelper = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" Category:QualifiedName "=" Body:QuoteMatchBody ";"
@@ -64,9 +64,14 @@ syntax module Nitrogen
                        lowers Grammar.QuoteMatchArm(optional Grammar.QuoteCaptures Captures, text Pattern, text Result);
   syntax QuoteCaptures = "(" Parameters:(QuoteParameter; ",")* ")"
                        lowers Grammar.QuoteCaptures(sequence Grammar.QuoteParameter Parameters);
-  syntax QuoteParameter = Name:Identifier ":" Category:QualifiedName List:ListMarker?
-                       lowers Grammar.QuoteParameter(text Name, text Category, optional Core.Text List);
+  syntax QuoteParameter = Name:Identifier ":" Descendant:DescendantMarker? Category:QualifiedName List:ListMarker?
+                       lowers Grammar.QuoteParameter(text Name, text Category, optional Core.Text List, optional Core.Text Descendant);
   syntax ListMarker = Value:"*" lowers text Core.Text Value;
+  syntax DescendantMarker = Value:".." lowers text Core.Text Value;
+  syntax NamedPattern = "pattern" Name:Identifier ":" Category:QualifiedName "=" "|"? Alternatives:(NamedPatternAlternative; "|")+ ";"
+                       lowers Grammar.NamedPattern(text Name, text Category, sequence Grammar.NamedPatternAlternative Alternatives);
+  syntax NamedPatternAlternative = Captures:QuoteCaptures? Pattern:TemplateString
+                       lowers Grammar.NamedPatternAlternative(optional Grammar.QuoteCaptures Captures, text Pattern);
   syntax HelperArgument = Name:Identifier lowers text Core.Text Name;
   // Grammar functions (spec: grammar functions): evaluated when the grammar is compiled.
   syntax GrammarFunction = "syntax"? "function" Name:Identifier "(" Parameters:(QuoteParameter; ",")* ")" ":" ReturnType:QualifiedName "="
@@ -159,8 +164,10 @@ syntax module Nitrogen
   syntax Check          = "check" Code:CheckCode? Condition:CsCond ":" Message:CsMessage At:CheckAt? ";"
                           lowers Grammar.Check(optional text Code, text Condition, text Message, optional Core.Text At);
   syntax CheckAt        = "at" Name:Identifier  lowers text Core.Text Name;
-  syntax MatchDiagnostic = "match" Captures:QuoteCaptures? Pattern:TemplateString "=>" Severity:("warning" / "error") Code:CheckCode ":" Message:CsCode ";"
-                          lowers Grammar.MatchDiagnostic(optional Grammar.QuoteCaptures Captures, text Pattern, text Severity, text Code, text Message);
+  syntax MatchDiagnostic = "match" Captures:QuoteCaptures? Pattern:TemplateString Context:MatchContext? "=>" Severity:("warning" / "error") Code:CheckCode ":" Message:CsCode ";"
+                          lowers Grammar.MatchDiagnostic(optional Grammar.QuoteCaptures Captures, text Pattern, text Severity, text Code, text Message, optional Grammar.MatchContext Context);
+  syntax MatchContext   = Kind:("inside" / "parent") Category:QualifiedName? Captures:QuoteCaptures? Pattern:TemplateString
+                          lowers Grammar.MatchContext(text Kind, optional text Category, optional Grammar.QuoteCaptures Captures, text Pattern);
   syntax Assignment     = Target:QualifiedName "=" Value:CsCode ";"  references? property Target  lowers Grammar.Assignment(text Target, text Value);
 
   syntax Expression     = Choices:(Sequence; "/")+  lowers Grammar.Choice(sequence Grammar.Expression Choices);

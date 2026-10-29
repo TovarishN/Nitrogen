@@ -10,7 +10,7 @@ public static class QuoteHelperValidation
     public static IReadOnlyList<WorkspaceDiagnostic> Validate(IEnumerable<GrammarInput> inputs)
     {
         var files = inputs.ToArray();
-        if (!files.Any(input => GrammarParser.Parse(input.Text).File?.Modules.Any(m => m.Helpers.Count > 0 || HasDiagnosticPatterns(m)) == true))
+        if (!files.Any(input => GrammarParser.Parse(input.Text).File?.Modules.Any(m => m.Helpers.Count > 0 || m.Patterns.Count > 0 || HasDiagnosticPatterns(m)) == true))
             return [];
         using var snapshot = CompileSyntax(files);
         return snapshot.Diagnostics;

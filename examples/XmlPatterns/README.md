@@ -39,10 +39,33 @@ example does not report empty passwords or passwords containing nested elements;
 list pattern such as `<[ <credentials ..$_>..$_<password ..$_>..$content</password>..$_</credentials> ]>`
 with `(content: Node*)`.
 
-The sample produces one diagnostic:
+The grammar also declares a named pattern for secrets and uses it in both directions:
+
+```ngr
+pattern Secret : Element =
+  | <[ <password ..$_>..$_</password> ]>
+  | <[ <api-key ..$_>..$_</api-key> ]>;
+
+match (secret: ..Secret)
+  <[ <vault ..$_>..$_ $secret ..$_</vault> ]>
+  => warning XML1002 : $"A vault stores a plaintext secret: {secret}";
+
+match <[ <api-key ..$_>..$_</api-key> ]>
+  inside <[ <service ..$_>..$_</service> ]>
+  => warning XML1003 : "An API key is embedded in a service definition; reference it instead.";
+```
+
+`..Secret` searches beneath the vault's children at any depth and reports once, on the vault.
+`inside` reports each API key on its own, wherever it sits within a service. See
+[Named patterns and tree context](../../docs/language-guide.md#named-patterns-and-tree-context).
+
+The sample produces four diagnostics:
 
 ```text
 sample.xml(6,5): warning XML1001: A password is stored directly inside credentials; use a secret-ref instead. example-only-password
+sample.xml(16,15): warning XML1003: An API key is embedded in a service definition; reference it instead.
+sample.xml(17,5): warning XML1003: An API key is embedded in a service definition; reference it instead.
+sample.xml(19,3): warning XML1002: A vault stores a plaintext secret: <password>nested-example</password>
 ```
 
 The secret reference and the password outside credentials do not match. Warnings leave the CLI exit code at zero. Malformed syntax and mismatched closing names are errors. Change `warning` to `error` to make the matched structure fail validation.
