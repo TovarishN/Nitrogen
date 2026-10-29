@@ -19,6 +19,8 @@ public static class GrammarSemantics
         public static readonly SemanticType QuoteMatchBody = Named("QuoteMatchBody");
         public static readonly SemanticType QuoteMatchArm = Named("QuoteMatchArm");
         public static readonly SemanticType QuoteCaptures = Named("QuoteCaptures");
+        public static readonly SemanticType NamedPatternAlternative = Named("NamedPatternAlternative");
+        public static readonly SemanticType MatchContext = Named("MatchContext");
         public static readonly SemanticType Member = Named("Member");
         public static readonly SemanticType Except = Named("Except");
         public static readonly SemanticType End = Named("End");
@@ -42,7 +44,7 @@ public static class GrammarSemantics
 
         internal static readonly SemanticType[] All =
         [
-            File, LanguageDeclaration, LanguageSetting, Module, QuoteParameter, QuoteMatchBody, QuoteMatchArm, QuoteCaptures, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
+            File, LanguageDeclaration, LanguageSetting, Module, QuoteParameter, QuoteMatchBody, QuoteMatchArm, QuoteCaptures, NamedPatternAlternative, MatchContext, Member, Except, End, Alternative, Precedence, Clause, Kinds, LowersForm, TypeSpec,
             OperationSpec, LoweringArgument, Semantics, SemanticItem, Expression, Tail, ClassItem, Value, ChainTail, Let, Block,
         ];
 
@@ -73,7 +75,10 @@ public static class GrammarSemantics
         Op("QuoteMatchBody", Types.QuoteMatchBody, Text, Seq(Types.QuoteMatchArm), Text),
         Op("QuoteMatchArm", Types.QuoteMatchArm, Opt(Types.QuoteCaptures), Text, Text),
         Op("QuoteCaptures", Types.QuoteCaptures, Seq(Types.QuoteParameter)),
-        Op("QuoteParameter", Types.QuoteParameter, Text, Text, Opt(Text)),
+        Op("QuoteParameter", Types.QuoteParameter, Text, Text, Opt(Text), Opt(Text)),
+        Op("NamedPattern", Types.Member, Text, Text, Seq(Types.NamedPatternAlternative)),
+        Op("NamedPatternAlternative", Types.NamedPatternAlternative, Opt(Types.QuoteCaptures), Text),
+        Op("MatchContext", Types.MatchContext, Text, Opt(Types.QuoteCaptures), Text),
         Op("HelperRewrite", Types.Clause, Text, Seq(Text)),
         Op("Symbols", Types.Member, Seq(Text)),
         Op("SymbolProperty", Types.Member, Text, Types.Kinds, Text, Text),
@@ -116,7 +121,7 @@ public static class GrammarSemantics
         Op("Semantics", Types.Semantics, Seq(Types.SemanticItem)),
         Op("PropertyDecl", Types.SemanticItem, Text, Seq(Text), Text, Text, Text),
         Op("Check", Types.SemanticItem, Opt(Text), Text, Text, Opt(Text)),
-        Op("MatchDiagnostic", Types.SemanticItem, Opt(Types.QuoteCaptures), Text, Text, Text, Text),
+        Op("MatchDiagnostic", Types.SemanticItem, Opt(Types.QuoteCaptures), Text, Text, Text, Text, Opt(Types.MatchContext)),
         Op("Assignment", Types.SemanticItem, Text, Text),
         Op("Choice", Types.Expression, Seq(Types.Expression)),
         Op("Sequence", Types.Expression, Seq(Types.Expression)),

@@ -159,8 +159,14 @@ public static class GrammarParser
             var symbolProperties = new List<SymbolPropertyDecl>();
             var helpers = new List<QuoteHelperDecl>();
             var functions = new List<GrammarFunctionDecl>();
+            var patterns = new List<NamedPatternDecl>();
             while (!At(TokenKind.RBrace))
             {
+                if (AtKeyword("pattern") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.Colon)
+                {
+                    patterns.Add(ParseNamedPattern());
+                    continue;
+                }
                 if (AtKeyword("function") && Next.Kind == TokenKind.Identifier && TokenAt(_position + 2).Kind == TokenKind.LParen)
                 {
                     ParseFunction(Current, helpers, functions);
@@ -259,7 +265,31 @@ public static class GrammarParser
             }
             var close = Advance();
             return new ModuleDecl(name, usings.ToArray(), rules.ToArray(), extends.ToArray(),
-                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray());
+                GrammarSpan.FromBounds(start.Start, close.End), symbols.ToArray(), builtins.ToArray(), symbolProperties.ToArray(), helpers.ToArray(), functions.ToArray(),
+                patterns.ToArray());
+        }
+
+        NamedPatternDecl ParseNamedPattern()
+        {
+            var keyword = Advance();
+            var name = Name(Expect(TokenKind.Identifier, "a pattern name"));
+            Expect(TokenKind.Colon, "':'");
+            var category = ReadCategory();
+            Expect(TokenKind.Equals, "'='");
+            if (At(TokenKind.Bar)) Advance();
+            var alternatives = new List<NamedPatternAlternativeDecl>();
+            while (true)
+            {
+                bool hasCaptures = At(TokenKind.LParen);
+                int start = hasCaptures ? Current.Start : -1;
+                var captures = hasCaptures ? ReadQuoteParameters() : Array.Empty<QuoteParameter>();
+                var quote = ReadQuote(_tokens[_position - 1].End);
+                alternatives.Add(new(captures, quote, GrammarSpan.FromBounds(hasCaptures ? start : quote.Span.Start - 2, quote.Span.End + 2)));
+                if (!At(TokenKind.Bar)) break;
+                Advance();
+            }
+            var semicolon = Expect(TokenKind.Semicolon, "';'");
+            return new(name, category, alternatives.ToArray(), GrammarSpan.FromBounds(keyword.Start, semicolon.End));
         }
 
         (string Name, Expr Body, EquatableArray<BindingClause> Clauses, SemanticsBlock? Semantics, int End) ParseRuleBody()
@@ -839,10 +869,12 @@ public static class GrammarParser
                 {
                     var parameter = Name(Expect(TokenKind.Identifier, "a parameter name"));
                     Expect(TokenKind.Colon, "':'");
+                    bool descendant = At(TokenKind.DotDot);
+                    if (descendant) Advance();
                     var category = ReadCategory();
                     bool list = At(TokenKind.Star);
                     int end = list ? Advance().End : category.Span.End;
-                    parameters.Add(new(parameter, category, list, GrammarSpan.FromBounds(parameter.Span.Start, end)));
+                    parameters.Add(new(parameter, category, list, GrammarSpan.FromBounds(parameter.Span.Start, end), descendant));
                     if (!At(TokenKind.Comma)) break;
                     Advance();
                 } while (true);
@@ -1180,6 +1212,15 @@ public static class GrammarParser
             bool hasCaptures = At(TokenKind.LParen);
             var captures = hasCaptures ? ReadQuoteParameters() : Array.Empty<QuoteParameter>();
             var pattern = ReadQuote(hasCaptures ? _tokens[_position - 1].End : keyword.End);
+            MatchContext? context = null;
+            if (AtKeyword("inside") || AtKeyword("parent"))
+            {
+                var kind = Advance();
+                bool contextCaptures = At(TokenKind.LParen);
+                var captureList = contextCaptures ? ReadQuoteParameters() : Array.Empty<QuoteParameter>();
+                var quote = ReadQuote(_tokens[_position - 1].End);
+                context = new(kind.Value == "parent", captureList, quote, GrammarSpan.FromBounds(kind.Start, quote.Span.End + 2));
+            }
             Expect(TokenKind.Arrow, "'=>'");
             if (!AtKeyword("warning") && !AtKeyword("error")) throw Error("expected 'warning' or 'error'");
             bool warning = Advance().Value == "warning";
@@ -1188,7 +1229,7 @@ public static class GrammarParser
             var colon = Expect(TokenKind.Colon, "':'");
             var message = Code(colon.End, CSharpCapture.Statement, "a diagnostic message");
             var semicolon = Expect(TokenKind.Semicolon, "';'");
-            return new(captures, pattern, code, warning, message, GrammarSpan.FromBounds(keyword.Start, semicolon.End));
+            return new(captures, pattern, code, warning, message, GrammarSpan.FromBounds(keyword.Start, semicolon.End), context);
         }
 
         CheckStatement ParseCheck()
