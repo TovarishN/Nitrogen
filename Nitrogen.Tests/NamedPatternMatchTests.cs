@@ -113,4 +113,48 @@ public sealed class NamedPatternMatchTests
         Assert.Equal("NQP0006", Assert.Single(limited.Diagnostics).Code);
         Assert.True(Run("$x", Deep(1_000), null, ("x", QuoteHole.Pattern("P.Nested"))).Matched);
     }
+
+    static int? FoundAt(string pattern, string source, string patternName) => Run(pattern, source, null,
+        result => result.Matched && result.Captures["s"] is QuoteArgument.Scalar scalar ? scalar.Value.Tree.Span(scalar.Value.Node).Start : (int?)null,
+        ("s", QuoteHole.DescendantOf(patternName)));
+
+    [Fact]
+    public void Descendant_finds_at_depth_zero()
+    {
+        Assert.Equal(2, FoundAt("f($s, ..$_)", "f(1, 5)", "P.One"));
+    }
+
+    [Fact]
+    public void Descendant_finds_deeper_than_one_level()
+    {
+        Assert.Equal(10, FoundAt("f($s, ..$_)", "f(2 + 3 * 1, 5)", "P.One"));
+    }
+
+    [Fact]
+    public void Descendant_without_candidate_is_a_mismatch()
+    {
+        Assert.Null(FoundAt("f($s, ..$_)", "f(2, 1)", "P.One"));
+    }
+
+    [Fact]
+    public void Descendant_moves_to_next_candidate_when_reference_fails()
+    {
+        Assert.Equal(6, FoundAt("f($s, ..$_)", "f(1 + 2, 5)", "P.Two"));
+    }
+
+    [Fact]
+    public void Descendant_backtracks_from_list_span_into_new_search()
+    {
+        Assert.Equal(13, FoundAt("f(..$_, $s, ..$_)", "f(1 + 3, 4 * 2)", "P.Two"));
+    }
+
+    [Fact]
+    public void Deep_descendant_search_is_budgeted()
+    {
+        var limited = Run("$s", Deep(1_000), new QuoteMatchOptions { MaxWorkSteps = 2_000 }, ("s", QuoteHole.DescendantOf("P.Two")));
+        Assert.Equal("NQP0006", Assert.Single(limited.Diagnostics).Code);
+        var full = Run("$s", Deep(1_000), null, ("s", QuoteHole.DescendantOf("P.Two")));
+        Assert.Empty(full.Diagnostics);
+        Assert.False(full.Matched);
+    }
 }
