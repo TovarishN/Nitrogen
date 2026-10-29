@@ -35,6 +35,10 @@ public sealed class QuotePattern
         _lists = lists;
     }
 
+    internal SyntaxTree Tree => _parsed.Tree;
+    internal IReadOnlyDictionary<string, QuoteHole> Contracts => _captures;
+    internal IReadOnlyDictionary<int, QuotePatternList> Lists => _lists;
+
     /// <summary>Named patterns required at holes, by capture name.</summary>
     internal IReadOnlyDictionary<string, NamedPatternDefinition> References { get; }
 
@@ -79,7 +83,7 @@ public sealed class QuotePattern
         if (invalid is not null) return invalid;
         if (!language.AcceptsQuoteNode(_category, input.Tree, input.Node))
             return QuotePatternMatcher.Invalid("NQP0005", "Input category does not match.");
-        return new QuotePatternMatcher(_parsed.Tree, _captures, _lists, resolve, budget).Match(input);
+        return new QuotePatternMatcher(this, resolve, budget).Match(input);
     }
 }
 

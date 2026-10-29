@@ -2,23 +2,31 @@ using System.Collections.ObjectModel;
 
 namespace Nitrogen;
 
-internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionary<string, QuoteHole> contracts,
-    IReadOnlyDictionary<int, QuotePatternList> lists, Func<QuoteNode, QuoteNode>? resolve, QuoteMatchBudget budget)
+internal sealed class QuotePatternMatcher(QuotePattern root, Func<QuoteNode, QuoteNode>? resolve, QuoteMatchBudget budget)
 {
     static readonly IReadOnlyDictionary<string, QuoteArgument> s_empty =
         new ReadOnlyDictionary<string, QuoteArgument>(new Dictionary<string, QuoteArgument>());
 
+    // A frame is the pattern a job walks and the capture scope it binds in; scope 0 is the published one.
+    sealed record Frame(QuotePattern Pattern, int Scope);
     abstract record Job;
-    sealed record NodeJob(int Pattern, QuoteNode Input) : Job;
-    sealed record SequenceJob(QuotePatternList Plan, QuoteNode[] Items, int PatternIndex, int InputIndex, int Length = 0) : Job;
-    sealed record SegmentJob(int Pattern, QuoteNode[] Items, int Start, int Count) : Job;
+    sealed record NodeJob(Frame Frame, int Pattern, QuoteNode Input) : Job;
+    sealed record SequenceJob(Frame Frame, QuotePatternList Plan, QuoteNode[] Items, int PatternIndex, int InputIndex, int Length = 0) : Job;
+    sealed record SegmentJob(Frame Frame, int Pattern, QuoteNode[] Items, int Start, int Count) : Job;
+    // Tries a named pattern's alternatives in order; ChoiceDepth is the choice count before the first try.
+    sealed record ReferenceJob(Frame Caller, NamedPatternDefinition Target, QuoteNode Input, string? BindName,
+        int Alternative = 0, int ChoiceDepth = -1) : Job;
+    // Commits a successful reference: the callee's choices are cut, since any alternative binds the same node.
+    sealed record BindJob(Frame Caller, string? Name, QuoteNode Value, int ChoiceDepth) : Job;
     // Persistent continuations let a choice restore pending outer/nested work without copying a stack.
     sealed record Pending(Job Job, Pending? Next);
     sealed record Choice(Pending Work, int CaptureCount);
     sealed record Binding(QuoteNode? Scalar, QuoteNode[]? Items = null, int Start = 0, int Count = 0);
-    readonly Dictionary<string, Binding> _captures = new(StringComparer.Ordinal);
-    readonly List<string> _trail = [];
+    readonly Dictionary<(int Scope, string Name), Binding> _captures = new();
+    readonly List<(int Scope, string Name)> _trail = [];
     readonly Stack<Choice> _choices = [];
+    readonly Language _language = root.Tree.Language!;
+    int _scopes;
 
     internal static QuoteMatchResult Invalid(string code, string message) => new(false, s_empty,
         Array.AsReadOnly(new[] { new QuoteDiagnostic(code, default, message) }));
@@ -49,7 +57,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
 
     internal QuoteMatchResult Match(QuoteNode input)
     {
-        Pending? work = new(new NodeJob(pattern.Root, input), null);
+        Pending? work = new(new NodeJob(new(root, 0), root.Tree.Root, input), null);
         while (work is not null)
         {
             var job = work.Job;
@@ -58,7 +66,9 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
             {
                 NodeJob node => MatchNode(node, ref work),
                 SequenceJob sequence => MatchSequence(sequence, ref work),
-                SegmentJob segment => MatchSegment(segment),
+                SegmentJob segment => MatchSegment(segment, ref work),
+                ReferenceJob reference => MatchReference(reference, ref work),
+                BindJob bind => Commit(bind),
                 _ => throw new InvalidOperationException(),
             };
             if (matched) continue;
@@ -71,8 +81,8 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
             work = choice.Work;
         }
         var captures = new Dictionary<string, QuoteArgument>(StringComparer.Ordinal);
-        foreach (var (name, value) in _captures)
-            captures[name] = value.Scalar is { } node ? QuoteArgument.Node(node)
+        foreach (var ((scope, name), value) in _captures)
+            if (scope == 0) captures[name] = value.Scalar is { } node ? QuoteArgument.Node(node)
                 : QuoteArgument.List(Array.AsReadOnly(value.Items!.AsSpan(value.Start, value.Count).ToArray()));
         return new(true, new ReadOnlyDictionary<string, QuoteArgument>(captures), Array.Empty<QuoteDiagnostic>());
     }
@@ -81,6 +91,8 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
     {
         budget.Step();
         if (pair.Pattern == SyntaxTree.NoNode) return pair.Input.Node == SyntaxTree.NoNode;
+        var frame = pair.Frame;
+        var pattern = frame.Pattern.Tree;
         var source = Resolve(pair.Input);
         bool absent = source.Node == SyntaxTree.NoNode;
         int kind = pattern.Kind(pair.Pattern);
@@ -88,13 +100,19 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
         {
             string name = pattern.GetText(pair.Pattern)[1..].ToString();
             bool discard = pattern.PatternHoleSites.TryGetValue(pair.Pattern, out var site);
-            if (absent || !pattern.Language!.AcceptsQuoteNode(discard ? site!.Category : contracts[name].Category, source.Tree, source.Node)) return false;
+            if (absent || !_language.AcceptsQuoteNode(discard ? site!.Category : frame.Pattern.Contracts[name].Category, source.Tree, source.Node)) return false;
             if (discard) return true;
-            if (_captures.TryGetValue(name, out var previous)) return Equal(previous.Scalar!, source);
-            Bind(name, new(source));
+            // Equal syntax matches the same named pattern, so a repeated reference capture only compares.
+            if (_captures.TryGetValue((frame.Scope, name), out var previous)) return Equal(previous.Scalar!, source);
+            if (frame.Pattern.References.TryGetValue(name, out var target))
+            {
+                work = new(new ReferenceJob(frame, target, source, name), work);
+                return true;
+            }
+            Bind((frame.Scope, name), new(source));
             return true;
         }
-        if (lists.TryGetValue(pair.Pattern, out var list))
+        if (frame.Pattern.Lists.TryGetValue(pair.Pattern, out var list))
         {
             int stride = list.Shape.Separator is null ? 1 : 2;
             int childCount = ListSlot.Count(source.Tree, source.Node);
@@ -115,7 +133,7 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
                 budget.Step();
                 items[i] = Resolve(new(source.Tree, ListSlot.Child(source.Tree, source.Node, i * stride), source.Origin));
             }
-            work = new(new SequenceJob(list, items, 0, 0), work);
+            work = new(new SequenceJob(frame, list, items, 0, 0), work);
             return true;
         }
         if (kind == SyntaxKinds.ListHole || absent || kind != source.Tree.Kind(source.Node) ||
@@ -123,26 +141,27 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
         int count = pattern.ChildCount(pair.Pattern);
         if (count == 0 && !pattern.GetText(pair.Pattern).SequenceEqual(source.Tree.GetText(source.Node))) return false;
         for (int i = count - 1; i >= 0; i--)
-            work = new(new NodeJob(pattern.Child(pair.Pattern, i), new(source.Tree, source.Tree.Child(source.Node, i), source.Origin)), work);
+            work = new(new NodeJob(frame, pattern.Child(pair.Pattern, i), new(source.Tree, source.Tree.Child(source.Node, i), source.Origin)), work);
         return true;
     }
 
     bool MatchSequence(SequenceJob sequence, ref Pending? work)
     {
-        var (plan, items, pi, ii, length) = sequence;
+        var (frame, plan, items, pi, ii, length) = sequence;
+        var pattern = frame.Pattern.Tree;
         if (pi == plan.Items.Length) return ii == items.Length;
         int node = plan.Items[pi];
         if (pattern.Kind(node) != SyntaxKinds.ListHole)
         {
             if (ii >= items.Length) return false;
-            work = new(new SequenceJob(plan, items, pi + 1, ii + 1), work);
-            work = new(new NodeJob(node, items[ii]), work);
+            work = new(new SequenceJob(frame, plan, items, pi + 1, ii + 1), work);
+            work = new(new NodeJob(frame, node, items[ii]), work);
             return true;
         }
         int maximum = items.Length - ii - plan.MinimumRemaining[pi + 1];
         if (maximum < 0) return false;
         string name = pattern.GetText(node)[3..].ToString();
-        bool bound = _captures.TryGetValue(name, out var previous);
+        bool bound = _captures.TryGetValue((frame.Scope, name), out var previous);
         // With no later segment, complete coverage determines this segment's length uniquely.
         if (bound) length = previous!.Count;
         else if (plan.SegmentsRemaining[pi + 1] == 0) length = maximum;
@@ -150,34 +169,65 @@ internal sealed class QuotePatternMatcher(SyntaxTree pattern, IReadOnlyDictionar
         budget.Step(); // one attempted split, including fixed/repeated segment lengths
         if (!bound && plan.SegmentsRemaining[pi + 1] > 0 && length < maximum)
             _choices.Push(new(new(sequence with { Length = length + 1 }, work), _trail.Count));
-        work = new(new SequenceJob(plan, items, pi + 1, ii + length), work);
-        work = new(new SegmentJob(node, items, ii, length), work);
+        work = new(new SequenceJob(frame, plan, items, pi + 1, ii + length), work);
+        work = new(new SegmentJob(frame, node, items, ii, length), work);
         return true;
     }
 
-    bool MatchSegment(SegmentJob segment)
+    bool MatchSegment(SegmentJob segment, ref Pending? work)
     {
+        var frame = segment.Frame;
+        var pattern = frame.Pattern.Tree;
         string name = pattern.GetText(segment.Pattern)[3..].ToString();
         bool discard = pattern.PatternHoleSites.TryGetValue(segment.Pattern, out var site);
-        string category = discard ? site!.Category : contracts[name].Category;
+        string category = discard ? site!.Category : frame.Pattern.Contracts[name].Category;
         for (int i = 0; i < segment.Count; i++)
         {
             budget.Step();
             var item = segment.Items[segment.Start + i];
-            if (!pattern.Language!.AcceptsQuoteNode(category, item.Tree, item.Node)) return false;
+            if (!_language.AcceptsQuoteNode(category, item.Tree, item.Node)) return false;
         }
         if (discard) return true;
-        if (_captures.TryGetValue(name, out var previous))
+        if (_captures.TryGetValue((frame.Scope, name), out var previous))
         {
             if (previous.Count != segment.Count) return false;
             for (int i = 0; i < segment.Count; i++)
                 if (!Equal(previous.Items![previous.Start + i], segment.Items[segment.Start + i])) return false;
+            return true;
         }
-        else Bind(name, new(null, segment.Items, segment.Start, segment.Count));
+        Bind((frame.Scope, name), new(null, segment.Items, segment.Start, segment.Count));
+        if (frame.Pattern.References.TryGetValue(name, out var target))
+            for (int i = segment.Count - 1; i >= 0; i--)
+                work = new(new ReferenceJob(frame, target, segment.Items[segment.Start + i], null), work);
         return true;
     }
 
-    void Bind(string name, Binding value)
+    bool MatchReference(ReferenceJob reference, ref Pending? work)
+    {
+        budget.Step();
+        var input = Resolve(reference.Input);
+        var alternatives = reference.Target.Alternatives;
+        if (input.Node == SyntaxTree.NoNode || reference.Alternative >= alternatives.Length ||
+            !_language.AcceptsQuoteNode(reference.Target.Category, input.Tree, input.Node)) return false;
+        int depth = reference.ChoiceDepth < 0 ? _choices.Count : reference.ChoiceDepth;
+        if (reference.Alternative + 1 < alternatives.Length)
+            _choices.Push(new(new(reference with { Alternative = reference.Alternative + 1, ChoiceDepth = depth }, work), _trail.Count));
+        var alternative = alternatives[reference.Alternative];
+        work = new(new BindJob(reference.Caller, reference.BindName, input, depth), work);
+        work = new(new NodeJob(new(alternative, ++_scopes), alternative.Tree.Root, input), work);
+        return true;
+    }
+
+    bool Commit(BindJob bind)
+    {
+        while (_choices.Count > bind.ChoiceDepth) _choices.Pop();
+        if (bind.Name is null) return true;
+        if (_captures.TryGetValue((bind.Caller.Scope, bind.Name), out var previous)) return Equal(previous.Scalar!, bind.Value);
+        Bind((bind.Caller.Scope, bind.Name), new(bind.Value));
+        return true;
+    }
+
+    void Bind((int Scope, string Name) name, Binding value)
     {
         _captures.Add(name, value);
         _trail.Add(name);
