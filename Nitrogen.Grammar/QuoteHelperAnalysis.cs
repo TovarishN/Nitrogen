@@ -40,6 +40,37 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
         return null;
     }
 
+    /// <summary>
+    /// What a pattern capture accepts: a syntax category, or a named pattern (its category and qualified name).
+    /// A descendant capture (<c>..Name</c>) must name a pattern and capture one node.
+    /// </summary>
+    public (GrammarSymbol Category, string? PatternName)? CaptureContract(QuoteParameter capture, ModuleDecl module, GrammarReport? report = null)
+    {
+        if (analysis.ResolvePattern(capture.Category.Name, module) is { } found)
+        {
+            if (capture.IsDescendant && capture.IsList)
+                report?.Invoke(GrammarCodes.InvalidPatternCapture, $"descendant capture '{capture.Name.Name}' finds one node; it cannot be a list", capture.Span, module);
+            return Category(found.Pattern.Category, found.Module) is { } category
+                ? (category, found.Module.Name + "." + found.Pattern.Name.Name) : null;
+        }
+        if (capture.IsDescendant)
+        {
+            report?.Invoke(GrammarCodes.UnknownNamedPattern, $"'{capture.Category.Name}' is not a named pattern; a descendant capture needs one", capture.Category.Span, module);
+            return null;
+        }
+        return Category(capture.Category, module, report) is { } symbol ? (symbol, null) : null;
+    }
+
+    /// <summary>Checks a pattern's captures: contracts, and that a descendant capture occurs once.</summary>
+    public void CheckPatternCaptures(IReadOnlyList<QuoteParameter> captures, QuoteText pattern, GrammarSymbol? category, ModuleDecl module, GrammarReport report)
+    {
+        foreach (var capture in captures) CaptureContract(capture, module, report);
+        var holes = QuotationWriter.Holes(pattern.Text, analysis, category).GroupBy(hole => hole.Name).ToDictionary(g => g.Key, g => g.Count());
+        foreach (var capture in captures)
+            if (capture.IsDescendant && holes.TryGetValue(capture.Name.Name, out int count) && count > 1)
+                report(GrammarCodes.InvalidPatternCapture, $"descendant capture '{capture.Name.Name}' may occur only once in a pattern", capture.Name.Span, module);
+    }
+
     public void CheckDeclarations(ModuleDecl module, GrammarReport report)
     {
         var names = new HashSet<string>(module.Rules.Select(r => r.Name), StringComparer.Ordinal);
@@ -68,8 +99,8 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
                     if (capture.Name.Name == "_" || parameters.ContainsKey(capture.Name.Name) || captures.ContainsKey(capture.Name.Name))
                         report(GrammarCodes.QuoteMatchCapture, $"capture '{capture.Name.Name}' is reserved, duplicated or shadows a helper parameter", capture.Name.Span, module);
                     else captures.Add(capture.Name.Name, capture);
-                    Category(capture.Category, module, report);
                 }
+                CheckPatternCaptures(arm.Captures, arm.Pattern, selector is null ? null : Category(selector.Category, module), module, report);
                 CheckQuote(arm.Pattern, captures, selector is null ? null : Category(selector.Category, module), pattern: true);
                 var scope = new Dictionary<string, QuoteParameter>(parameters, StringComparer.Ordinal);
                 foreach (var capture in captures) scope[capture.Key] = capture.Value;
@@ -87,6 +118,24 @@ internal sealed class QuoteHelperAnalysis(GrammarAnalysis analysis)
                     else if (parameter.IsList != hole.IsList)
                         report(GrammarCodes.HoleShapeMismatch, $"'${hole.Name}' has the wrong scalar/list shape", span, module);
                 }
+            }
+        }
+        foreach (var pattern in module.Patterns)
+        {
+            if (!names.Add(pattern.Name.Name))
+                report(GrammarCodes.DuplicateNamedPattern, $"duplicate rule/helper/pattern '{pattern.Name.Name}'", pattern.Name.Span, module);
+            var category = Category(pattern.Category, module, report);
+            foreach (var alternative in pattern.Alternatives)
+            {
+                var captures = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var capture in alternative.Captures)
+                    if (capture.Name.Name == "_" || !captures.Add(capture.Name.Name))
+                        report(GrammarCodes.QuoteMatchCapture, $"reserved or duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
+                CheckPatternCaptures(alternative.Captures, alternative.Pattern, category, module, report);
+                foreach (var hole in QuotationWriter.Holes(alternative.Pattern.Text, analysis, category))
+                    if (hole.Name != "_" && !captures.Contains(hole.Name))
+                        report(GrammarCodes.UnknownHole, $"'${hole.Name}' is not a capture of this alternative",
+                            new GrammarSpan(alternative.Pattern.Span.Start + hole.Start, hole.Length), module);
             }
         }
     }

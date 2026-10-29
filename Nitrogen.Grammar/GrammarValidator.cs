@@ -264,8 +264,8 @@ public static class GrammarValidator
                     {
                         if (capture.Name.Name == "_" || !captures.Add(capture.Name.Name))
                             Report(GrammarCodes.QuoteMatchCapture, $"reserved or duplicate capture '{capture.Name.Name}'", capture.Name.Span, module);
-                        _analysis.Helpers.Category(capture.Category, module, Report);
                     }
+                    _analysis.Helpers.CheckPatternCaptures(match.Captures, match.Pattern, null, module, Report);
                 }
             }
 

@@ -76,6 +76,10 @@ public static class GrammarCodes
     public const string TransparentShape = "NGR0160";
     public const string TransparentPostfix = "NGR0161";
     public const string TransparentDecorated = "NGR0162";
+    public const string UnknownNamedPattern = "NGR0163";
+    public const string DuplicateNamedPattern = "NGR0164";
+    public const string ContextCaptureCollision = "NGR0165";
+    public const string InvalidPatternCapture = "NGR0166";
     public const string GeneratedNameCollision = "NGR0201";
     public const string KindNameCollision = "NGR0202";
     public const string ReservedName = "NGR0203";

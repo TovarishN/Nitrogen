@@ -32,12 +32,24 @@ internal static class QuoteHelperWriter
         }
         output.Append("    };\n\n");
 
-        string Map(IEnumerable<QuoteParameter> parameters) =>
-            "new global::System.Collections.Generic.Dictionary<string, global::Nitrogen.QuoteHole> { " +
-            string.Join(", ", parameters.Select(parameter => "[" + CSharpText.Literal(parameter.Name.Name) + "] = new(" +
-                CSharpText.Literal(model.Analysis.Helpers.Category(parameter.Category, info.Module)!.Key) +
-                (parameter.IsList ? ", true)" : ", false)"))) + " }";
-        string Source(QuoteText quote) => "new global::Nitrogen.QuoteHelperSource(" +
-            CSharpText.Literal(model.InputOf(info.Module)?.Path ?? "") + $", {quote.Span.Start}, {quote.Span.Length})";
+        string Map(IEnumerable<QuoteParameter> parameters) => HoleMap(parameters, model, info);
+        string Source(QuoteText quote) => QuoteSource(quote, model, info);
     }
+
+    /// <summary>The C# for one capture contract; the only place generated code constructs a <c>QuoteHole</c>.</summary>
+    internal static string HoleExpression(string category, bool isList, string? patternName, bool descendant) =>
+        "new(" + CSharpText.Literal(category) + (isList ? ", true)" : ", false)") + (patternName is null ? "" :
+            " { PatternName = " + CSharpText.Literal(patternName) + (descendant ? ", Descendant = true" : "") + " }");
+
+    internal static string HoleMap(IEnumerable<QuoteParameter> parameters, EmitModel model, ModuleInfo info) =>
+        "new global::System.Collections.Generic.Dictionary<string, global::Nitrogen.QuoteHole> { " +
+        string.Join(", ", parameters.Select(parameter =>
+        {
+            var contract = model.Analysis.Helpers.CaptureContract(parameter, info.Module)!.Value;
+            return "[" + CSharpText.Literal(parameter.Name.Name) + "] = " +
+                HoleExpression(contract.Category.Key, parameter.IsList, contract.PatternName, parameter.IsDescendant);
+        })) + " }";
+
+    internal static string QuoteSource(QuoteText quote, EmitModel model, ModuleInfo info) => "new global::Nitrogen.QuoteHelperSource(" +
+        CSharpText.Literal(model.InputOf(info.Module)?.Path ?? "") + $", {quote.Span.Start}, {quote.Span.Length})";
 }

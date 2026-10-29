@@ -166,10 +166,7 @@ internal sealed class SemanticsWriter
                 {
                     string field = $"s_match_{kind.Name}_{index}";
                     patterns.Add(field);
-                    string map = "new global::System.Collections.Generic.Dictionary<string, global::Nitrogen.QuoteHole> { " +
-                        string.Join(", ", match.Captures.Select(capture => "[" + CSharpText.Literal(capture.Name.Name) + "] = new(" +
-                            CSharpText.Literal(_model.Analysis.Helpers.Category(capture.Category, _info.Module)!.Key) +
-                            (capture.IsList ? ", true)" : ", false)"))) + " }";
+                    string map = QuoteHelperWriter.HoleMap(match.Captures, _model, _info);
                     b.Append($"    static readonly global::Nitrogen.SyntaxDiagnosticPattern {field} = new(")
                         .Append(CSharpText.Literal(OwnerOf(kind).Owner.Module.Name + "." + category)).Append(", ")
                         .Append(CSharpText.Literal(match.Pattern.Text)).Append(", ").Append(map)
@@ -396,7 +393,7 @@ internal sealed class SemanticsWriter
 
     string CaptureItemType(QuoteParameter capture)
     {
-        var symbol = _model.Analysis.Helpers.Category(capture.Category, _info.Module)!;
+        var symbol = _model.Analysis.Helpers.CaptureContract(capture, _info.Module)!.Value.Category;
         return StructOf(symbol.Rule) is { } name
             ? _model.Info(symbol.Module).TypeRef(_info, name) : Ns + "SemanticNode";
     }
